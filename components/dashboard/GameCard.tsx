@@ -16,9 +16,10 @@ type GameWithLibrary = UserLibrary & { game: Game };
 
 interface GameCardProps {
   item: GameWithLibrary;
+  paceFactor?: number;
 }
 
-export function GameCard({ item }: GameCardProps) {
+export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   const { game } = item;
   const [countdown, setCountdown] = useState<string>('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -70,7 +71,22 @@ export function GameCard({ item }: GameCardProps) {
   // Progress Logic
   const playedMinutes = item.playTimeManual ?? item.playTimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
-  const progress = calculateProgress(playedMinutes, hltbTimes, targetType);
+
+  // Apply pace factor to HLTB times for display/calculation purposes
+  // Note: calculateProgress usually takes played vs total. If paceFactor means "I play slower",
+  // then the expected time is HLTB * paceFactor.
+  // We should pass the adjusted HLTB times to calculateProgress or adjust logic inside.
+  // Since calculateProgress is imported, let's adjust the HLTB times before passing them.
+
+  const adjustedHltbTimes = useMemo(() => {
+      const times = { ...hltbTimes };
+      if (times.main) times.main = Math.round(times.main * paceFactor * 10) / 10; // keep 1 decimal
+      if (times.extra) times.extra = Math.round(times.extra * paceFactor * 10) / 10;
+      if (times.completionist) times.completionist = Math.round(times.completionist * paceFactor * 10) / 10;
+      return times;
+  }, [hltbTimes, paceFactor]);
+
+  const progress = calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
 
   const handleQuickAdd = async () => {
       if (!quickAddTime) return;

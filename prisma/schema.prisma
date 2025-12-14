@@ -24,6 +24,7 @@ model User {
   sessions      Session[]
   Authenticator Authenticator[] // Added opposite relation
   library       UserLibrary[]
+  tags          Tag[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -114,6 +115,18 @@ model UserLibrary {
   playTimeSteam          Int?     // In minutes
   targetedCompletionType String?  // Enum: Main, Extra, 100%
   dateAdded              DateTime @default(now())
+  tags                   Tag[]
 
   @@unique([userId, gameId])
+}
+
+model Tag {
+  id     String @id @default(uuid())
+  name   String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  libraryEntries UserLibrary[]
+
+  @@unique([userId, name])
 }
