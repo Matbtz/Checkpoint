@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { type UserLibrary, type Game } from '@prisma/client';
 import { GameCard } from './GameCard';
 import { calculateProgress } from '@/lib/format-utils';
+import { ManualAddModal } from './ManualAddModal';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
 
 type GameWithLibrary = UserLibrary & { game: Game };
 
@@ -24,6 +27,8 @@ export function Dashboard({ initialLibrary }: DashboardProps) {
   const [playtimeFilter, setPlaytimeFilter] = useState<PlaytimeFilter>('All');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('All');
   const [sortBy, setSortBy] = useState<SortOption>('dateAdded');
+
+  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
 
   // Filter
   const filteredLibrary = library.filter(item => {
@@ -97,21 +102,26 @@ export function Dashboard({ initialLibrary }: DashboardProps) {
       <div className="flex flex-col gap-4 bg-white dark:bg-zinc-900 p-4 rounded-lg border border-zinc-200 dark:border-zinc-800">
 
         {/* Row 1: Status Filters */}
-        <div className="flex flex-wrap gap-2">
-            <span className="text-sm font-medium text-zinc-500 my-auto mr-2">Statut:</span>
-            {(['All', 'Playing', 'Backlog', 'Completed', 'Wishlist', 'Abandoned'] as StatusFilter[]).map((status) => (
-                <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                        statusFilter === status
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                    }`}
-                >
-                    {status}
-                </button>
-            ))}
+        <div className="flex flex-wrap gap-2 justify-between items-center">
+            <div className="flex flex-wrap gap-2">
+                <span className="text-sm font-medium text-zinc-500 my-auto mr-2">Statut:</span>
+                {(['All', 'Playing', 'Backlog', 'Completed', 'Wishlist', 'Abandoned'] as StatusFilter[]).map((status) => (
+                    <button
+                        key={status}
+                        onClick={() => setStatusFilter(status)}
+                        className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                            statusFilter === status
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                        }`}
+                    >
+                        {status}
+                    </button>
+                ))}
+            </div>
+            <Button size="sm" onClick={() => setIsManualAddOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Add Game
+            </Button>
         </div>
 
         {/* Row 2: Other Filters & Sort */}
@@ -176,6 +186,8 @@ export function Dashboard({ initialLibrary }: DashboardProps) {
             ))}
           </div>
       )}
+
+      <ManualAddModal isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)} />
     </div>
   );
 }
