@@ -1,16 +1,47 @@
 'use client';
 
-import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { updateGameStatus, updateTargetedCompletion, updateManualPlayTime, fixGameMatch } from '@/actions/library';
-import { Game, UserLibrary } from '@prisma/client';
+import { assignTag, removeTag, getUserTags } from '@/actions/tag';
+import { Game, UserLibrary, Tag } from '@prisma/client';
 import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
-type GameWithLibrary = UserLibrary & { game: Game };
+type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
+
+function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
+    const [isSelected, setIsSelected] = useState(initiallySelected);
+    const [loading, setLoading] = useState(false);
+
+    const toggle = async () => {
+        setLoading(true);
+        if (isSelected) {
+            await removeTag(libraryId, tag.id);
+        } else {
+            await assignTag(libraryId, tag.id);
+        }
+        setIsSelected(!isSelected);
+        setLoading(false);
+    };
+
+    return (
+        <button
+            onClick={toggle}
+            disabled={loading}
+            className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                isSelected
+                ? 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-100'
+                : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
+            } ${loading ? 'opacity-50' : ''}`}
+        >
+            {tag.name}
+        </button>
+    );
+}
 
 interface EditGameModalProps {
   item: GameWithLibrary;
@@ -23,9 +54,17 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
   const [manualTime, setManualTime] = useState(item.playTimeManual?.toString() || (item.playTimeSteam || 0).toString());
   const [loading, setLoading] = useState(false);
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
   // Fix Match State
   const [showFixMatch, setShowFixMatch] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      getUserTags().then(setAvailableTags);
+    }
+  }, [isOpen]);
+
   // Manual HLTB inputs
   const hltbTimes = item.game.hltbTimes ? JSON.parse(item.game.hltbTimes) : {};
   const [hltbMain, setHltbMain] = useState(hltbTimes.main || 0);
@@ -150,6 +189,30 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                   </div>
               </div>
           )}
+
+          {/* Tags */}
+          <div className="grid gap-2">
+            <Label>Tags</Label>
+            <div className="flex flex-wrap gap-2">
+                {availableTags.map(tag => {
+                    // Check if tag is in item.tags.
+                    // IMPORTANT: item.tags comes from server. Local updates won't show unless we track them.
+                    // For MVP+, we might accept that it updates on refresh, or we implement local state.
+                    // Let's implement local state for tags.
+                    // But wait, 'item' prop doesn't change.
+                    // We need a local 'selectedTags' state.
+                    return (
+                        <TagBadge
+                            key={tag.id}
+                            tag={tag}
+                            initiallySelected={item.tags?.some(t => t.id === tag.id) || false}
+                            libraryId={item.id}
+                        />
+                    )
+                })}
+                 {availableTags.length === 0 && <span className="text-sm text-zinc-500">Go to Settings to create tags.</span>}
+            </div>
+          </div>
 
         </div>
         <DialogFooter>

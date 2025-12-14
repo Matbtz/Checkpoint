@@ -7,11 +7,14 @@ import { calculateProgress } from '@/lib/format-utils';
 import { ManualAddModal } from './ManualAddModal';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import { Tag } from '@prisma/client';
 
-type GameWithLibrary = UserLibrary & { game: Game };
+type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
 interface DashboardProps {
   initialLibrary: GameWithLibrary[];
+  userPaceFactor?: number;
+  availableTags?: Tag[];
 }
 
 type SortOption = 'dateAdded' | 'progress' | 'releaseDate';
@@ -19,13 +22,19 @@ type StatusFilter = 'All' | 'Playing' | 'Backlog' | 'Completed' | 'Wishlist' | '
 type PlaytimeFilter = 'All' | '0-10h' | '10-50h' | '50-100h' | '100h+';
 type PlatformFilter = 'All' | 'Steam' | 'Manual'; // Since we don't have explicit platform field yet, we rely on data source indicators
 
-export function Dashboard({ initialLibrary }: DashboardProps) {
+export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags = [] }: DashboardProps) {
   // Use local state if we plan to implement client-side deletion/updates later.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [library, setLibrary] = useState<GameWithLibrary[]>(initialLibrary);
+
+  useEffect(() => {
+    setLibrary(initialLibrary);
+  }, [initialLibrary]);
+
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [playtimeFilter, setPlaytimeFilter] = useState<PlaytimeFilter>('All');
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('All');
+  const [tagFilter, setTagFilter] = useState<string>('All');
   const [sortBy, setSortBy] = useState<SortOption>('dateAdded');
 
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
@@ -50,6 +59,11 @@ export function Dashboard({ initialLibrary }: DashboardProps) {
         // The prompt says "par plateforme".
         // Since we don't have a "Platform" field, this is best effort.
         if (item.playTimeManual === null && item.playTimeSteam !== null) return false;
+    }
+
+    // Tag Filter
+    if (tagFilter !== 'All') {
+        if (!item.tags || !item.tags.some(t => t.id === tagFilter)) return false;
     }
 
     // Playtime Filter
@@ -141,6 +155,23 @@ export function Dashboard({ initialLibrary }: DashboardProps) {
                     </select>
                 </div>
 
+                {/* Tag Filter */}
+                {availableTags && availableTags.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-zinc-500">Tag:</span>
+                        <select
+                            value={tagFilter}
+                            onChange={(e) => setTagFilter(e.target.value)}
+                            className="text-sm bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1"
+                        >
+                            <option value="All">Tous</option>
+                            {availableTags.map(tag => (
+                                <option key={tag.id} value={tag.id}>{tag.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
                 {/* Playtime Filter */}
                 <div className="flex items-center gap-2">
                     <span className="text-sm text-zinc-500">Temps de jeu:</span>
@@ -182,7 +213,7 @@ export function Dashboard({ initialLibrary }: DashboardProps) {
       ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedLibrary.map((item) => (
-              <GameCard key={item.id} item={item} />
+              <GameCard key={item.id} item={item} paceFactor={userPaceFactor} />
             ))}
           </div>
       )}
