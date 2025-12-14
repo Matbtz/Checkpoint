@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-
-const prisma = new PrismaClient();
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -43,6 +41,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(userWithoutPassword, { status: 201 });
   } catch (error) {
+    console.error('Registration error:', error);
     if (error instanceof z.ZodError) {
       // Access .errors property if it's a ZodError
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

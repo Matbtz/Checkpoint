@@ -2,12 +2,10 @@ import { NextAuthOptions } from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import CredentialsProvider from "next-auth/providers/credentials"
 import SteamProvider from "next-auth-steam"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 import { getServerSession } from "next-auth";
-
-const prisma = new PrismaClient()
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getAuthOptions(req: any): NextAuthOptions {
@@ -17,7 +15,7 @@ export function getAuthOptions(req: any): NextAuthOptions {
     providers: [
         SteamProvider(req, {
             clientSecret: process.env.STEAM_SECRET!,
-            callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback/steam`
+            callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback`
         }),
         CredentialsProvider({
         name: "Credentials",
