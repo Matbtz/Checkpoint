@@ -12,6 +12,7 @@ export function getAuthOptions(req: any): NextAuthOptions {
   const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   return {
+    trustHost: true,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     adapter: PrismaAdapter(prisma) as any,
     providers: [
