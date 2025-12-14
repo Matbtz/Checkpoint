@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  steamId     String?
+  preferences String?  // Stored as JSON string (e.g., {"pacing": "fast"})
+  library     UserLibrary[]
+}
+
+model Game {
+  id          String   @id // IGDB or Steam ID
+  title       String
+  coverImage  String?
+  releaseDate DateTime?
+  hltbTimes   String?  // Stored as JSON string: {main, extra, completionist}
+  scores      String?  // Stored as JSON string: {openCritic, rawg}
+
+  usersWithGame UserLibrary[]
+}
+
+model UserLibrary {
+  id                     String   @id @default(uuid())
+  userId                 String
+  user                   User     @relation(fields: [userId], references: [id])
+  gameId                 String
+  game                   Game     @relation(fields: [gameId], references: [id])
+  status                 String   // Enum: Wishlist, Backlog, Playing, Completed, Abandoned
+  playTimeManual         Int?     // In minutes
+  playTimeSteam          Int?     // In minutes
+  targetedCompletionType String?  // Enum: Main, Extra, 100%
+  dateAdded              DateTime @default(now())
+
+  @@unique([userId, gameId])
+}
