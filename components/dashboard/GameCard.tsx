@@ -5,6 +5,12 @@ import Image from 'next/image';
 import { type UserLibrary, type Game } from '@prisma/client';
 import { formatReleaseDate, getCountdownString, isReleasingSoon, calculateProgress } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
+import { EditGameModal } from './EditGameModal';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { updateManualPlayTime } from '@/actions/library';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
 
 type GameWithLibrary = UserLibrary & { game: Game };
 
@@ -15,6 +21,11 @@ interface GameCardProps {
 export function GameCard({ item }: GameCardProps) {
   const { game } = item;
   const [countdown, setCountdown] = useState<string>('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Quick Update State
+  const [quickAddTime, setQuickAddTime] = useState('');
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   // Parse JSON fields safely
   const genres = useMemo(() => {
@@ -61,8 +72,23 @@ export function GameCard({ item }: GameCardProps) {
   const targetType = item.targetedCompletionType || 'Main';
   const progress = calculateProgress(playedMinutes, hltbTimes, targetType);
 
+  const handleQuickAdd = async () => {
+      if (!quickAddTime) return;
+      const minutesToAdd = parseInt(quickAddTime);
+      if (isNaN(minutesToAdd)) return;
+
+      const current = item.playTimeManual ?? item.playTimeSteam ?? 0;
+      await updateManualPlayTime(item.gameId, current + minutesToAdd);
+      setIsPopoverOpen(false);
+      setQuickAddTime('');
+  };
+
   return (
-    <div className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    <>
+    <div
+        className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+        onClick={() => setIsEditModalOpen(true)}
+    >
       {/* Thumbnail Left */}
       <div className="relative w-32 h-auto flex-shrink-0 bg-zinc-100 dark:bg-zinc-800">
         {game.coverImage ? (
@@ -136,6 +162,35 @@ export function GameCard({ item }: GameCardProps) {
              )}
         </div>
       </div>
+
+      {/* Quick Update Button for Playing games */}
+      {item.status === 'Playing' && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+              <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                      <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md">
+                          <Plus className="h-4 w-4" />
+                      </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-40 p-2" align="end">
+                        <div className="flex gap-1">
+                            <Input
+                                type="number"
+                                placeholder="+ Min"
+                                value={quickAddTime}
+                                onChange={(e) => setQuickAddTime(e.target.value)}
+                                className="h-8 text-xs"
+                                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+                            />
+                            <Button size="sm" className="h-8 px-2" onClick={handleQuickAdd}>Ok</Button>
+                        </div>
+                  </PopoverContent>
+              </Popover>
+          </div>
+      )}
     </div>
+
+    <EditGameModal item={item} isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} />
+    </>
   );
 }
