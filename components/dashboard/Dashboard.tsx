@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { type UserLibrary, type Game } from '@prisma/client';
 import { GameCard } from './GameCard';
 import { calculateProgress } from '@/lib/format-utils';
@@ -24,7 +24,6 @@ type PlatformFilter = 'All' | 'Steam' | 'Manual'; // Since we don't have explici
 
 export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags = [] }: DashboardProps) {
   // Use local state if we plan to implement client-side deletion/updates later.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [library, setLibrary] = useState<GameWithLibrary[]>(initialLibrary);
 
   useEffect(() => {
