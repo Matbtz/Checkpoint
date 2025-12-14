@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
 
 export async function fetchSteamGames() {
   const session = await auth();
-  // @ts-expect-error accessing custom session property
   const userId = session?.user?.id;
 
   if (!userId) {
@@ -55,7 +54,6 @@ export async function fetchSteamGames() {
 
 export async function importGames(games: SteamGame[]) {
     const session = await auth();
-    // @ts-expect-error accessing custom session property
     const userId = session?.user?.id;
 
     if (!userId) {

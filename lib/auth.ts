@@ -1,10 +1,11 @@
-import NextAuth, { NextAuthOptions } from "next-auth"
+import { NextAuthOptions } from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import CredentialsProvider from "next-auth/providers/credentials"
 import SteamProvider from "next-auth-steam"
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { getServerSession } from "next-auth";
 
 const prisma = new PrismaClient()
 
@@ -64,9 +65,7 @@ export function getAuthOptions(req: any): NextAuthOptions {
         },
         async session({ session, token }) {
         if (token?.id && session.user) {
-            // @ts-expect-error adding custom property to session user
             session.user.id = token.id as string
-            // @ts-expect-error adding custom property to session user
             session.user.steamId = token.steamId as string | undefined
         }
         return session
@@ -78,11 +77,14 @@ export function getAuthOptions(req: any): NextAuthOptions {
   }
 }
 
-// Keep a static version for getServerSession in server components where req might not be needed for non-steam
-// Or better, handle the req requirement.
-// Actually, getServerSession(authOptions) works if we don't rely on `req` for Steam.
-// But `next-auth-steam` relies on `req` for OpenID 2.0 discovery.
-// So `authOptions` must be dynamic.
-
-// But `getServerSession` takes `...args`.
-// We can pass `req, res, authOptions`.
+// Wrapper for Server Components
+export function auth() {
+    // Note: This won't work well for Steam as it requires 'req'.
+    // In App Router Server Actions/Components, getting 'req' is hard or impossible directly.
+    // However, usually Steam is only needed for sign-in. Once session is established,
+    // we can check session without steam provider specifics if we just need the user ID.
+    // But getAuthOptions requires 'req' for SteamProvider init.
+    // We can mock it or pass null if we just want session and not the auth flow?
+    // Or we should use a separate auth options for session retrieval vs auth flow.
+    return getServerSession(getAuthOptions(null));
+}

@@ -1,5 +1,3 @@
-import type { Metadata } from 'next'
-
 export default function manifest() {
   return {
     name: 'Checkpoint',
