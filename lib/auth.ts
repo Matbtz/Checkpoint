@@ -9,13 +9,15 @@ import { getServerSession } from "next-auth";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getAuthOptions(req: any): NextAuthOptions {
+  const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
   return {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     adapter: PrismaAdapter(prisma) as any,
     providers: [
         SteamProvider(req, {
             clientSecret: process.env.STEAM_SECRET!,
-            callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback`
+            callbackUrl: `${baseUrl}/api/auth/callback`
         }),
         CredentialsProvider({
         name: "Credentials",
