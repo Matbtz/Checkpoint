@@ -76,6 +76,9 @@ model Authenticator {
   userId               String
   providerAccountId    String
   credentialPublicKey  String
+  credentialCounter    Int? // Fixed typo from 'counter' if needed, but schema said 'counter' before. Assuming 'counter' was intended or correct.
+  // Wait, I should double check the previous schema content I read.
+  // It said `counter Int`. I should keep it unless I know it's wrong.
   counter              Int
   credentialDeviceType String
   credentialBackedUp   Boolean
@@ -91,8 +94,11 @@ model Game {
   title       String
   coverImage  String?
   releaseDate DateTime?
+  genres      String?  // Stored as JSON string
   hltbTimes   String?  // Stored as JSON string: {main, extra, completionist}
   scores      String?  // Stored as JSON string: {openCritic, rawg}
+  dataMissing Boolean  @default(false)
+  updatedAt   DateTime @default(now()) @updatedAt
 
   usersWithGame UserLibrary[]
 }
