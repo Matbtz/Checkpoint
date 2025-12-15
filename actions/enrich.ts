@@ -48,32 +48,24 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
 
     if (rawgDetails || rawgGame) {
         const g = rawgDetails || rawgGame;
-        if (g.description_raw || g.description) dataToUpdate.description = g.description_raw || g.description;
 
-        // Fix: Mapping for coverUrl and Fallback
+        // Description: rawgData.description_raw
+        if (g.description_raw || g.description) {
+            dataToUpdate.description = g.description_raw || g.description;
+        }
+
+        // CoverUrl: rawgData.background_image
         if (g.background_image) {
             dataToUpdate.backgroundImage = g.background_image;
-            // Also update coverImage as requested if it's missing or if we want to ensure high quality.
-            // However, the prompt says "coverUrl: doit prendre la valeur de rawgGame.background_image".
-            // The schema has `coverImage`. We should probably update it.
-            // And "Fallback Image: Si RAWG ne renvoie pas d'image, garde l'URL Steam... générée lors de l'import initial (ne l'écrase pas avec null)."
-            // So if `g.background_image` is present, we update `coverImage`.
             dataToUpdate.coverImage = g.background_image;
         }
 
-        // Fix: genres mapping to comma-separated string as requested
-        // BUT: The frontend expects a JSON array or handles string?
-        // GameCard.tsx: try { return game.genres ? JSON.parse(game.genres) : []; }
-        // If we save it as a string "Action, Adventure", JSON.parse will fail (or return string?).
-        // If it fails, GameCard returns [].
-        // So we MUST also update GameCard.tsx to handle comma-separated strings if we change this.
-        // Or we stick to JSON array but the prompt EXPLICITLY said: `genres: doit prendre rawgGame.genres.map(g => g.name).join(", ")`.
-        // I will follow the prompt and update GameCard.tsx.
+        // Genres: rawgData.genres.map((g: any) => g.name).join(", ")
         if (g.genres) {
             dataToUpdate.genres = g.genres.map((gen: any) => gen.name).join(", ");
         }
 
-        // Fix: releaseDate mapping
+        // ReleaseDate: new Date(rawgData.released)
         if (g.released) {
             dataToUpdate.releaseDate = new Date(g.released);
         }
@@ -89,23 +81,6 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
         const bestMatch = hltbResults.find(r => r.name.toLowerCase() === gameTitle.toLowerCase()) || hltbResults[0];
 
         if (bestMatch) {
-            // HLTB service now returns HOURS.
-            // We need to store them. The schema has Int.
-            // `lib/format-utils.ts` expects HOURS in `calculateProgress`.
-            // So if I store 10 (hours), calculateProgress does 10 * 60 = 600 minutes.
-            // But `playtimeSteam` is in minutes.
-            // So logic matches: store HOURS in DB.
-
-            // Wait, schema comment: "hltbMain Int? // En minutes"
-            // If schema comment says minutes, but format-utils treats it as hours...
-            // `format-utils.ts`: `targetMinutes = targetHours * 60;` implies input `targetHours` is in hours.
-            // And it comes from `times.main` which comes from DB `hltbMain` (via `adjustedHltbTimes`).
-            // So the code EXPECTS `hltbMain` to be in HOURS (e.g., 10).
-            // But the SCHEMA COMMENT says "En minutes".
-            // Trust the CODE (format-utils) over the COMMENT, or update consistency?
-            // If I store minutes (600), format-utils will do 600 * 60 = 36000 minutes target. That's wrong.
-            // So I must store HOURS.
-
             dataToUpdate.hltbMain = Math.round(bestMatch.gameplayMain);
             dataToUpdate.hltbExtra = Math.round(bestMatch.gameplayMainExtra);
             dataToUpdate.hltbCompletionist = Math.round(bestMatch.gameplayCompletionist);

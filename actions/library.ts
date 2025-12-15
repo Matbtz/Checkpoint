@@ -5,6 +5,21 @@ import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { searchRawgGame, getRawgGameDetails } from '@/lib/rawg';
 
+export async function updateLibraryEntry(userLibraryId: string, data: { status?: string, playtimeManual?: number, targetedCompletionType?: string }) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await prisma.userLibrary.update({
+    where: {
+      id: userLibraryId,
+      userId: session.user.id
+    },
+    data: data,
+  });
+
+  revalidatePath('/dashboard');
+}
+
 export async function updateGameStatus(gameId: string, status: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -88,14 +103,10 @@ export async function searchAndAddGame(query: string) {
                 title: details.name,
                 coverImage: details.background_image,
                 releaseDate: details.released ? new Date(details.released) : null,
-                genres: JSON.stringify(details.genres.map(g => g.name)),
+                genres: JSON.stringify(details.genres.map((g: { name: any; }) => g.name)),
                 dataMissing: true // Flag for enrichment
             }
         });
-
-        // Trigger enrichment? For now we assume the dataMissing flag will handle it via a background job or next visit.
-        // Or we should call enrichment here. But I can't easily import `enrichGame` if it is in actions/enrich.ts and circular deps occur.
-        // Assuming `dataMissing: true` is enough for now.
     }
 
     // 4. Add to user library
@@ -137,26 +148,6 @@ export async function fixGameMatch(gameId: string, hltbData: { main: number, ext
     });
 
     if (!userLib) throw new Error("Game not in library");
-
-    // Update the Game model with provided HLTB times
-    // Note: This updates the global game data, which affects all users.
-    // This fits the "Fix Match" description where the data is "wrong".
-    // Ideally we might want per-user override, but the prompt says "Fix Match ... relier le bon jeu" implies fixing the data link.
-    // However, if we just paste "times", we are manually overriding values.
-    // If the prompt meant "Paste HLTB Link", then we should fetch from that link.
-    // Since I can't easily fetch from a specific HLTB ID/Link with the current `howlongtobeat` lib wrapper (it searches by name),
-    // I will implement this as "User provides values manually" OR "User provides name to search".
-    // The prompt says "coller un lien/ID HLTB correct".
-    // If I paste a link, I can extract the ID.
-    // The `howlongtobeat` lib has `detail(id)`.
-
-    // Let's defer the implementation of fetching from ID and instead accept values for now,
-    // or try to implement fetching if I can.
-
-    // For now, I will accept values directly to be safe and robust.
-    // Wait, "Fix Match" usually means "I want to link this game to *that* HLTB entry".
-    // But if I can't fetch *that* HLTB entry reliable, manual values are a good fallback.
-    // I'll stick to updating with provided values.
 
     await prisma.game.update({
         where: { id: gameId },
