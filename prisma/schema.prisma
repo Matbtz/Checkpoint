@@ -1,133 +1,41 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL") // Utilise le connection pooling (Variable Vercel)
-  directUrl = env("POSTGRES_URL_NON_POOLING") // Utilise la connexion directe pour les migrations (Variable Vercel)
+  url       = env("POSTGRES_PRISMA_URL") // Uses connection pooling
+  directUrl = env("POSTGRES_URL_NON_POOLING") // Uses direct connection
 }
 
 model User {
-  id            String          @id @default(uuid())
-  name          String?
-  email         String?         @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?         // Hashed password for credentials provider
-  steamId       String?         // Optional, can be populated from Account
-  preferences   String?         // Stored as JSON string (e.g., {"pacing": "fast"})
-
-  accounts      Account[]
-  sessions      Session[]
-  Authenticator Authenticator[] // Added opposite relation
+  id            String   @id @default(cuid())
+  email         String   @unique
+  steamId       String?  @unique
+  createdAt     DateTime @default(now())
   library       UserLibrary[]
-  tags          Tag[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Account {
-  id                String  @id @default(uuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(uuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-// Optional for WebAuthn support
-model Authenticator {
-  credentialID         String  @unique
-  userId               String
-  providerAccountId    String
-  credentialPublicKey  String
-  credentialCounter    Int? // Fixed typo from 'counter' if needed, but schema said 'counter' before. Assuming 'counter' was intended or correct.
-  // Wait, I should double check the previous schema content I read.
-  // It said `counter Int`. I should keep it unless I know it's wrong.
-  counter              Int
-  credentialDeviceType String
-  credentialBackedUp   Boolean
-  transports           String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@id([userId, credentialID])
 }
 
 model Game {
-  id          String   @id // IGDB or Steam ID
-  title       String
-  coverImage  String?
-  releaseDate DateTime?
-  genres      String?  // Stored as JSON string
-  hltbTimes   String?  // Stored as JSON string: {main, extra, completionist}
-  scores      String?  // Stored as JSON string: {openCritic, rawg}
-  dataMissing Boolean  @default(false)
-  updatedAt   DateTime @default(now()) @updatedAt
-
-  usersWithGame UserLibrary[]
+  id                String   @id // ID externe (IGDB ou Steam généré)
+  title             String
+  coverUrl          String?
+  releaseDate       DateTime?
+  hltbMain          Int?     // En minutes
+  hltbExtra         Int?
+  hltbCompletionist Int?
+  users             UserLibrary[]
 }
 
 model UserLibrary {
-  id                     String   @id @default(uuid())
-  userId                 String
-  user                   User     @relation(fields: [userId], references: [id])
-  gameId                 String
-  game                   Game     @relation(fields: [gameId], references: [id])
-  status                 String   // Enum: Wishlist, Backlog, Playing, Completed, Abandoned
-  playTimeManual         Int?     // In minutes
-  playTimeSteam          Int?     // In minutes
-  targetedCompletionType String?  // Enum: Main, Extra, 100%
-  dateAdded              DateTime @default(now())
-  tags                   Tag[]
+  id             String   @id @default(cuid())
+  userId         String
+  gameId         String
+  status         String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
+  playtimeSteam  Int      @default(0) // En minutes
+  playtimeManual Int?     // Override
+  user           User     @relation(fields: [userId], references: [id])
+  game           Game     @relation(fields: [gameId], references: [id])
 
   @@unique([userId, gameId])
-}
-
-model Tag {
-  id     String @id @default(uuid())
-  name   String
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  libraryEntries UserLibrary[]
-
-  @@unique([userId, name])
 }
