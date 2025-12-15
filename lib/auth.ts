@@ -9,6 +9,10 @@ import { getServerSession } from "next-auth";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getAuthOptions(req: any): NextAuthOptions {
+  if (!process.env.STEAM_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error("CRITICAL: STEAM_SECRET env var is missing in production!");
+  }
+
   const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
   return {
