@@ -20,9 +20,9 @@ export interface GetOwnedGamesResponse {
 }
 
 export async function getOwnedGames(steamId: string): Promise<SteamGame[]> {
-  const apiKey = process.env.STEAM_API_KEY;
+  const apiKey = process.env.STEAM_SECRET;
   if (!apiKey) {
-    throw new Error('STEAM_API_KEY not configured');
+    throw new Error('STEAM_SECRET api key not configured');
   }
 
   const url = `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamId}&format=json&include_appinfo=true&include_played_free_games=true`;
