@@ -78,6 +78,7 @@ model Game {
   hltbTimes         String?  // JSON string for HLTB times
   scores            String?  // JSON string for scores (metacritic, user rating)
   dataMissing       Boolean  @default(false)
+  dataFetched       Boolean  @default(false)
   lastSync          DateTime? // Pour savoir quand on a mis à jour pour la dernière fois
   hltbMain          Int?     // En minutes (Keeping for backward compatibility or direct access if needed, but logic seems to use JSON or different fields)
   hltbExtra         Int?
