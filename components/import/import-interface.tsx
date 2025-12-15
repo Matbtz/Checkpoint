@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { SteamGame } from '@/lib/steam';
 import { importGames } from '@/actions/steam';
 
 export default function ImportInterface({ initialGames }: { initialGames: SteamGame[] }) {
+  const router = useRouter();
   const [games] = useState<SteamGame[]>(initialGames);
   const [minPlaytime, setMinPlaytime] = useState(0);
   const [selectedGames, setSelectedGames] = useState<Set<number>>(new Set(initialGames.map(g => g.appid)));
@@ -38,6 +40,8 @@ export default function ImportInterface({ initialGames }: { initialGames: SteamG
       const gamesToImport = filteredGames.filter(g => selectedGames.has(g.appid));
       const result = await importGames(gamesToImport);
       setMessage(`Successfully imported ${result.count} games!`);
+      router.refresh();
+      router.push('/dashboard');
     } catch (error) {
       setMessage('Error importing games.');
       console.error(error);

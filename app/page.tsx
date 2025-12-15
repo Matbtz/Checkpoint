@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/auth";
-import { SignOutButton } from "@/components/auth/sign-out-button"; // Create this component
 
 export default async function Home() {
   const session = await auth();
@@ -29,12 +28,17 @@ export default async function Home() {
                   </p>
                    <div className="flex gap-4">
                       <Link
-                          href="/import"
+                          href="/dashboard"
                           className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                      >
+                          Go to Dashboard
+                      </Link>
+                      <Link
+                          href="/import"
+                          className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-zinc-900 dark:text-white dark:ring-zinc-700 dark:hover:bg-zinc-800"
                       >
                           Import Steam Games
                       </Link>
-                      <SignOutButton />
                    </div>
               </div>
           ) : (
