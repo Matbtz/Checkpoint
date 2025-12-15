@@ -22,6 +22,9 @@ model Account {
   id_token          String? @db.Text
   session_state     String?
 
+  // Champ spécifique pour supporter le provider Steam qui envoie parfois cette donnée en doublon
+  steamId            String?
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
@@ -33,6 +36,15 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+
+  @@unique([identifier, token])
 }
 
 model User {
