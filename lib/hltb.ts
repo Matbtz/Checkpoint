@@ -1,79 +1,50 @@
-interface HltbResult {
-  id: string;
-  name: string;
-  gameplayMain: number;
-  gameplayMainExtra: number;
-  gameplayCompletionist: number;
-}
-
-interface HltbRawItem {
-  game_id: number;
-  game_name: string;
-  comp_main: number;
-  comp_plus: number;
-  comp_100: number;
-  [key: string]: unknown;
-}
-
-export async function searchHowLongToBeat(gameTitle: string): Promise<HltbResult[]> {
+export async function searchHowLongToBeat(gameTitle: string) {
   try {
-    const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    const response = await fetch('https://howlongtobeat.com/api/search', {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://howlongtobeat.com/',
         'Origin': 'https://howlongtobeat.com',
         'Content-Type': 'application/json'
-    };
-
-    const searchUrl = 'https://howlongtobeat.com/api/search';
-
-    const payload = {
-        "searchType": "games",
-        "searchTerms": [gameTitle],
-        "searchPage": 1,
-        "size": 20,
-        "searchOptions": {
-            "games": {
-                "userId": 0,
-                "platform": "",
-                "sortCategory": "popular",
-                "rangeCategory": "main",
-                "rangeTime": { "min": null, "max": null },
-                "gameplay": { "perspective": "", "flow": "", "genre": "" },
-                "rangeYear": { "min": "", "max": "" },
-                "modifier": ""
-            }
+      },
+      body: JSON.stringify({
+        searchType: "games",
+        searchTerms: [gameTitle],
+        searchPage: 1,
+        size: 5,
+        searchOptions: {
+          games: {
+            userId: 0,
+            platform: "",
+            sortCategory: "popular",
+            rangeCategory: "main",
+            rangeTime: { min: null, max: null },
+            gameplay: { perspective: "", flow: "", genre: "" },
+            rangeYear: { min: "", max: "" },
+            modifier: ""
+          }
         }
-    };
-
-    const response = await fetch(searchUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(payload)
+      })
     });
 
-    if (!response.ok) {
-         console.error(`HLTB API Error: ${response.status} ${response.statusText}`);
-         return [];
-    }
+    if (!response.ok) throw new Error(`HLTB blocked: ${response.status}`);
 
     const data = await response.json();
+    if (!data.data || data.data.length === 0) return null;
 
-    if (!data.data || !Array.isArray(data.data)) {
-        return [];
-    }
+    const bestMatch = data.data[0];
 
-    // Map the results
-    return data.data.map((game: HltbRawItem) => ({
-        id: game.game_id.toString(),
-        name: game.game_name,
-        // Converting seconds to hours to match application expectation (format-utils expects hours)
-        gameplayMain: Math.round((game.comp_main / 3600) * 10) / 10,
-        gameplayMainExtra: Math.round((game.comp_plus / 3600) * 10) / 10,
-        gameplayCompletionist: Math.round((game.comp_100 / 3600) * 10) / 10
-    }));
+    // Conversion secondes -> minutes (HLTB renvoie parfois des secondes)
+    const convert = (val: number) => Math.round(val / 60);
 
+    return {
+      main: convert(bestMatch.comp_main),       // Main Story
+      extra: convert(bestMatch.comp_plus),      // Main + Extra
+      completionist: convert(bestMatch.comp_100) // Completionist
+    };
   } catch (error) {
-    console.error("Error scraping HLTB:", error);
-    return [];
+    console.error("HLTB Fetch Error:", error);
+    return null; // Retourne null pour ne pas faire planter RAWG
   }
 }
