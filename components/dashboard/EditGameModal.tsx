@@ -13,6 +13,12 @@ import { useEffect, useState } from 'react';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
+interface UpdateData {
+  status?: string;
+  targetedCompletionType?: string;
+  playtimeManual?: number;
+}
+
 function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
     const [isSelected, setIsSelected] = useState(initiallySelected);
     const [loading, setLoading] = useState(false);
@@ -74,7 +80,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const dataToUpdate: any = {};
+      const dataToUpdate: UpdateData = {};
 
       if (status !== item.status) {
           dataToUpdate.status = status;
