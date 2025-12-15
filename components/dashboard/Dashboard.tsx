@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { Tag } from '@prisma/client';
 
-type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
+type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] }; // tags are temporarily ignored in runtime
 
 interface DashboardProps {
   initialLibrary: GameWithLibrary[];
@@ -62,7 +62,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags 
 
     // Tag Filter
     if (tagFilter !== 'All') {
-        if (!item.tags || !item.tags.some(t => t.id === tagFilter)) return false;
+        // if (!item.tags || !item.tags.some(t => t.id === tagFilter)) return false;
     }
 
     // Playtime Filter
@@ -93,7 +93,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags 
     switch (sortBy) {
       case 'dateAdded':
         // Newest first
-        return new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime();
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       case 'progress':
         // Highest progress first
         const progressA = calculateProgress(a.playTimeManual ?? a.playTimeSteam ?? 0, a.game.hltbTimes, a.targetedCompletionType || 'Main');

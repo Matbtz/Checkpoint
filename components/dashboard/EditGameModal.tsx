@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
+/*
 function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
     const [isSelected, setIsSelected] = useState(initiallySelected);
     const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySe
         </button>
     );
 }
+*/
 
 interface EditGameModalProps {
   item: GameWithLibrary;
@@ -190,17 +192,12 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
               </div>
           )}
 
-          {/* Tags */}
+          {/* Tags - Temporarily disabled until Tag relation is ready */}
+          {/*
           <div className="grid gap-2">
             <Label>Tags</Label>
             <div className="flex flex-wrap gap-2">
                 {availableTags.map(tag => {
-                    // Check if tag is in item.tags.
-                    // IMPORTANT: item.tags comes from server. Local updates won't show unless we track them.
-                    // For MVP+, we might accept that it updates on refresh, or we implement local state.
-                    // Let's implement local state for tags.
-                    // But wait, 'item' prop doesn't change.
-                    // We need a local 'selectedTags' state.
                     return (
                         <TagBadge
                             key={tag.id}
@@ -213,6 +210,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                  {availableTags.length === 0 && <span className="text-sm text-zinc-500">Go to Settings to create tags.</span>}
             </div>
           </div>
+          */}
 
         </div>
         <DialogFooter>

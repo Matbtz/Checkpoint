@@ -18,10 +18,9 @@ export async function getUserLibrary() {
     },
     include: {
       game: true,
-      tags: true,
     },
     orderBy: {
-      dateAdded: 'desc',
+      createdAt: 'desc',
     },
   });
 
