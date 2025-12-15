@@ -92,6 +92,7 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
     }
 
     dataToUpdate.dataMissing = false;
+    dataToUpdate.dataFetched = true;
 
     // 3. Update Database
     await prisma.game.update({
