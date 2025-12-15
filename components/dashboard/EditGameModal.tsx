@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { updateGameStatus, updateTargetedCompletion, updateManualPlayTime, fixGameMatch } from '@/actions/library';
+import { updateLibraryEntry, fixGameMatch } from '@/actions/library';
 import { assignTag, removeTag, getUserTags } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
 import { Loader2 } from 'lucide-react';
@@ -74,22 +74,25 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // Execute all updates
-      const promises = [];
+      const dataToUpdate: any = {};
 
       if (status !== item.status) {
-        promises.push(updateGameStatus(item.gameId, status));
+          dataToUpdate.status = status;
       }
 
       if (completionType !== item.targetedCompletionType) {
-        promises.push(updateTargetedCompletion(item.gameId, completionType));
+          dataToUpdate.targetedCompletionType = completionType;
       }
 
       const timeVal = parseInt(manualTime);
       if (!isNaN(timeVal) && timeVal !== item.playtimeManual) {
-         // If it's the same as Steam time and we want to "reset", maybe we pass null?
-         // For now, just update.
-         promises.push(updateManualPlayTime(item.gameId, timeVal));
+          dataToUpdate.playtimeManual = timeVal;
+      }
+
+      const promises = [];
+
+      if (Object.keys(dataToUpdate).length > 0) {
+          promises.push(updateLibraryEntry(item.id, dataToUpdate));
       }
 
       if (showFixMatch) {
@@ -195,12 +198,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             <Label>Tags</Label>
             <div className="flex flex-wrap gap-2">
                 {availableTags.map(tag => {
-                    // Check if tag is in item.tags.
-                    // IMPORTANT: item.tags comes from server. Local updates won't show unless we track them.
-                    // For MVP+, we might accept that it updates on refresh, or we implement local state.
-                    // Let's implement local state for tags.
-                    // But wait, 'item' prop doesn't change.
-                    // We need a local 'selectedTags' state.
                     return (
                         <TagBadge
                             key={tag.id}

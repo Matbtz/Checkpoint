@@ -135,7 +135,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   return (
     <>
     <div
-        className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
+        className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md cursor-pointer relative group hover:scale-105 transition-transform duration-200"
         onClick={() => setIsEditModalOpen(true)}
     >
       {/* Thumbnail Left */}
