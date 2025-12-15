@@ -69,11 +69,16 @@ model Game {
   id                String   @id // ID externe (IGDB ou Steam généré)
   title             String
   coverImage        String?
+  backgroundImage   String?  // Image de fond haute qualité (RAWG)
   releaseDate       DateTime?
+  description       String?  @db.Text
+  rawgRating        Float?   // Note des joueurs (sur 5 ou 10)
+  metacritic        Int?     // Score critique (souvent via RAWG)
   genres            String?  // JSON string
   hltbTimes         String?  // JSON string for HLTB times
   scores            String?  // JSON string for scores (metacritic, user rating)
   dataMissing       Boolean  @default(false)
+  lastSync          DateTime? // Pour savoir quand on a mis à jour pour la dernière fois
   hltbMain          Int?     // En minutes (Keeping for backward compatibility or direct access if needed, but logic seems to use JSON or different fields)
   hltbExtra         Int?
   hltbCompletionist Int?

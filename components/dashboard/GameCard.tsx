@@ -6,9 +6,10 @@ import { type UserLibrary, type Game } from '@prisma/client';
 import { formatReleaseDate, getCountdownString, isReleasingSoon, calculateProgress } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { EditGameModal } from './EditGameModal';
-import { Plus } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { updateManualPlayTime } from '@/actions/library';
+import { enrichGameData } from '@/actions/enrich';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 
@@ -24,6 +25,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   const [countdown, setCountdown] = useState<string>('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Quick Update State
   const [quickAddTime, setQuickAddTime] = useState('');
@@ -48,11 +50,19 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
 
   const hltbTimes = useMemo(() => {
     try {
+        // Prefer explicit fields if available (added via enrichment)
+        if (game.hltbMain !== null || game.hltbExtra !== null || game.hltbCompletionist !== null) {
+            return {
+                main: game.hltbMain,
+                extra: game.hltbExtra,
+                completionist: game.hltbCompletionist
+            };
+        }
         return game.hltbTimes ? JSON.parse(game.hltbTimes) : {};
     } catch {
         return {};
     }
-  }, [game.hltbTimes]);
+  }, [game.hltbTimes, game.hltbMain, game.hltbExtra, game.hltbCompletionist]);
 
   // Date Logic
   const releaseDate = useMemo(() => game.releaseDate ? new Date(game.releaseDate) : null, [game.releaseDate]);
@@ -99,6 +109,21 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       setQuickAddTime('');
   };
 
+  const handleSync = async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsSyncing(true);
+      try {
+          await enrichGameData(game.id, game.title);
+      } catch (error) {
+          console.error("Sync failed", error);
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
+  const rawgScore = game.rawgRating || scores.rawg;
+  const metacriticScore = game.metacritic || scores.metacritic;
+
   return (
     <>
     <div
@@ -107,9 +132,9 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
     >
       {/* Thumbnail Left */}
       <div className="relative w-32 h-auto flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex flex-col items-center justify-center text-center p-2">
-        {!imageError && game.coverImage ? (
+        {!imageError && (game.backgroundImage || game.coverImage) ? (
           <Image
-            src={game.coverImage}
+            src={game.backgroundImage || game.coverImage || ''}
             alt={game.title}
             fill
             className="object-cover"
@@ -145,14 +170,24 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
                     OC: {Math.round(scores.openCritic)}
                 </span>
             )}
-            {scores.rawg && (
+            {rawgScore && (
                 <span className={cn(
                     "px-2 py-0.5 text-xs font-medium rounded-full border",
-                    scores.rawg >= 80 ? "bg-blue-100 text-blue-800 border-blue-200" :
-                    scores.rawg >= 60 ? "bg-orange-100 text-orange-800 border-orange-200" :
+                    rawgScore >= 4 ? "bg-blue-100 text-blue-800 border-blue-200" :
+                    rawgScore >= 3 ? "bg-orange-100 text-orange-800 border-orange-200" :
                     "bg-gray-100 text-gray-800 border-gray-200"
                 )}>
-                    RAWG: {Math.round(scores.rawg)}
+                    RAWG: {rawgScore}
+                </span>
+            )}
+            {metacriticScore && (
+                <span className={cn(
+                    "px-2 py-0.5 text-xs font-medium rounded-full border",
+                    metacriticScore >= 80 ? "bg-green-100 text-green-800 border-green-200" :
+                    metacriticScore >= 60 ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                    "bg-red-100 text-red-800 border-red-200"
+                )}>
+                    Meta: {metacriticScore}
                 </span>
             )}
         </div>
@@ -187,30 +222,39 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       </div>
 
       {/* Quick Update Button for Playing games */}
-      {item.status === 'Playing' && (
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-              <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                  <PopoverTrigger asChild>
-                      <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md">
-                          <Plus className="h-4 w-4" />
-                      </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-40 p-2" align="end">
-                        <div className="flex gap-1">
-                            <Input
-                                type="number"
-                                placeholder="+ Min"
-                                value={quickAddTime}
-                                onChange={(e) => setQuickAddTime(e.target.value)}
-                                className="h-8 text-xs"
-                                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
-                            />
-                            <Button size="sm" className="h-8 px-2" onClick={handleQuickAdd}>Ok</Button>
-                        </div>
-                  </PopoverContent>
-              </Popover>
-          </div>
-      )}
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+        <Button
+            size="icon"
+            variant="secondary"
+            className="h-8 w-8 rounded-full shadow-md"
+            onClick={handleSync}
+            disabled={isSyncing}
+        >
+            <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+        </Button>
+        {item.status === 'Playing' && (
+            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+                <PopoverTrigger asChild>
+                    <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-md">
+                        <Plus className="h-4 w-4" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-2" align="end">
+                    <div className="flex gap-1">
+                        <Input
+                            type="number"
+                            placeholder="+ Min"
+                            value={quickAddTime}
+                            onChange={(e) => setQuickAddTime(e.target.value)}
+                            className="h-8 text-xs"
+                            onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+                        />
+                        <Button size="sm" className="h-8 px-2" onClick={handleQuickAdd}>Ok</Button>
+                    </div>
+                </PopoverContent>
+            </Popover>
+        )}
+      </div>
     </div>
 
     <EditGameModal item={item} isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} />
