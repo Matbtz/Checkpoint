@@ -52,7 +52,7 @@ interface EditGameModalProps {
 export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [status, setStatus] = useState(item.status);
   const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
-  const [manualTime, setManualTime] = useState(item.playTimeManual?.toString() || (item.playTimeSteam || 0).toString());
+  const [manualTime, setManualTime] = useState(item.playtimeManual?.toString() || (item.playtimeSteam || 0).toString());
   const [loading, setLoading] = useState(false);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
@@ -86,7 +86,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       }
 
       const timeVal = parseInt(manualTime);
-      if (!isNaN(timeVal) && timeVal !== item.playTimeManual) {
+      if (!isNaN(timeVal) && timeVal !== item.playtimeManual) {
          // If it's the same as Steam time and we want to "reset", maybe we pass null?
          // For now, just update.
          promises.push(updateManualPlayTime(item.gameId, timeVal));

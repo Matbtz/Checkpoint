@@ -85,7 +85,7 @@ export async function importGames(games: SteamGame[]) {
                     userId: userId,
                     gameId: game.appid.toString(),
                     status: 'Backlog', // Default status
-                    playTimeSteam: game.playtime_forever,
+                    playtimeSteam: game.playtime_forever,
                 }
             });
             importedCount++;
@@ -99,7 +99,7 @@ export async function importGames(games: SteamGame[]) {
                     }
                 },
                 data: {
-                    playTimeSteam: game.playtime_forever
+                    playtimeSteam: game.playtime_forever
                 }
             });
             importedCount++;

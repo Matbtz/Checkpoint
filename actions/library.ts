@@ -50,7 +50,7 @@ export async function updateManualPlayTime(gameId: string, minutes: number) {
         gameId: gameId,
       },
     },
-    data: { playTimeManual: minutes },
+    data: { playtimeManual: minutes },
   });
 
   revalidatePath('/dashboard');

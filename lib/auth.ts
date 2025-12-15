@@ -16,7 +16,7 @@ export function getAuthOptions(req: any): NextAuthOptions {
     adapter: PrismaAdapter(prisma) as any,
     providers: [
         SteamProvider(req, {
-            clientSecret: process.env.STEAM_SECRET!,
+            clientSecret: process.env.STEAM_SECRET || 'mock_secret_for_build',
             callbackUrl: `${baseUrl}/api/auth/callback`
         }),
         CredentialsProvider({
