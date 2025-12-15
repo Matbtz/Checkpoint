@@ -23,6 +23,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   const { game } = item;
   const [countdown, setCountdown] = useState<string>('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Quick Update State
   const [quickAddTime, setQuickAddTime] = useState('');
@@ -69,15 +70,10 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   }, [isSoon, releaseDate]);
 
   // Progress Logic
-  const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
+  const playedMinutes = item.playtimeManual !== null ? item.playtimeManual : item.playtimeSteam;
   const targetType = item.targetedCompletionType || 'Main';
 
   // Apply pace factor to HLTB times for display/calculation purposes
-  // Note: calculateProgress usually takes played vs total. If paceFactor means "I play slower",
-  // then the expected time is HLTB * paceFactor.
-  // We should pass the adjusted HLTB times to calculateProgress or adjust logic inside.
-  // Since calculateProgress is imported, let's adjust the HLTB times before passing them.
-
   const adjustedHltbTimes = useMemo(() => {
       const times = { ...hltbTimes };
       if (times.main) times.main = Math.round(times.main * paceFactor * 10) / 10; // keep 1 decimal
@@ -87,6 +83,10 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   }, [hltbTimes, paceFactor]);
 
   const progress = calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
+
+  // Determine if HLTB data is effectively missing for the selected target type
+  const targetTime = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main'];
+  const hasHltbData = targetTime > 0;
 
   const handleQuickAdd = async () => {
       if (!quickAddTime) return;
@@ -106,17 +106,20 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
         onClick={() => setIsEditModalOpen(true)}
     >
       {/* Thumbnail Left */}
-      <div className="relative w-32 h-auto flex-shrink-0 bg-zinc-100 dark:bg-zinc-800">
-        {game.coverImage ? (
+      <div className="relative w-32 h-auto flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex flex-col items-center justify-center text-center p-2">
+        {!imageError && game.coverImage ? (
           <Image
             src={game.coverImage}
             alt={game.title}
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 33vw"
+            onError={() => setImageError(true)}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Image</div>
+           <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-2">
+                <span className="text-white text-xs font-bold line-clamp-3">{game.title}</span>
+           </div>
         )}
       </div>
 
@@ -166,13 +169,17 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-zinc-500">
                         <span>Progression ({targetType})</span>
-                        <span>{Math.round(progress)}%</span>
+                        <span>{hasHltbData ? `${Math.round(progress)}%` : 'N/A'}</span>
                     </div>
-                    <div className="w-full bg-zinc-100 rounded-full h-2.5 dark:bg-zinc-700">
-                        <div
-                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                        ></div>
+                    <div className="w-full bg-zinc-100 rounded-full h-2.5 dark:bg-zinc-700 overflow-hidden">
+                        {hasHltbData ? (
+                            <div
+                                className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+                                style={{ width: `${progress}%` }}
+                            ></div>
+                        ) : (
+                            <div className="bg-zinc-300 dark:bg-zinc-600 h-2.5 w-full"></div>
+                        )}
                     </div>
                 </div>
              )}

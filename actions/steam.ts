@@ -70,11 +70,15 @@ export async function importGames(games: SteamGame[]) {
         // Upsert Game
         await prisma.game.upsert({
             where: { id: game.appid.toString() },
-            update: { title: game.name },
+            update: {
+                title: game.name,
+                coverImage: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`
+            },
             create: {
                 id: game.appid.toString(),
                 title: game.name,
-                // We could fetch more details here if needed
+                coverImage: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`,
+                dataMissing: true
             }
         });
 
