@@ -44,20 +44,20 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags 
     if (statusFilter !== 'All' && item.status !== statusFilter) return false;
 
     // Platform Filter
-    // Logic: If playTimeSteam > 0 or we can infer it's from steam (e.g. steamId on user, but item doesn't have it).
-    // Actually, UserLibrary has `playTimeSteam`. If it's not null, it's likely Steam.
-    // `playTimeManual` implies Manual.
+    // Logic: If playtimeSteam > 0 or we can infer it's from steam (e.g. steamId on user, but item doesn't have it).
+    // Actually, UserLibrary has `playtimeSteam`. If it's not null, it's likely Steam.
+    // `playtimeManual` implies Manual.
     if (platformFilter === 'Steam') {
-        if (!item.playTimeSteam && item.playTimeSteam !== 0) return false; // Basic check
+        if (!item.playtimeSteam && item.playtimeSteam !== 0) return false; // Basic check
         // Or strictly:
-        // if (item.playTimeSteam === null) return false;
+        // if (item.playtimeSteam === null) return false;
     }
     if (platformFilter === 'Manual') {
         // Assume anything with manual time or just not steam?
         // Let's assume if manual time is set and > 0, or if we want to filter by "Added manually".
         // The prompt says "par plateforme".
         // Since we don't have a "Platform" field, this is best effort.
-        if (item.playTimeManual === null && item.playTimeSteam !== null) return false;
+        if (item.playtimeManual === null && item.playtimeSteam !== null) return false;
     }
 
     // Tag Filter
@@ -67,7 +67,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags 
 
     // Playtime Filter
     if (playtimeFilter !== 'All') {
-        const minutes = item.playTimeManual ?? item.playTimeSteam ?? 0;
+        const minutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
         const hours = minutes / 60;
         switch (playtimeFilter) {
             case '0-10h':
@@ -93,11 +93,11 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0, availableTags 
     switch (sortBy) {
       case 'dateAdded':
         // Newest first
-        return new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime();
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       case 'progress':
         // Highest progress first
-        const progressA = calculateProgress(a.playTimeManual ?? a.playTimeSteam ?? 0, a.game.hltbTimes, a.targetedCompletionType || 'Main');
-        const progressB = calculateProgress(b.playTimeManual ?? b.playTimeSteam ?? 0, b.game.hltbTimes, b.targetedCompletionType || 'Main');
+        const progressA = calculateProgress(a.playtimeManual ?? a.playtimeSteam ?? 0, a.game.hltbTimes, a.targetedCompletionType || 'Main');
+        const progressB = calculateProgress(b.playtimeManual ?? b.playtimeSteam ?? 0, b.game.hltbTimes, b.targetedCompletionType || 'Main');
         return progressB - progressA;
       case 'releaseDate':
         // Newest release first (or future first?)

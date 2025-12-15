@@ -8,22 +8,63 @@ datasource db {
   directUrl = env("DATABASE_POSTGRES_URL_NON_POOLING") // Nom exact Vercel/Supabase
 }
 
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model User {
   id            String   @id @default(cuid())
-  email         String   @unique
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
   steamId       String?  @unique
+  preferences   String?  // JSON string
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  accounts      Account[]
+  sessions      Session[]
   library       UserLibrary[]
+  tags          Tag[]
 }
 
 model Game {
   id                String   @id // ID externe (IGDB ou Steam généré)
   title             String
-  coverUrl          String?
+  coverImage        String?
   releaseDate       DateTime?
-  hltbMain          Int?     // En minutes
+  genres            String?  // JSON string
+  hltbTimes         String?  // JSON string for HLTB times
+  scores            String?  // JSON string for scores (metacritic, user rating)
+  dataMissing       Boolean  @default(false)
+  hltbMain          Int?     // En minutes (Keeping for backward compatibility or direct access if needed, but logic seems to use JSON or different fields)
   hltbExtra         Int?
   hltbCompletionist Int?
+  updatedAt         DateTime @updatedAt
   users             UserLibrary[]
 }
 
@@ -34,8 +75,21 @@ model UserLibrary {
   status         String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
   playtimeSteam  Int      @default(0) // En minutes
   playtimeManual Int?     // Override
+  targetedCompletionType String @default("MAIN")
+  createdAt      DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id])
   game           Game     @relation(fields: [gameId], references: [id])
+  tags           Tag[]
 
   @@unique([userId, gameId])
+}
+
+model Tag {
+  id        String        @id @default(cuid())
+  name      String
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  libraries UserLibrary[]
+
+  @@unique([userId, name])
 }

@@ -69,7 +69,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   }, [isSoon, releaseDate]);
 
   // Progress Logic
-  const playedMinutes = item.playTimeManual ?? item.playTimeSteam ?? 0;
+  const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
 
   // Apply pace factor to HLTB times for display/calculation purposes
@@ -93,7 +93,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       const minutesToAdd = parseInt(quickAddTime);
       if (isNaN(minutesToAdd)) return;
 
-      const current = item.playTimeManual ?? item.playTimeSteam ?? 0;
+      const current = item.playtimeManual ?? item.playtimeSteam ?? 0;
       await updateManualPlayTime(item.gameId, current + minutesToAdd);
       setIsPopoverOpen(false);
       setQuickAddTime('');
