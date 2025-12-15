@@ -6,42 +6,42 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { updateGameStatus, updateTargetedCompletion, updateManualPlayTime, fixGameMatch } from '@/actions/library';
-import { assignTag, removeTag, getUserTags } from '@/actions/tag';
+// import { assignTag, removeTag, getUserTags } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
-function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
-    const [isSelected, setIsSelected] = useState(initiallySelected);
-    const [loading, setLoading] = useState(false);
+// function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
+//     const [isSelected, setIsSelected] = useState(initiallySelected);
+//     const [loading, setLoading] = useState(false);
 
-    const toggle = async () => {
-        setLoading(true);
-        if (isSelected) {
-            await removeTag(libraryId, tag.id);
-        } else {
-            await assignTag(libraryId, tag.id);
-        }
-        setIsSelected(!isSelected);
-        setLoading(false);
-    };
+//     const toggle = async () => {
+//         setLoading(true);
+//         if (isSelected) {
+//             await removeTag(libraryId, tag.id);
+//         } else {
+//             await assignTag(libraryId, tag.id);
+//         }
+//         setIsSelected(!isSelected);
+//         setLoading(false);
+//     };
 
-    return (
-        <button
-            onClick={toggle}
-            disabled={loading}
-            className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                isSelected
-                ? 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-100'
-                : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
-            } ${loading ? 'opacity-50' : ''}`}
-        >
-            {tag.name}
-        </button>
-    );
-}
+//     return (
+//         <button
+//             onClick={toggle}
+//             disabled={loading}
+//             className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+//                 isSelected
+//                 ? 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900 dark:border-blue-700 dark:text-blue-100'
+//                 : 'bg-zinc-50 border-zinc-200 text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400'
+//             } ${loading ? 'opacity-50' : ''}`}
+//         >
+//             {tag.name}
+//         </button>
+//     );
+// }
 
 interface EditGameModalProps {
   item: GameWithLibrary;
@@ -54,16 +54,16 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
   const [manualTime, setManualTime] = useState(item.playTimeManual?.toString() || (item.playTimeSteam || 0).toString());
   const [loading, setLoading] = useState(false);
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  // const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
   // Fix Match State
   const [showFixMatch, setShowFixMatch] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      getUserTags().then(setAvailableTags);
-    }
-  }, [isOpen]);
+  // useEffect(() => {
+  //   if (isOpen) {
+  //     getUserTags().then(setAvailableTags);
+  //   }
+  // }, [isOpen]);
 
   // Manual HLTB inputs
   const hltbTimes = item.game.hltbTimes ? JSON.parse(item.game.hltbTimes) : {};
@@ -190,8 +190,8 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
               </div>
           )}
 
-          {/* Tags */}
-          <div className="grid gap-2">
+          {/* Tags - Temporarily disabled */}
+          {/* <div className="grid gap-2">
             <Label>Tags</Label>
             <div className="flex flex-wrap gap-2">
                 {availableTags.map(tag => {
@@ -212,7 +212,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 })}
                  {availableTags.length === 0 && <span className="text-sm text-zinc-500">Go to Settings to create tags.</span>}
             </div>
-          </div>
+          </div> */}
 
         </div>
         <DialogFooter>
