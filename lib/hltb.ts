@@ -1,70 +1,82 @@
-// Placeholder for HowLongToBeat interactions.
-// Note: HLTB has strict bot protection. This service attempts to use the 'howlongtobeat' library,
-// but handles failures gracefully as requested (setting 'dataMissing' flag).
+import * as cheerio from 'cheerio';
 
-export interface HltbTime {
-  main: number;
-  extra: number;
-  completionist: number;
+interface HltbResult {
+  id: string;
+  name: string;
+  gameplayMain: number;
+  gameplayMainExtra: number;
+  gameplayCompletionist: number;
 }
 
-export interface HltbResult {
-  game_id: number;
-  game_name: string;
-  game_image?: string;
-  comp_main: number; // Seconds? No, usually hours or formatted string in library. Let's check library output.
-  comp_plus: number;
-  comp_100: number;
-}
-
-// Based on library output inspection (from docs or source):
-// The library returns objects with fields like 'gameplayMain', 'gameplayMainExtra', 'gameplayCompletionist' in hours.
-// Wait, looking at library source, it maps fields.
-// Let's define what we expect from our service wrapper.
-
-export async function searchHltb(gameName: string): Promise<HltbTime | null> {
-  // We dynamically import to avoid issues if the module is missing or causes build errors in some envs
-  // clean name for better search results
-  const cleanName = gameName.replace(/[^a-zA-Z0-9 ]/g, ' ');
-
+export async function searchHowLongToBeat(gameTitle: string): Promise<HltbResult[]> {
   try {
-     // Since the 'howlongtobeat' library uses axios and might be blocked,
-     // we wrap this in a try/catch.
-     // In a real production environment with bot protection, we might need a proxy or a real browser (Puppeteer).
-     // For this task, we implement the interface and return null on 403/error.
+    // Standard User-Agent to bypass simple anti-bot checks
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': 'https://howlongtobeat.com/',
+        'Origin': 'https://howlongtobeat.com'
+    };
 
-     // Note: The library export is `HowLongToBeatService` class.
-     // const hltb = require('howlongtobeat');
-     // const hltbService = new hltb.HowLongToBeatService();
-     // return await hltbService.search(cleanName).then(...)
+    const searchUrl = 'https://howlongtobeat.com/api/search';
 
-     // However, since we know it fails in this sandbox, we will simulate or return null.
-     // If the user runs this locally, it might work.
+    // Payload structure typically observed for HLTB
+    const payload = {
+        "searchType": "games",
+        "searchTerms": gameTitle.split(" "),
+        "searchPage": 1,
+        "size": 20,
+        "searchOptions": {
+            "games": {
+                "userId": 0,
+                "platform": "",
+                "sortCategory": "popular",
+                "rangeCategory": "main",
+                "rangeTime": { "min": 0, "max": null },
+                "gameplay": { "perspective": "", "flow": "", "genre": "" },
+                "modifier": ""
+            },
+            "users": { "sortCategory": "postcount" },
+            "filter": "",
+            "sort": 0,
+            "randomizer": 0
+        }
+    };
 
-     const { HowLongToBeatService } = await import('howlongtobeat');
-     const service = new HowLongToBeatService();
-     const results = await service.search(cleanName);
+    const response = await fetch(searchUrl, {
+        method: 'POST',
+        headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    });
 
-     if (!results || results.length === 0) {
-       return null;
-     }
+    if (!response.ok) {
+         console.error(`HLTB API Error: ${response.status} ${response.statusText}`);
+         return [];
+    }
 
-     // Simple matching: find exact match.
-     // We can improve matching logic (e.g. using Levenshtein distance)
-     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-     const match = results.find((r: any) => r.name.toLowerCase() === gameName.toLowerCase());
+    const data = await response.json();
 
-     // Strict matching as requested: if no exact match, return null to flag data missing.
-     if (!match) return null;
+    if (!data.data || !Array.isArray(data.data)) {
+        return [];
+    }
 
-     return {
-       main: match.gameplayMain,
-       extra: match.gameplayMainExtra,
-       completionist: match.gameplayCompletionist
-     };
+    // Map the results
+    return data.data.map((game: any) => ({
+        id: game.game_id.toString(),
+        name: game.game_name,
+        // HLTB API returns SECONDS (e.g. 37800 for 10.5h).
+        // Our App expects HOURS (e.g. 10.5).
+        // 37800 / 3600 = 10.5
+
+        gameplayMain: Math.round((game.comp_main / 3600) * 10) / 10,
+        gameplayMainExtra: Math.round((game.comp_plus / 3600) * 10) / 10,
+        gameplayCompletionist: Math.round((game.comp_100 / 3600) * 10) / 10
+    }));
 
   } catch (error) {
-    console.warn(`HLTB Search failed for ${gameName}:`, error);
-    return null;
+    console.error("Error scraping HLTB:", error);
+    return [];
   }
 }

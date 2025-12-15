@@ -31,11 +31,19 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   const [quickAddTime, setQuickAddTime] = useState('');
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
-  // Parse JSON fields safely
+  // Parse JSON fields safely or handle string
   const genres = useMemo(() => {
     try {
-        return game.genres ? JSON.parse(game.genres) : [];
+        if (!game.genres) return [];
+        // Try parsing as JSON first
+        const parsed = JSON.parse(game.genres);
+        if (Array.isArray(parsed)) return parsed;
+        return []; // Should not happen if valid JSON array
     } catch {
+        // If parsing fails, it might be a simple string (comma separated) as per new requirement
+        if (typeof game.genres === 'string') {
+            return game.genres.split(',').map(s => s.trim());
+        }
         return [];
     }
   }, [game.genres]);
