@@ -157,10 +157,16 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       </div>
 
       {/* Content Right */}
-      <div className="flex flex-col flex-grow p-4 space-y-3">
+      <div className="flex flex-col flex-grow p-4 space-y-3 relative">
         {/* Title and Genre */}
         <div>
-          <h3 className="font-bold text-lg leading-tight text-zinc-900 dark:text-zinc-100 truncate">{game.title}</h3>
+           {/* Date Display (Top Right) */}
+           {releaseDate && (
+             <span className="absolute top-4 right-4 text-xs font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
+               {formatReleaseDate(releaseDate)}
+             </span>
+           )}
+          <h3 className="font-bold text-lg leading-tight text-zinc-900 dark:text-zinc-100 truncate pr-16">{game.title}</h3>
           <p className="text-xs text-zinc-500 truncate">
             {Array.isArray(genres) ? genres.slice(0, 3).join(', ') : 'Genre unknown'}
           </p>
