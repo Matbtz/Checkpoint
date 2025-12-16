@@ -100,11 +100,15 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       return times;
   }, [hltbTimes, paceFactor]);
 
-  const progress = calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
+  // Use manual progress if set, otherwise calculate
+  const calculatedProgress = calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
+  const progress = item.progressManual !== null ? item.progressManual : calculatedProgress;
 
   // Determine if HLTB data is effectively missing for the selected target type
   const targetTime = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main'];
   const hasHltbData = targetTime > 0;
+  // If manual progress is set, treat as having data
+  const showProgress = hasHltbData || item.progressManual !== null;
 
   const handleQuickAdd = async () => {
       if (!quickAddTime) return;
@@ -138,6 +142,13 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
         className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md cursor-pointer relative group hover:scale-105 transition-transform duration-200"
         onClick={() => setIsEditModalOpen(true)}
     >
+       {/* Date Display (Top Right of the CARD) */}
+       {releaseDate && (
+         <span className="absolute top-2 right-2 z-10 text-xs font-medium text-zinc-500 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 shadow-sm">
+           {formatReleaseDate(releaseDate)}
+         </span>
+       )}
+
       {/* Thumbnail Left */}
       <div className="relative w-32 h-auto flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex flex-col items-center justify-center text-center p-2">
         {!imageError && (game.backgroundImage || game.coverImage) ? (
@@ -160,12 +171,6 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       <div className="flex flex-col flex-grow p-4 space-y-3 relative">
         {/* Title and Genre */}
         <div>
-           {/* Date Display (Top Right) */}
-           {releaseDate && (
-             <span className="absolute top-4 right-4 text-xs font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
-               {formatReleaseDate(releaseDate)}
-             </span>
-           )}
           <h3 className="font-bold text-lg leading-tight text-zinc-900 dark:text-zinc-100 truncate pr-16">{game.title}</h3>
           <p className="text-xs text-zinc-500 truncate">
             {Array.isArray(genres) ? genres.slice(0, 3).join(', ') : 'Genre unknown'}
@@ -218,10 +223,10 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-zinc-500">
                         <span>Progression ({targetType})</span>
-                        <span>{hasHltbData ? `${Math.round(progress)}%` : 'N/A'}</span>
+                        <span>{showProgress ? `${Math.round(progress)}%` : 'N/A'}</span>
                     </div>
                     <div className="w-full bg-zinc-100 rounded-full h-2.5 dark:bg-zinc-700 overflow-hidden">
-                        {hasHltbData ? (
+                        {showProgress ? (
                             <div
                                 className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
                                 style={{ width: `${progress}%` }}
@@ -236,7 +241,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       </div>
 
       {/* Quick Update Button for Playing games */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
         <Button
             size="icon"
             variant="secondary"

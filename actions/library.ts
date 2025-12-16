@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { searchRawgGame, getRawgGameDetails } from '@/lib/rawg';
 
-export async function updateLibraryEntry(userLibraryId: string, data: { status?: string, playtimeManual?: number, targetedCompletionType?: string }) {
+export async function updateLibraryEntry(userLibraryId: string, data: { status?: string, playtimeManual?: number | null, progressManual?: number | null, targetedCompletionType?: string }) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
@@ -54,7 +54,7 @@ export async function updateTargetedCompletion(gameId: string, type: string) {
   revalidatePath('/dashboard');
 }
 
-export async function updateManualPlayTime(gameId: string, minutes: number) {
+export async function updateManualPlayTime(gameId: string, minutes: number | null) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 

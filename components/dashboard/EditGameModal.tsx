@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { updateLibraryEntry, fixGameMatch } from '@/actions/library';
 import { assignTag, removeTag, getUserTags } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
@@ -16,7 +17,8 @@ type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 interface UpdateData {
   status?: string;
   targetedCompletionType?: string;
-  playtimeManual?: number;
+  playtimeManual?: number | null;
+  progressManual?: number | null;
 }
 
 function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
@@ -58,7 +60,15 @@ interface EditGameModalProps {
 export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [status, setStatus] = useState(item.status);
   const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
+
+  // Time state
+  const [useManualTime, setUseManualTime] = useState(item.playtimeManual !== null);
   const [manualTime, setManualTime] = useState(item.playtimeManual?.toString() || (item.playtimeSteam || 0).toString());
+
+  // Progress state
+  const [useManualProgress, setUseManualProgress] = useState(item.progressManual !== null);
+  const [manualProgress, setManualProgress] = useState(item.progressManual?.toString() || '0');
+
   const [loading, setLoading] = useState(false);
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
 
@@ -68,8 +78,15 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   useEffect(() => {
     if (isOpen) {
       getUserTags().then(setAvailableTags);
+      // Reset fields on open
+      setStatus(item.status);
+      setCompletionType(item.targetedCompletionType || 'Main');
+      setUseManualTime(item.playtimeManual !== null);
+      setManualTime(item.playtimeManual?.toString() || (item.playtimeSteam || 0).toString());
+      setUseManualProgress(item.progressManual !== null);
+      setManualProgress(item.progressManual?.toString() || '0');
     }
-  }, [isOpen]);
+  }, [isOpen, item]);
 
   // Manual HLTB inputs
   const hltbTimes = item.game.hltbTimes ? JSON.parse(item.game.hltbTimes) : {};
@@ -90,9 +107,29 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           dataToUpdate.targetedCompletionType = completionType;
       }
 
-      const timeVal = parseInt(manualTime);
-      if (!isNaN(timeVal) && timeVal !== item.playtimeManual) {
-          dataToUpdate.playtimeManual = timeVal;
+      // Handle Manual Time
+      if (useManualTime) {
+          const timeVal = parseInt(manualTime);
+          if (!isNaN(timeVal) && timeVal !== item.playtimeManual) {
+              dataToUpdate.playtimeManual = timeVal;
+          }
+      } else if (item.playtimeManual !== null) {
+          // If was manual but now unchecked, reset to null
+          dataToUpdate.playtimeManual = null;
+      }
+
+      // Handle Manual Progress
+      if (useManualProgress) {
+          let progressVal = parseInt(manualProgress);
+          if (!isNaN(progressVal)) {
+               // Clamp between 0 and 100
+               progressVal = Math.min(100, Math.max(0, progressVal));
+               if (progressVal !== item.progressManual) {
+                   dataToUpdate.progressManual = progressVal;
+               }
+          }
+      } else if (item.progressManual !== null) {
+           dataToUpdate.progressManual = null;
       }
 
       const promises = [];
@@ -162,13 +199,45 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           {/* Time Override */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="time" className="text-right">Time (min)</Label>
-            <Input
-              id="time"
-              type="number"
-              value={manualTime}
-              onChange={(e) => setManualTime(e.target.value)}
-              className="col-span-3"
-            />
+            <div className="col-span-3 flex items-center gap-2">
+                <Checkbox
+                    id="manual-time-check"
+                    checked={useManualTime}
+                    onCheckedChange={(c) => setUseManualTime(c === true)}
+                />
+                <Label htmlFor="manual-time-check" className="text-xs text-muted-foreground mr-2">Manual</Label>
+                <Input
+                    id="time"
+                    type="number"
+                    value={manualTime}
+                    onChange={(e) => setManualTime(e.target.value)}
+                    disabled={!useManualTime}
+                    className="flex-1"
+                />
+            </div>
+          </div>
+
+          {/* Progress Override */}
+           <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="progress" className="text-right">Progress (%)</Label>
+            <div className="col-span-3 flex items-center gap-2">
+                <Checkbox
+                    id="manual-progress-check"
+                    checked={useManualProgress}
+                    onCheckedChange={(c) => setUseManualProgress(c === true)}
+                />
+                <Label htmlFor="manual-progress-check" className="text-xs text-muted-foreground mr-2">Manual</Label>
+                <Input
+                    id="progress"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={manualProgress}
+                    onChange={(e) => setManualProgress(e.target.value)}
+                    disabled={!useManualProgress}
+                    className="flex-1"
+                />
+            </div>
           </div>
 
           {/* Fix Match Toggle */}
