@@ -139,7 +139,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
   return (
     <>
     <div
-        className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md cursor-pointer relative group hover:scale-105 transition-transform duration-200"
+        className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md cursor-pointer relative group hover:scale-105 transition-transform duration-200 h-32"
         onClick={() => setIsEditModalOpen(true)}
     >
        {/* Date Display (Top Right of the CARD) */}
@@ -150,7 +150,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
        )}
 
       {/* Thumbnail Left */}
-      <div className="relative w-32 h-auto flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex flex-col items-center justify-center text-center p-2">
+      <div className="relative w-24 h-full flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex flex-col items-center justify-center text-center p-2">
         {!imageError && (game.backgroundImage || game.coverImage) ? (
           <Image
             src={game.backgroundImage || game.coverImage || ''}
@@ -168,7 +168,7 @@ export function GameCard({ item, paceFactor = 1.0 }: GameCardProps) {
       </div>
 
       {/* Content Right */}
-      <div className="flex flex-col flex-grow p-4 space-y-3 relative">
+      <div className="flex flex-col flex-grow p-4 space-y-2 relative overflow-hidden">
         {/* Title and Genre */}
         <div>
           <h3 className="font-bold text-lg leading-tight text-zinc-900 dark:text-zinc-100 truncate pr-16">{game.title}</h3>
