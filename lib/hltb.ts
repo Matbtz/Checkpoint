@@ -3,8 +3,9 @@ export async function searchHowLongToBeat(gameTitle: string) {
     const response = await fetch('https://howlongtobeat.com/api/search', {
       method: 'POST',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         'Referer': 'https://howlongtobeat.com/',
+        'Origin': 'https://howlongtobeat.com',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
