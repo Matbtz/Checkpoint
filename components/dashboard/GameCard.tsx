@@ -6,7 +6,7 @@ import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Gamepad2, Monitor } from 'lucide-react';
+import { Gamepad2, Monitor, Check } from 'lucide-react';
 
 type GameWithLibrary = UserLibrary & { game: Game };
 
@@ -82,6 +82,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
 
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
+  const isCompleted = progress >= 100;
 
   return (
     <motion.div
@@ -203,24 +204,44 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                 </div>
 
                 {/* Progress Section */}
-                <div className="w-full">
-                    <div className="flex justify-between items-end mb-2">
-                        <span className="text-sm font-medium font-mono text-white/90">
-                            Played: <span className="text-cyan-400">{playedHours}h</span>
-                        </span>
-                        <span className="text-sm font-medium font-mono text-white/60">
-                           {totalHours ? `Total: ${totalHours}h` : 'No Estimate'}
-                        </span>
+                <div className="w-full mt-4 group/progress relative">
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 backdrop-blur-md rounded border border-white/10 text-[10px] font-medium text-white opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
+                        Target: {targetType === '100%' ? 'Completionist' : targetType === 'Extra' ? 'Main + Extra' : 'Main Story'} ({totalHours ? `${totalHours}h` : 'N/A'})
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    {/* Bar Container */}
+                    <div className="relative h-7 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-white/5 backdrop-blur-sm">
+
+                        {/* Fill */}
                         <motion.div
-                            className="absolute inset-y-0 left-0 bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.6)]"
+                            className={cn(
+                                "absolute inset-y-0 left-0 flex items-center justify-end px-2",
+                                isCompleted
+                                    ? "bg-gradient-to-r from-yellow-500 to-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)]"
+                                    : "bg-gradient-to-r from-cyan-500 to-blue-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                            )}
                             initial={{ width: 0 }}
                             animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-                        />
+                        >
+                            {/* Inner Glow Helper */}
+                            <div className="absolute inset-0 bg-white/20" />
+                        </motion.div>
+
+                        {/* Text Layer (Overlay) */}
+                        <div className="absolute inset-0 flex items-center justify-between px-3 z-10">
+                            {/* Left: Played */}
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-white drop-shadow-md">
+                                {isCompleted && <Check className="w-3.5 h-3.5 text-white animate-in zoom-in duration-300" />}
+                                <span>{playedHours}h</span>
+                            </div>
+
+                            {/* Right: Target */}
+                            <div className="text-[10px] font-bold text-white/60 uppercase tracking-wider group-hover/progress:text-white/90 transition-colors">
+                                {totalHours ? `/ ${totalHours}h` : ''}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
