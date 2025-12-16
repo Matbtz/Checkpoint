@@ -6,6 +6,7 @@ import { GameCard } from './GameCard';
 import { FilterStrip } from './FilterStrip';
 import { calculateProgress } from '@/lib/format-utils';
 import { AddGameModal } from './AddGameModal';
+import { AddGameWizardDialog } from './AddGameWizardDialog';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
 import { Plus, Search } from 'lucide-react';
@@ -158,7 +159,8 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
       </motion.div>
 
       {/* Modals */}
-      <AddGameModal isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} />
+      {/* <AddGameModal isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} /> */}
+      <AddGameWizardDialog isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} />
 
       {selectedGame && (
           <EditGameModal
