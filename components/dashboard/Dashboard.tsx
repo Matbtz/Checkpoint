@@ -5,7 +5,6 @@ import { type UserLibrary, type Game, type Tag } from '@prisma/client';
 import { GameCard } from './GameCard';
 import { FilterStrip } from './FilterStrip';
 import { calculateProgress } from '@/lib/format-utils';
-import { AddGameModal } from './AddGameModal';
 import { AddGameWizardDialog } from './AddGameWizardDialog';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
