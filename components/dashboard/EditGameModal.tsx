@@ -61,9 +61,12 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [status, setStatus] = useState(item.status);
   const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
 
-  // Time state
+  // Time state (Converted to Hours for display)
+  const initialMinutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
+  const initialHours = Math.round((initialMinutes / 60) * 10) / 10; // Round to 1 decimal
+
   const [useManualTime, setUseManualTime] = useState(item.playtimeManual !== null);
-  const [manualTime, setManualTime] = useState(item.playtimeManual?.toString() || (item.playtimeSteam || 0).toString());
+  const [manualTimeHours, setManualTimeHours] = useState(initialHours.toString());
 
   // Progress state
   const [useManualProgress, setUseManualProgress] = useState(item.progressManual !== null);
@@ -81,8 +84,13 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       // Reset fields on open
       setStatus(item.status);
       setCompletionType(item.targetedCompletionType || 'Main');
+
+      const minutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
+      const hours = Math.round((minutes / 60) * 10) / 10;
+
       setUseManualTime(item.playtimeManual !== null);
-      setManualTime(item.playtimeManual?.toString() || (item.playtimeSteam || 0).toString());
+      setManualTimeHours(hours.toString());
+
       setUseManualProgress(item.progressManual !== null);
       setManualProgress(item.progressManual?.toString() || '0');
     }
@@ -107,11 +115,14 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           dataToUpdate.targetedCompletionType = completionType;
       }
 
-      // Handle Manual Time
+      // Handle Manual Time (Convert Hours back to Minutes)
       if (useManualTime) {
-          const timeVal = parseInt(manualTime);
-          if (!isNaN(timeVal) && timeVal !== item.playtimeManual) {
-              dataToUpdate.playtimeManual = timeVal;
+          const hoursVal = parseFloat(manualTimeHours);
+          if (!isNaN(hoursVal)) {
+              const minutesVal = Math.round(hoursVal * 60);
+              if (minutesVal !== item.playtimeManual) {
+                  dataToUpdate.playtimeManual = minutesVal;
+              }
           }
       } else if (item.playtimeManual !== null) {
           // If was manual but now unchecked, reset to null
@@ -196,9 +207,9 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             </Select>
           </div>
 
-          {/* Time Override */}
+          {/* Time Override (Hours) */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="time" className="text-right">Time (min)</Label>
+            <Label htmlFor="time" className="text-right">Time (hours)</Label>
             <div className="col-span-3 flex items-center gap-2">
                 <Checkbox
                     id="manual-time-check"
@@ -209,8 +220,9 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 <Input
                     id="time"
                     type="number"
-                    value={manualTime}
-                    onChange={(e) => setManualTime(e.target.value)}
+                    step="0.1"
+                    value={manualTimeHours}
+                    onChange={(e) => setManualTimeHours(e.target.value)}
                     disabled={!useManualTime}
                     className="flex-1"
                 />

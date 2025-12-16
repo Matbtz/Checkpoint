@@ -5,7 +5,7 @@ import { type UserLibrary, type Game, type Tag } from '@prisma/client';
 import { GameCard } from './GameCard';
 import { FilterStrip } from './FilterStrip';
 import { calculateProgress } from '@/lib/format-utils';
-import { ManualAddModal } from './ManualAddModal';
+import { AddGameModal } from './AddGameModal';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
 import { Plus, Search } from 'lucide-react';
@@ -43,7 +43,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
   const [sortBy, setSortBy] = useState<SortOption>('dateAdded');
 
   // Modal states
-  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
+  const [isAddGameOpen, setIsAddGameOpen] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameWithLibrary | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -109,7 +109,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                   <option value="releaseDate">Release Date</option>
               </select>
 
-              <Button onClick={() => setIsManualAddOpen(true)} className="whitespace-nowrap">
+              <Button onClick={() => setIsAddGameOpen(true)} className="whitespace-nowrap">
                   <Plus className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Add Game</span>
               </Button>
@@ -123,21 +123,23 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
         onFilterChange={(id) => setStatusFilter(id as StatusFilter)}
       />
 
-      {/* Bento Grid Layout */}
+      {/* Grid/List Layout */}
       <motion.div
         layout
-        className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6"
+        className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"
       >
         <AnimatePresence mode="popLayout">
             {sortedLibrary.length === 0 ? (
                 <motion.div
+                    layout
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
                     className="col-span-full py-12 text-center text-muted-foreground"
                 >
                     <p className="text-lg">No games found in {statusFilter === 'All' ? 'your library' : statusFilter}.</p>
                     {statusFilter === 'All' && (
-                        <Button variant="link" onClick={() => setIsManualAddOpen(true)} className="mt-2">
+                        <Button variant="link" onClick={() => setIsAddGameOpen(true)} className="mt-2">
                             Add your first game
                         </Button>
                     )}
@@ -156,7 +158,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
       </motion.div>
 
       {/* Modals */}
-      <ManualAddModal isOpen={isManualAddOpen} onClose={() => setIsManualAddOpen(false)} />
+      <AddGameModal isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} />
 
       {selectedGame && (
           <EditGameModal
