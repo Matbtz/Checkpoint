@@ -94,6 +94,7 @@ model UserLibrary {
   status         String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
   playtimeSteam  Int      @default(0) // En minutes
   playtimeManual Int?     // Override
+  progressManual Int?     // Percentage 0-100 manual override
   targetedCompletionType String @default("MAIN")
   createdAt      DateTime @default(now())
   user           User     @relation(fields: [userId], references: [id])
