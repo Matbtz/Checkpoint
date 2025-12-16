@@ -2,9 +2,8 @@
 
 import { auth } from '@/auth';
 import { getOwnedGames, SteamGame } from '@/lib/steam';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db';
+import { importGamesInternal } from '@/lib/steam-import';
 
 export async function fetchSteamGames() {
   const session = await auth();
@@ -53,62 +52,12 @@ export async function fetchSteamGames() {
 }
 
 export async function importGames(games: SteamGame[]) {
-    const session = await auth();
-    const userId = session?.user?.id;
+  const session = await auth();
+  const userId = session?.user?.id;
 
-    if (!userId) {
-        throw new Error('Not authenticated');
-    }
+  if (!userId) {
+    throw new Error('Not authenticated');
+  }
 
-    // Process imports
-    // 1. Create Game entries if not exist
-    // 2. Create UserLibrary entries
-
-    let importedCount = 0;
-
-    for (const game of games) {
-        // Upsert Game
-        await prisma.game.upsert({
-            where: { id: game.appid.toString() },
-            update: {
-                title: game.name,
-                coverImage: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`
-            },
-            create: {
-                id: game.appid.toString(),
-                title: game.name,
-                coverImage: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`,
-                dataMissing: true
-            }
-        });
-
-        // Upsert UserLibrary
-        try {
-            await prisma.userLibrary.create({
-                data: {
-                    userId: userId,
-                    gameId: game.appid.toString(),
-                    status: 'Backlog', // Default status
-                    playtimeSteam: game.playtime_forever,
-                }
-            });
-            importedCount++;
-        } catch {
-            // Probably already exists
-             await prisma.userLibrary.update({
-                where: {
-                    userId_gameId: {
-                        userId: userId,
-                        gameId: game.appid.toString()
-                    }
-                },
-                data: {
-                    playtimeSteam: game.playtime_forever
-                }
-            });
-            importedCount++;
-        }
-    }
-
-    return { success: true, count: importedCount };
+  return importGamesInternal(userId, games);
 }
