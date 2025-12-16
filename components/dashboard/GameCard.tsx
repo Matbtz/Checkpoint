@@ -74,8 +74,8 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
   const totalHours = timeToBeat ? Math.round(timeToBeat) : null;
 
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
-  // Safely access developer with fallback, assuming it exists on the schema/object at runtime or future update
-  const developer = extendedGame.developer;
+  // Safely access developer with fallback
+  const developer = extendedGame.developer || "Unknown Studio";
 
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
@@ -87,7 +87,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         animate={{ opacity: 1, scale: 1 }}
         whileHover={{ scale: 1.01 }}
         transition={{ duration: 0.3 }}
-        className="group relative h-[200px] w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all border border-white/10 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]"
+        className="group relative h-44 w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all border border-white/20 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]"
         onClick={onClick}
     >
       {/* Layer 1: Background Art */}
@@ -108,39 +108,30 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
       </div>
 
       {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[120px_1fr] gap-5 p-5">
+      <div className="relative z-20 grid h-full grid-cols-[112px_1fr] gap-4 p-4">
 
         {/* Left Column: Cover & Platform */}
-        <div className="flex flex-col gap-3">
-            {/* Floating Portrait Cover */}
-            <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10 group-hover:brightness-110 transition-all duration-300">
-                {game.coverImage || game.backgroundImage ? (
-                    <Image
-                        src={game.coverImage || game.backgroundImage || ''}
-                        alt={game.title}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 120px, 130px"
-                    />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-zinc-800 p-2 text-center text-xs text-zinc-500">
-                        No Image
-                    </div>
-                )}
-            </div>
+        <div className="relative w-full aspect-[3/4] overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10 group-hover:brightness-110 transition-all duration-300">
+             {game.coverImage || game.backgroundImage ? (
+                <Image
+                    src={game.coverImage || game.backgroundImage || ''}
+                    alt={game.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 112px, 112px"
+                />
+            ) : (
+                <div className="flex h-full w-full items-center justify-center bg-zinc-800 p-2 text-center text-xs text-zinc-500">
+                    No Image
+                </div>
+            )}
 
-            {/* Platform Icon */}
-            <div className="flex items-center justify-center gap-2 text-white/60">
+            {/* Platform Icon - Absolute Bottom Right */}
+            <div className="absolute bottom-1 right-1 flex items-center justify-center rounded bg-black/60 p-1 backdrop-blur-sm">
                  {isSteam ? (
-                    <>
-                        <Gamepad2 className="h-4 w-4" />
-                        <span className="text-xs font-medium uppercase tracking-wide">Steam</span>
-                    </>
+                     <Gamepad2 className="h-3 w-3 text-white/90" />
                  ) : (
-                    <>
-                        <Monitor className="h-4 w-4 opacity-50" />
-                        <span className="text-xs font-medium uppercase tracking-wide opacity-50">PC</span>
-                    </>
+                     <Monitor className="h-3 w-3 text-white/50" />
                  )}
             </div>
         </div>
@@ -149,30 +140,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         <div className="flex flex-col h-full min-w-0">
 
             {/* Header: Title & Scores */}
-            <div className="flex justify-between items-start mb-1">
-                <h2 className="text-2xl font-bold leading-none tracking-tight text-white/95 line-clamp-1 drop-shadow-sm pr-4">
+            <div className="flex justify-between items-start mb-1 gap-2">
+                <h2 className="text-lg font-bold leading-tight text-white/95 line-clamp-1 drop-shadow-sm flex-grow">
                     {game.title}
                 </h2>
 
-                {/* Scores moved to top right */}
+                {/* Circular Scores */}
                 <div className="flex gap-2 shrink-0">
                     {scores.metacritic && (
-                        <div className="flex items-center gap-1.5 rounded bg-black/40 px-2 py-0.5 backdrop-blur-sm border border-white/5">
-                            <div className={cn(
-                                "h-1.5 w-1.5 rounded-full",
-                                scores.metacritic >= 75 ? "bg-green-500" :
-                                scores.metacritic >= 50 ? "bg-yellow-500" : "bg-red-500"
-                            )} />
-                            <span className="text-[10px] font-bold text-white/90 font-mono">
+                         <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-green-500 bg-black/40 backdrop-blur-sm">
+                            <span className="text-[10px] font-bold text-white font-mono">
                                 {scores.metacritic}
-                            </span>
-                        </div>
-                    )}
-                    {scores.openCritic && (
-                         <div className="flex items-center gap-1.5 rounded bg-black/40 px-2 py-0.5 backdrop-blur-sm border border-white/5">
-                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                            <span className="text-[10px] font-bold text-white/90 font-mono">
-                                {Math.round(scores.openCritic)}
                             </span>
                         </div>
                     )}
@@ -180,10 +158,10 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
             </div>
 
             {/* Subheader: Year & Developer */}
-            <div className="flex items-center gap-2 text-sm font-medium text-white/60 mb-auto">
+            <div className="flex items-center gap-2 text-xs font-medium text-white/60 mb-auto">
                 {releaseYear && <span>{releaseYear}</span>}
                 {releaseYear && developer && <span>•</span>}
-                {developer && <span>{developer}</span>}
+                <span>{developer}</span>
             </div>
 
             {/* Bottom Section (Anchored) */}
@@ -196,35 +174,35 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                         Target: {targetType === '100%' ? 'Completionist' : targetType === 'Extra' ? 'Main + Extra' : 'Main Story'} ({totalHours ? `${totalHours}h` : 'N/A'})
                     </div>
 
-                    {/* Bar Container */}
-                    <div className="relative h-7 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-white/5 backdrop-blur-sm">
+                    {/* Bar Container - Sleek */}
+                    <div className="relative h-4 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-white/5 backdrop-blur-sm">
 
                         {/* Fill */}
                         <motion.div
                             className={cn(
                                 "absolute inset-y-0 left-0 flex items-center justify-end px-2",
                                 isCompleted
-                                    ? "bg-gradient-to-r from-yellow-500 to-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)]"
-                                    : "bg-gradient-to-r from-cyan-500 to-blue-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                                    ? "bg-gradient-to-r from-yellow-500 to-amber-500/90"
+                                    : "bg-gradient-to-r from-cyan-500 to-blue-500/90"
                             )}
                             initial={{ width: 0 }}
                             animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
                             transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
                         >
                             {/* Inner Glow Helper */}
-                            <div className="absolute inset-0 bg-white/20" />
+                            <div className="absolute inset-0 bg-white/10" />
                         </motion.div>
 
                         {/* Text Layer (Overlay) */}
-                        <div className="absolute inset-0 flex items-center justify-between px-3 z-10">
+                        <div className="absolute inset-0 flex items-center justify-between px-2 z-10">
                             {/* Left: Played */}
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-white drop-shadow-md">
-                                {isCompleted && <Check className="w-3.5 h-3.5 text-white animate-in zoom-in duration-300" />}
+                            <div className="flex items-center gap-1 text-[9px] font-bold text-white drop-shadow-md">
+                                {isCompleted && <Check className="w-2.5 h-2.5 text-white" />}
                                 <span>{playedHours}h</span>
                             </div>
 
                             {/* Right: Target */}
-                            <div className="text-[10px] font-bold text-white/60 uppercase tracking-wider group-hover/progress:text-white/90 transition-colors">
+                            <div className="text-[9px] font-bold text-white/60 uppercase tracking-wider group-hover/progress:text-white/90 transition-colors">
                                 {totalHours ? `/ ${totalHours}h` : ''}
                             </div>
                         </div>
