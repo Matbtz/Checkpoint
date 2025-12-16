@@ -8,6 +8,11 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Gamepad2, Monitor, Check } from 'lucide-react';
 
+// Extend the Game type to include the assumed 'developer' field
+type ExtendedGame = Game & {
+  developer?: string;
+};
+
 type GameWithLibrary = UserLibrary & { game: Game };
 
 interface GameCardProps {
@@ -18,6 +23,7 @@ interface GameCardProps {
 
 export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
   const { game } = item;
+  const extendedGame = game as ExtendedGame;
 
   // --- Data Preparation Logic (Preserved) ---
 
@@ -46,19 +52,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
       }
   }, [game.scores]);
 
-  // Genres
-  const genres = useMemo(() => {
-      try {
-          if (!game.genres) return [];
-          if (game.genres.startsWith('[')) {
-              return JSON.parse(game.genres);
-          }
-          return game.genres.split(',').map(g => g.trim());
-      } catch {
-          return [];
-      }
-  }, [game.genres]);
-
   // Progress Calculations
   const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
@@ -81,6 +74,9 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
   const totalHours = timeToBeat ? Math.round(timeToBeat) : null;
 
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
+  // Safely access developer with fallback, assuming it exists on the schema/object at runtime or future update
+  const developer = extendedGame.developer;
+
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
 
@@ -91,7 +87,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         animate={{ opacity: 1, scale: 1 }}
         whileHover={{ scale: 1.01 }}
         transition={{ duration: 0.3 }}
-        className="group relative h-[280px] w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all"
+        className="group relative h-[200px] w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all border border-white/10 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]"
         onClick={onClick}
     >
       {/* Layer 1: Background Art */}
@@ -112,7 +108,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
       </div>
 
       {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[140px_1fr] gap-5 p-5 sm:grid-cols-[150px_1fr]">
+      <div className="relative z-20 grid h-full grid-cols-[120px_1fr] gap-5 p-5">
 
         {/* Left Column: Cover & Platform */}
         <div className="flex flex-col gap-3">
@@ -124,7 +120,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                         alt={game.title}
                         fill
                         className="object-cover"
-                        sizes="(max-width: 640px) 140px, 150px"
+                        sizes="(max-width: 640px) 120px, 130px"
                     />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-zinc-800 p-2 text-center text-xs text-zinc-500">
@@ -152,59 +148,49 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         {/* Right Column: Details & Progress */}
         <div className="flex flex-col h-full min-w-0">
 
-            {/* Header */}
-            <div className="mb-4">
-                <h2 className="mb-1 text-3xl font-bold leading-none tracking-tight text-white/95 line-clamp-2 drop-shadow-sm">
+            {/* Header: Title & Scores */}
+            <div className="flex justify-between items-start mb-1">
+                <h2 className="text-2xl font-bold leading-none tracking-tight text-white/95 line-clamp-1 drop-shadow-sm pr-4">
                     {game.title}
                 </h2>
-                {releaseYear && (
-                    <p className="text-sm font-medium uppercase tracking-wider text-white/70">
-                        Released {releaseYear}
-                    </p>
-                )}
-            </div>
 
-            {/* Badges (Glassmorphism) */}
-            <div className="flex flex-wrap gap-2 mb-4">
-                {genres.slice(0, 3).map((genre: string) => (
-                    <div
-                        key={genre}
-                        className="rounded-full bg-white/10 backdrop-blur-md px-3 py-1 text-xs font-semibold text-white/90 shadow-sm border border-white/5 whitespace-nowrap"
-                    >
-                        {genre}
-                    </div>
-                ))}
-            </div>
-
-            {/* Bottom Section (Anchored) */}
-            <div className="mt-auto">
-
-                {/* Scores */}
-                <div className="flex gap-3 mb-5">
+                {/* Scores moved to top right */}
+                <div className="flex gap-2 shrink-0">
                     {scores.metacritic && (
-                        <div className="flex items-center gap-1.5 rounded bg-black/40 px-2 py-1 backdrop-blur-sm border border-white/5">
+                        <div className="flex items-center gap-1.5 rounded bg-black/40 px-2 py-0.5 backdrop-blur-sm border border-white/5">
                             <div className={cn(
-                                "h-2 w-2 rounded-full",
+                                "h-1.5 w-1.5 rounded-full",
                                 scores.metacritic >= 75 ? "bg-green-500" :
                                 scores.metacritic >= 50 ? "bg-yellow-500" : "bg-red-500"
                             )} />
-                            <span className="text-xs font-bold text-white/90 font-mono">
+                            <span className="text-[10px] font-bold text-white/90 font-mono">
                                 {scores.metacritic}
                             </span>
                         </div>
                     )}
                     {scores.openCritic && (
-                         <div className="flex items-center gap-1.5 rounded bg-black/40 px-2 py-1 backdrop-blur-sm border border-white/5">
-                            <div className="h-2 w-2 rounded-full bg-blue-500" />
-                            <span className="text-xs font-bold text-white/90 font-mono">
+                         <div className="flex items-center gap-1.5 rounded bg-black/40 px-2 py-0.5 backdrop-blur-sm border border-white/5">
+                            <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                            <span className="text-[10px] font-bold text-white/90 font-mono">
                                 {Math.round(scores.openCritic)}
                             </span>
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* Subheader: Year & Developer */}
+            <div className="flex items-center gap-2 text-sm font-medium text-white/60 mb-auto">
+                {releaseYear && <span>{releaseYear}</span>}
+                {releaseYear && developer && <span>•</span>}
+                {developer && <span>{developer}</span>}
+            </div>
+
+            {/* Bottom Section (Anchored) */}
+            <div className="mt-auto">
 
                 {/* Progress Section */}
-                <div className="w-full mt-4 group/progress relative">
+                <div className="w-full group/progress relative">
                     {/* Tooltip */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 backdrop-blur-md rounded border border-white/10 text-[10px] font-medium text-white opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
                         Target: {targetType === '100%' ? 'Completionist' : targetType === 'Extra' ? 'Main + Extra' : 'Main Story'} ({totalHours ? `${totalHours}h` : 'N/A'})
