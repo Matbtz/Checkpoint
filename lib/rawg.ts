@@ -1,3 +1,4 @@
+
 export interface RawgGame {
   id: number;
   slug: string;
@@ -8,6 +9,7 @@ export interface RawgGame {
   metacritic: number;
   genres: { id: number; name: string; slug: string }[];
   description_raw?: string;
+  platforms?: { platform: { id: number; name: string; slug: string } }[];
 }
 
 export interface RawgSearchResponse {
@@ -20,14 +22,14 @@ export interface RawgSearchResponse {
 const RAWG_API_KEY = process.env.RAWG_API_KEY;
 const BASE_URL = 'https://api.rawg.io/api';
 
-export async function searchRawgGame(query: string): Promise<RawgGame | null> {
+export async function searchRawgGames(query: string, limit: number = 10): Promise<RawgGame[]> {
   if (!RAWG_API_KEY) {
     console.warn('RAWG_API_KEY is not set');
-    return null;
+    return [];
   }
 
   try {
-    const url = `${BASE_URL}/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=1`;
+    const url = `${BASE_URL}/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=${limit}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -37,15 +39,20 @@ export async function searchRawgGame(query: string): Promise<RawgGame | null> {
     const data: RawgSearchResponse = await response.json();
 
     if (data.results && data.results.length > 0) {
-      // Return the first match. In a real app we might want fuzzy matching or user selection.
-      return data.results[0];
+      return data.results;
     }
 
-    return null;
+    return [];
   } catch (error) {
     console.error('Error fetching from RAWG:', error);
-    return null;
+    return [];
   }
+}
+
+// Keep the old function for backward compatibility if needed, or refactor it to use searchRawgGames
+export async function searchRawgGame(query: string): Promise<RawgGame | null> {
+    const results = await searchRawgGames(query, 1);
+    return results.length > 0 ? results[0] : null;
 }
 
 export async function getRawgGameDetails(id: number): Promise<RawgGame | null> {
