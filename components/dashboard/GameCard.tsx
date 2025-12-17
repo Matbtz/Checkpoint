@@ -124,6 +124,8 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         ) : (
              <div className="absolute inset-0 bg-zinc-800" />
         )}
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-l from-black/60 via-black/30 to-transparent z-10" />
       </div>
 
       {/* Layer 2: Content Flex */}
