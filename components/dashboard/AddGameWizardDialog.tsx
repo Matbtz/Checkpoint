@@ -93,8 +93,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     if (!selectedGame) return;
 
     // Use selected cover/bg or custom override
-    const coverImage = customCoverUrl || (selectedGame.possibleCovers.length > 0 ? selectedGame.possibleCovers[selectedCoverIndex] : '') || '';
-    const backgroundImage = customBackgroundUrl || (selectedGame.possibleBackgrounds.length > 0 ? selectedGame.possibleBackgrounds[selectedBackgroundIndex] : '') || undefined;
+    const coverImage = customCoverUrl || (selectedGame.availableCovers.length > 0 ? selectedGame.availableCovers[selectedCoverIndex] : '') || '';
+    const backgroundImage = customBackgroundUrl || (selectedGame.availableBackgrounds.length > 0 ? selectedGame.availableBackgrounds[selectedBackgroundIndex] : '') || undefined;
 
     const finalData = {
         id: selectedGame.id,
@@ -185,8 +185,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                 className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted text-left border border-transparent hover:border-border transition-colors group"
                             >
                                 <div className="h-14 w-10 relative bg-muted rounded overflow-hidden shrink-0">
-                                    {game.possibleCovers && game.possibleCovers.length > 0 && (
-                                        <Image src={game.possibleCovers[0]} alt={game.title} fill className="object-cover" />
+                                    {game.availableCovers && game.availableCovers.length > 0 && (
+                                        <Image src={game.availableCovers[0]} alt={game.title} fill className="object-cover" />
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -237,9 +237,9 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     {/* Cover Selection */}
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Select Cover Art</Label>
-                        {selectedGame && selectedGame.possibleCovers.length > 0 ? (
+                        {selectedGame && selectedGame.availableCovers.length > 0 ? (
                             <div className="grid grid-cols-4 gap-3">
-                                {selectedGame.possibleCovers.map((url, idx) => (
+                                {selectedGame.availableCovers.map((url, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => { setSelectedCoverIndex(idx); setCustomCoverUrl(''); }}
@@ -276,9 +276,9 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     {/* Background Selection */}
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Select Background</Label>
-                        {selectedGame && selectedGame.possibleBackgrounds.length > 0 ? (
+                        {selectedGame && selectedGame.availableBackgrounds.length > 0 ? (
                              <div className="grid grid-cols-2 gap-3">
-                                {selectedGame.possibleBackgrounds.map((url, idx) => (
+                                {selectedGame.availableBackgrounds.map((url, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => { setSelectedBackgroundIndex(idx); setCustomBackgroundUrl(''); }}
