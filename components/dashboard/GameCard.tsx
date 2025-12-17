@@ -157,11 +157,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                 </div>
             </div>
 
-            {/* Subheader: Year & Developer */}
-            <div className="flex items-center gap-2 text-xs font-medium text-white/60 mb-auto">
-                {releaseYear && <span>{releaseYear}</span>}
-                {releaseYear && developer && <span>•</span>}
-                <span>{developer}</span>
+            {/* Metadata Row: Year | Developer */}
+            <div className="flex items-center gap-1.5 mt-1 select-none font-inter">
+                <span className="text-[11px] font-extralight text-zinc-300 tracking-wider">
+                    {releaseYear || 'N/A'}
+                </span>
+
+                <span className="text-[10px] text-zinc-500 font-light">•</span>
+
+                <span className="text-[11px] font-extralight text-zinc-300 tracking-wider truncate max-w-[120px]">
+                    {developer || 'Unknown Studio'}
+                </span>
             </div>
 
             {/* Bottom Section (Anchored) */}
