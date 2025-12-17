@@ -14,11 +14,16 @@ export interface EnrichedGameData {
     originalData: IgdbGame | RawgGame;
 }
 
-export async function searchGamesEnriched(query: string): Promise<EnrichedGameData[]> {
-    const [igdbResults, rawgResults] = await Promise.all([
-        searchIgdbGames(query, 5),
-        searchRawgGames(query, 5)
-    ]);
+export async function searchGamesEnriched(query: string, provider: 'igdb' | 'rawg' | 'all' = 'all'): Promise<EnrichedGameData[]> {
+    let igdbResults: IgdbGame[] = [];
+    let rawgResults: RawgGame[] = [];
+
+    if (provider === 'all' || provider === 'igdb') {
+        igdbResults = await searchIgdbGames(query, 5);
+    }
+    if (provider === 'all' || provider === 'rawg') {
+        rawgResults = await searchRawgGames(query, 5);
+    }
 
     const enrichedIgdb = igdbResults.map(game => {
         const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
@@ -52,11 +57,13 @@ export async function searchGamesEnriched(query: string): Promise<EnrichedGameDa
     const enrichedRawg = rawgResults.map(game => {
         const developer = game.developers && game.developers.length > 0 ? game.developers[0].name : null;
 
-        const possibleCovers = game.background_image ? [game.background_image] : [];
         const possibleBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
         if (game.background_image && !possibleBackgrounds.includes(game.background_image)) {
              possibleBackgrounds.unshift(game.background_image);
         }
+
+        // Use background image AND screenshots for covers as well, as RAWG doesn't have dedicated vertical covers in search
+        const possibleCovers = [game.background_image, ...(game.short_screenshots?.map(s => s.image) || [])].filter(Boolean) as string[];
 
         return {
             id: String(game.id),
@@ -64,7 +71,7 @@ export async function searchGamesEnriched(query: string): Promise<EnrichedGameDa
             releaseDate: game.released,
             studio: developer,
             metacritic: game.metacritic,
-            possibleCovers, // RAWG doesn't strictly distinguish cover/bg in search results same way, often background_image is used for both
+            possibleCovers,
             possibleBackgrounds,
             source: 'rawg' as const,
             originalData: game

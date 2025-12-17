@@ -23,6 +23,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // State
   const [step, setStep] = useState<'search' | 'customize'>('search');
   const [searchQuery, setSearchQuery] = useState('');
+  const [provider, setProvider] = useState<'igdb' | 'rawg'>('rawg');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<EnrichedGameData[]>([]);
 
@@ -61,7 +62,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     try {
-        const results = await searchGamesAction(searchQuery);
+        const results = await searchGamesAction(searchQuery, provider);
         setSearchResults(results);
     } catch (e) {
         console.error(e);
@@ -141,7 +142,16 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         {/* Content */}
         {step === 'search' ? (
              <div className="flex flex-col gap-4 p-6">
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                   <Select value={provider} onValueChange={(v) => setProvider(v as 'igdb' | 'rawg')}>
+                        <SelectTrigger className="w-[100px]">
+                            <SelectValue placeholder="Source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="rawg">RAWG</SelectItem>
+                            <SelectItem value="igdb">IGDB</SelectItem>
+                        </SelectContent>
+                   </Select>
                     <div className="relative flex-1">
                         <Input
                             placeholder="Enter game title..."

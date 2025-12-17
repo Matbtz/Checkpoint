@@ -5,11 +5,11 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 
-export async function searchGamesAction(query: string) {
+export async function searchGamesAction(query: string, provider: 'igdb' | 'rawg' = 'rawg') {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
-    return await searchGamesEnriched(query);
+    return await searchGamesEnriched(query, provider);
 }
 
 export interface AddGamePayload {
