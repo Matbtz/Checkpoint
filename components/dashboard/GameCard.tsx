@@ -8,9 +8,10 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Gamepad2, Monitor, Check } from 'lucide-react';
 
-// Extend the Game type to include the assumed 'developer' field
+// Extend the Game type to include the 'studio' field
 type ExtendedGame = Game & {
-  developer?: string;
+  // studio is now in the schema, but keeping this for safety if client types aren't fully regenerated
+  studio?: string | null;
 };
 
 type GameWithLibrary = UserLibrary & { game: Game };
@@ -43,14 +44,19 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
     }
   }, [game]);
 
-  // Scores
+  // Scores - Fallback to JSON or direct fields
   const scores = useMemo(() => {
       try {
-          return game.scores ? JSON.parse(game.scores) : {};
+          const parsed = game.scores ? JSON.parse(game.scores) : {};
+          // Prefer direct field if available
+          if (game.metacritic) {
+              parsed.metacritic = game.metacritic;
+          }
+          return parsed;
       } catch {
-          return {};
+          return { metacritic: game.metacritic };
       }
-  }, [game.scores]);
+  }, [game.scores, game.metacritic]);
 
   // Progress Calculations
   const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
@@ -74,11 +80,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
   const totalHours = timeToBeat ? Math.round(timeToBeat) : null;
 
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
-  // Safely access developer with fallback
-  const developer = extendedGame.developer || "Unknown Studio";
+  // Safely access studio/developer with fallback
+  const developer = extendedGame.studio || "Unknown Studio";
 
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
+
+  const getScoreColor = (score: number) => {
+    if (score >= 75) return 'border-green-500';
+    if (score >= 50) return 'border-yellow-500';
+    return 'border-red-500';
+  };
 
   return (
     <motion.div
@@ -148,7 +160,10 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                 {/* Circular Scores */}
                 <div className="flex gap-2 shrink-0">
                     {scores.metacritic && (
-                         <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-green-500 bg-black/40 backdrop-blur-sm">
+                         <div className={cn(
+                             "flex h-8 w-8 items-center justify-center rounded-full border-2 bg-black/40 backdrop-blur-sm",
+                             getScoreColor(scores.metacritic)
+                         )}>
                             <span className="text-[10px] font-bold text-white font-mono">
                                 {scores.metacritic}
                             </span>
@@ -166,7 +181,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                 <span className="text-[10px] text-zinc-500 font-light">•</span>
 
                 <span className="text-[11px] font-extralight text-zinc-300 tracking-wider truncate max-w-[120px]">
-                    {developer || 'Unknown Studio'}
+                    {developer}
                 </span>
             </div>
 

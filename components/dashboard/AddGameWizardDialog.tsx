@@ -7,113 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Loader2, ChevronDown, ChevronRight, Check, ArrowLeft } from 'lucide-react';
+import { Search, Loader2, ChevronRight, Check, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { addGameById, searchGamesAction } from '@/actions/add-game';
-
-// --- Types ---
-
-export interface EnrichedGameResult {
-  id: string;
-  title: string;
-  releaseYear: number;
-  platforms: string[];
-  availableCovers: string[];
-  availableBackgrounds: string[];
-  metadata: {
-    hltb: {
-      main: number;
-      extra: number;
-      completionist: number;
-    };
-    description?: string;
-    score?: number;
-  };
-}
-
-// --- Mock API ---
-
-const MOCK_COVERS = [
-    "https://images.igdb.com/igdb/image/upload/t_cover_big/co4jni.jpg", // Elden Ring
-    "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1245620/library_600x900.jpg", // Elden Ring Steam
-    "https://media.rawg.io/media/games/b29/b294fdd866dcdb643e7bab370a55684a.jpg", // Elden Ring Rawg
-    "https://howlongtobeat.com/games/68151_Elden_Ring.jpg" // HLTB
-];
-
-const MOCK_BACKGROUNDS = [
-    "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/sc6khq.jpg",
-    "https://media.rawg.io/media/games/5ec/5ecac5cb026ec26a56efcc546364e348.jpg",
-    "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1245620/header.jpg"
-];
-
-const mockSearchGames = async (query: string): Promise<EnrichedGameResult[]> => {
-    if (!query) return [];
-
-    try {
-        // Try to fetch real games if available
-        const rawgGames = await searchGamesAction(query);
-        if (rawgGames && rawgGames.length > 0) {
-            return rawgGames.map(g => ({
-                id: String(g.id),
-                title: g.name,
-                releaseYear: g.released ? parseInt(g.released.split('-')[0]) : new Date().getFullYear(),
-                platforms: g.platforms?.map((p: { platform: { name: string } }) => p.platform.name) || [],
-                availableCovers: [g.background_image].filter(Boolean) as string[],
-                availableBackgrounds: [g.background_image].filter(Boolean) as string[], // RAWG main image is often wide
-                metadata: {
-                    hltb: { main: 0, extra: 0, completionist: 0 }, // Would need separate fetch
-                    score: g.rating ? g.rating * 20 : 0
-                }
-            }));
-        }
-    } catch (e) {
-        console.warn("Failed to fetch real games, falling back to mock", e);
-    }
-
-    // Fallback to Mock results if real search fails or empty
-    return [
-        {
-            id: `mock-${Date.now()}-1`,
-            title: query,
-            releaseYear: 2022,
-            platforms: ["PC", "PS5", "Xbox Series X"],
-            availableCovers: MOCK_COVERS,
-            availableBackgrounds: MOCK_BACKGROUNDS,
-            metadata: {
-                hltb: { main: 50, extra: 80, completionist: 120 },
-                score: 96,
-                description: "A vast world awaits..."
-            }
-        },
-        {
-            id: `mock-${Date.now()}-2`,
-            title: `${query}: GOTY Edition`,
-            releaseYear: 2023,
-            platforms: ["PC", "PS5"],
-            availableCovers: [MOCK_COVERS[1], MOCK_COVERS[0]],
-            availableBackgrounds: [MOCK_BACKGROUNDS[1]],
-            metadata: {
-                hltb: { main: 60, extra: 90, completionist: 130 },
-                score: 98
-            }
-        },
-         {
-            id: `mock-${Date.now()}-3`,
-            title: `The Art of ${query}`,
-            releaseYear: 2022,
-            platforms: [],
-            availableCovers: [MOCK_COVERS[3]],
-            availableBackgrounds: [MOCK_BACKGROUNDS[2]],
-            metadata: {
-                hltb: { main: 0, extra: 0, completionist: 0 },
-                score: 0
-            }
-        }
-    ];
-};
-
-// --- Component ---
+import { addGameExtended, searchGamesAction } from '@/actions/add-game';
+import { EnrichedGameData } from '@/lib/enrichment';
+import { Badge } from '@/components/ui/badge';
 
 interface AddGameWizardDialogProps {
   isOpen: boolean;
@@ -124,30 +23,23 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // State
   const [step, setStep] = useState<'search' | 'customize'>('search');
   const [searchQuery, setSearchQuery] = useState('');
-  const [provider, setProvider] = useState('igdb');
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<EnrichedGameResult[]>([]);
+  const [searchResults, setSearchResults] = useState<EnrichedGameData[]>([]);
 
   // Selection State (Draft)
-  const [selectedGame, setSelectedGame] = useState<EnrichedGameResult | null>(null);
+  const [selectedGame, setSelectedGame] = useState<EnrichedGameData | null>(null);
 
   // Customization State
   const [title, setTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState<string>('');
-  const [platform, setPlatform] = useState('Steam'); // Default
-  const [status, setStatus] = useState('Backlog');
+  const [status, setStatus] = useState('BACKLOG'); // Changed default to BACKLOG to match Prisma enum convention if needed, though frontend display might differ
+  const [studio, setStudio] = useState('');
 
   // Media State
   const [selectedCoverIndex, setSelectedCoverIndex] = useState(0);
   const [selectedBackgroundIndex, setSelectedBackgroundIndex] = useState(0);
   const [customCoverUrl, setCustomCoverUrl] = useState('');
   const [customBackgroundUrl, setCustomBackgroundUrl] = useState('');
-
-  // Advanced Options State
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [hltbMain, setHltbMain] = useState('');
-  const [hltbExtra, setHltbExtra] = useState('');
-  const [hltbCompletionist, setHltbCompletionist] = useState('');
 
   // Reset when closed
   useEffect(() => {
@@ -158,6 +50,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
             setSearchQuery('');
             setSearchResults([]);
             setSelectedGame(null);
+            setCustomCoverUrl('');
+            setCustomBackgroundUrl('');
         }, 300);
         return () => clearTimeout(timer);
     }
@@ -167,7 +61,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     try {
-        const results = await mockSearchGames(searchQuery);
+        const results = await searchGamesAction(searchQuery);
         setSearchResults(results);
     } catch (e) {
         console.error(e);
@@ -176,57 +70,58 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     }
   };
 
-  const selectGame = (game: EnrichedGameResult) => {
+  const selectGame = (game: EnrichedGameData) => {
     setSelectedGame(game);
     // Initialize draft fields
     setTitle(game.title);
-    setReleaseYear(game.releaseYear.toString());
-    setHltbMain(game.metadata.hltb.main.toString());
-    setHltbExtra(game.metadata.hltb.extra.toString());
-    setHltbCompletionist(game.metadata.hltb.completionist.toString());
+    setReleaseYear(game.releaseDate ? new Date(game.releaseDate).getFullYear().toString() : '');
+    setStudio(game.studio || '');
+
+    // Select first image by default
     setSelectedCoverIndex(0);
     setSelectedBackgroundIndex(0);
+
+    // Reset customs
+    setCustomCoverUrl('');
+    setCustomBackgroundUrl('');
+
     setStep('customize');
   };
 
   const handleFinalSubmit = async () => {
     if (!selectedGame) return;
 
-    // Construct the final object
+    // Use selected cover/bg or custom override
+    const coverImage = customCoverUrl || (selectedGame.possibleCovers.length > 0 ? selectedGame.possibleCovers[selectedCoverIndex] : '') || '';
+    const backgroundImage = customBackgroundUrl || (selectedGame.possibleBackgrounds.length > 0 ? selectedGame.possibleBackgrounds[selectedBackgroundIndex] : '') || undefined;
+
     const finalData = {
-        ...selectedGame,
+        id: selectedGame.id,
         title,
-        releaseYear: parseInt(releaseYear),
-        status,
-        platform,
-        coverImage: customCoverUrl || selectedGame?.availableCovers[selectedCoverIndex],
-        backgroundImage: customBackgroundUrl || selectedGame?.availableBackgrounds[selectedBackgroundIndex],
-        hltb: {
-            main: parseFloat(hltbMain) || 0,
-            extra: parseFloat(hltbExtra) || 0,
-            completionist: parseFloat(hltbCompletionist) || 0
-        }
+        coverImage,
+        backgroundImage,
+        releaseDate: selectedGame.releaseDate,
+        studio,
+        metacritic: selectedGame.metacritic || undefined,
+        source: selectedGame.source
     };
 
     console.log("Submitting Game Data:", finalData);
 
     try {
-        // Attempt to add the game using existing actions
-        if (!selectedGame.id.startsWith('mock-')) {
-             await addGameById(parseInt(selectedGame.id));
-             // Note: addGameById doesn't support manual overrides yet, so we would theoretically
-             // follow up with updateLibraryEntry or similar if the API supported it.
-             // For now, this at least adds the game to the library.
-        } else {
-             // For mock games, we can't really add them without a 'createCustomGame' action.
-             // We'll fallback to searchAndAddGame if the title matches, or just log for now.
-             console.log("Cannot persist mock game without backend support.");
-        }
+         await addGameExtended(finalData);
     } catch (e) {
         console.error("Failed to add game:", e);
     }
 
     onClose();
+  };
+
+  const getScoreColor = (score: number | null | undefined) => {
+    if (!score) return 'bg-gray-500';
+    if (score >= 75) return 'bg-green-500';
+    if (score >= 50) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   return (
@@ -247,16 +142,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         {step === 'search' ? (
              <div className="flex flex-col gap-4 p-6">
                 <div className="flex gap-2">
-                    <Select value={provider} onValueChange={setProvider}>
-                        <SelectTrigger className="w-[140px]">
-                            <SelectValue placeholder="Provider" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="igdb">IGDB (Pref)</SelectItem>
-                            <SelectItem value="steam">Steam</SelectItem>
-                            <SelectItem value="rawg">Rawg</SelectItem>
-                        </SelectContent>
-                    </Select>
                     <div className="relative flex-1">
                         <Input
                             placeholder="Enter game title..."
@@ -284,23 +169,35 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     <div className="grid gap-2">
                         {searchResults.map((game) => (
                             <button
-                                key={game.id}
+                                key={`${game.source}-${game.id}`}
                                 onClick={() => selectGame(game)}
                                 className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted text-left border border-transparent hover:border-border transition-colors group"
                             >
                                 <div className="h-14 w-10 relative bg-muted rounded overflow-hidden shrink-0">
-                                    {game.availableCovers[0] && (
-                                        <Image src={game.availableCovers[0]} alt={game.title} fill className="object-cover" />
+                                    {game.possibleCovers && game.possibleCovers.length > 0 && (
+                                        <Image src={game.possibleCovers[0]} alt={game.title} fill className="object-cover" />
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-medium truncate">{game.title}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-medium truncate">{game.title}</h3>
+                                        <Badge variant="outline" className="text-[10px] h-5 px-1">{game.source.toUpperCase()}</Badge>
+                                    </div>
                                     <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <span>{game.releaseYear}</span>
-                                        <span>•</span>
-                                        <span className="truncate">{game.platforms.join(', ')}</span>
+                                        <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
+                                        {game.studio && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="truncate">{game.studio}</span>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
+                                {game.metacritic && (
+                                    <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(game.metacritic))}>
+                                        {game.metacritic}
+                                    </Badge>
+                                )}
                                 <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
                             </button>
                         ))}
@@ -315,28 +212,32 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     {/* Cover Selection */}
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Select Cover Art</Label>
-                        <div className="grid grid-cols-4 gap-3">
-                            {selectedGame?.availableCovers.map((url, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => setSelectedCoverIndex(idx)}
-                                    className={cn(
-                                        "relative aspect-[2/3] rounded-md overflow-hidden border-2 transition-all",
-                                        selectedCoverIndex === idx ? "border-cyan-500 ring-2 ring-cyan-500/20" : "border-transparent hover:border-white/20"
-                                    )}
-                                >
-                                    <Image src={url} alt="Cover option" fill className="object-cover" sizes="100px"/>
-                                    {selectedCoverIndex === idx && (
-                                        <div className="absolute top-1 right-1 bg-cyan-500 text-black rounded-full p-0.5">
-                                            <Check className="h-3 w-3" />
-                                        </div>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
+                        {selectedGame && selectedGame.possibleCovers.length > 0 ? (
+                            <div className="grid grid-cols-4 gap-3">
+                                {selectedGame.possibleCovers.map((url, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => { setSelectedCoverIndex(idx); setCustomCoverUrl(''); }}
+                                        className={cn(
+                                            "relative aspect-[2/3] rounded-md overflow-hidden border-2 transition-all",
+                                            selectedCoverIndex === idx && !customCoverUrl ? "border-cyan-500 ring-2 ring-cyan-500/20" : "border-transparent hover:border-white/20"
+                                        )}
+                                    >
+                                        <Image src={url} alt="Cover option" fill className="object-cover" sizes="100px"/>
+                                        {selectedCoverIndex === idx && !customCoverUrl && (
+                                            <div className="absolute top-1 right-1 bg-cyan-500 text-black rounded-full p-0.5">
+                                                <Check className="h-3 w-3" />
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">No covers found.</div>
+                        )}
                         <div className="flex gap-2 items-center">
                            <Input
-                                placeholder="Or paste custom URL..."
+                                placeholder="Or paste custom Cover URL..."
                                 value={customCoverUrl}
                                 onChange={(e) => {
                                     setCustomCoverUrl(e.target.value);
@@ -350,28 +251,33 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     {/* Background Selection */}
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Select Background</Label>
-                        <div className="grid grid-cols-2 gap-3">
-                            {selectedGame?.availableBackgrounds.map((url, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => setSelectedBackgroundIndex(idx)}
-                                    className={cn(
-                                        "relative aspect-video rounded-md overflow-hidden border-2 transition-all",
-                                        selectedBackgroundIndex === idx ? "border-amber-500 ring-2 ring-amber-500/20" : "border-transparent hover:border-white/20"
-                                    )}
-                                >
-                                    <Image src={url} alt="Background option" fill className="object-cover" sizes="200px"/>
-                                     {selectedBackgroundIndex === idx && (
-                                        <div className="absolute top-1 right-1 bg-amber-500 text-black rounded-full p-0.5">
-                                            <Check className="h-3 w-3" />
-                                        </div>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
+                        {selectedGame && selectedGame.possibleBackgrounds.length > 0 ? (
+                             <div className="grid grid-cols-2 gap-3">
+                                {selectedGame.possibleBackgrounds.map((url, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => { setSelectedBackgroundIndex(idx); setCustomBackgroundUrl(''); }}
+                                        className={cn(
+                                            "relative aspect-video rounded-md overflow-hidden border-2 transition-all",
+                                            selectedBackgroundIndex === idx && !customBackgroundUrl ? "border-amber-500 ring-2 ring-amber-500/20" : "border-transparent hover:border-white/20"
+                                        )}
+                                    >
+                                        <Image src={url} alt="Background option" fill className="object-cover" sizes="200px"/>
+                                         {selectedBackgroundIndex === idx && !customBackgroundUrl && (
+                                            <div className="absolute top-1 right-1 bg-amber-500 text-black rounded-full p-0.5">
+                                                <Check className="h-3 w-3" />
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                             <div className="text-sm text-muted-foreground">No backgrounds found.</div>
+                        )}
+
                          <div className="flex gap-2 items-center">
                            <Input
-                                placeholder="Or paste custom URL..."
+                                placeholder="Or paste custom Background URL..."
                                 value={customBackgroundUrl}
                                 onChange={(e) => {
                                     setCustomBackgroundUrl(e.target.value);
@@ -407,75 +313,29 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Backlog">Backlog</SelectItem>
-                                                <SelectItem value="Playing">Playing</SelectItem>
-                                                <SelectItem value="Completed">Completed</SelectItem>
-                                                <SelectItem value="Wishlist">Wishlist</SelectItem>
+                                                <SelectItem value="BACKLOG">Backlog</SelectItem>
+                                                <SelectItem value="PLAYING">Playing</SelectItem>
+                                                <SelectItem value="COMPLETED">Completed</SelectItem>
+                                                <SelectItem value="ABANDONED">Abandoned</SelectItem>
+                                                <SelectItem value="WISHLIST">Wishlist</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>Platform</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {["Steam", "PlayStation", "Xbox", "Switch", "GOG", "Epic"].map((p) => (
-                                            <button
-                                                key={p}
-                                                onClick={() => setPlatform(p)}
-                                                className={cn(
-                                                    "px-3 py-1 rounded-full text-xs border transition-colors",
-                                                    platform === p
-                                                        ? "bg-primary text-primary-foreground border-primary"
-                                                        : "bg-muted text-muted-foreground border-transparent hover:border-border"
-                                                )}
-                                            >
-                                                {p}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <Label>Studio</Label>
+                                    <Input value={studio} onChange={(e) => setStudio(e.target.value)} placeholder="Developer / Studio" />
                                 </div>
-                            </div>
 
-                            {/* Advanced Toggle */}
-                            <div className="pt-4 border-t">
-                                <Button
-                                    variant="ghost"
-                                    className="w-full flex justify-between items-center"
-                                    onClick={() => setShowAdvanced(!showAdvanced)}
-                                >
-                                    <span>Advanced Options</span>
-                                    <ChevronDown className={cn("h-4 w-4 transition-transform", showAdvanced && "rotate-180")} />
-                                </Button>
-
-                                {showAdvanced && (
-                                    <div className="pt-4 space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs text-muted-foreground uppercase tracking-wider">HowLongToBeat (Hours)</Label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <div>
-                                                    <Label className="text-xs">Main</Label>
-                                                    <Input type="number" value={hltbMain} onChange={(e) => setHltbMain(e.target.value)} className="h-8" />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-xs">Extra</Label>
-                                                    <Input type="number" value={hltbExtra} onChange={(e) => setHltbExtra(e.target.value)} className="h-8" />
-                                                </div>
-                                                <div>
-                                                    <Label className="text-xs">Comp.</Label>
-                                                    <Input type="number" value={hltbCompletionist} onChange={(e) => setHltbCompletionist(e.target.value)} className="h-8" />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>External Links</Label>
-                                            <Input placeholder="Metacritic URL" className="h-8" />
-                                            <Input placeholder="OpenCritic URL" className="h-8" />
-                                        </div>
-                                         <div className="space-y-2">
-                                            <Label>Tags</Label>
-                                            <Input placeholder="Add tags separated by comma..." className="h-8" />
+                                {selectedGame?.metacritic && (
+                                    <div className="space-y-2">
+                                        <Label>Metacritic Score</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Badge className={cn("text-sm h-7 px-2", getScoreColor(selectedGame.metacritic))}>
+                                                {selectedGame.metacritic}
+                                            </Badge>
+                                            <span className="text-sm text-muted-foreground">Detected from {selectedGame.source.toUpperCase()}</span>
                                         </div>
                                     </div>
                                 )}
