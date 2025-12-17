@@ -20,9 +20,11 @@ interface GameCardProps {
   item: GameWithLibrary;
   paceFactor?: number;
   onClick?: () => void;
+  primaryColor?: string;
+  secondaryColor?: string;
 }
 
-export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
+export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, secondaryColor }: GameCardProps) {
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
@@ -101,6 +103,8 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
     return 'border-red-500';
   };
 
+  const hasCustomColors = !!primaryColor && !!secondaryColor;
+
   return (
     <motion.div
         layoutId={game.id}
@@ -108,7 +112,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         animate={{ opacity: 1, scale: 1 }}
         whileHover={{ scale: 1.01 }}
         transition={{ duration: 0.3 }}
-        className="group relative aspect-video w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all border border-white/20 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]"
+        className={cn(
+            "group relative aspect-video w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all",
+            !hasCustomColors && "border border-white/20 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]",
+            hasCustomColors && "border-2 border-transparent"
+        )}
+        style={hasCustomColors ? {
+            backgroundImage: `linear-gradient(#18181b, #18181b), linear-gradient(to bottom right, ${primaryColor}, ${secondaryColor})`,
+            backgroundOrigin: 'border-box',
+            backgroundClip: 'padding-box, border-box',
+            boxShadow: `0 0 20px -5px ${primaryColor}40`
+        } : undefined}
         onClick={onClick}
     >
       {/* Layer 1: Background Art */}
