@@ -14,7 +14,6 @@ export async function middleware(req: NextRequest) {
   }
 
   // If user is NOT authenticated and tries to access protected routes, redirect to login
-  // Add other protected routes here if needed
   const isProtectedPath = req.nextUrl.pathname.startsWith('/dashboard') || req.nextUrl.pathname.startsWith('/import');
 
   if (!isAuth && isProtectedPath) {

@@ -8,6 +8,7 @@ export interface RawgGame {
   rating: number;
   metacritic: number;
   genres: { id: number; name: string; slug: string }[];
+  developers?: { id: number; name: string; slug: string }[];
   description_raw?: string;
   platforms?: { platform: { id: number; name: string; slug: string } }[];
 }

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Loader2, ChevronDown, ChevronRight, Check, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { addGameById, searchGamesAction } from '@/actions/add-game';
+import { addGameById, searchGamesMultiProvider } from '@/actions/add-game';
 
 // --- Types ---
 
@@ -52,15 +52,15 @@ const mockSearchGames = async (query: string): Promise<EnrichedGameResult[]> => 
 
     try {
         // Try to fetch real games if available
-        const rawgGames = await searchGamesAction(query);
-        if (rawgGames && rawgGames.length > 0) {
-            return rawgGames.map(g => ({
+        const games = await searchGamesMultiProvider(query);
+        if (games && games.length > 0) {
+            return games.map((g: any) => ({
                 id: String(g.id),
                 title: g.name,
                 releaseYear: g.released ? parseInt(g.released.split('-')[0]) : new Date().getFullYear(),
                 platforms: g.platforms?.map((p: { platform: { name: string } }) => p.platform.name) || [],
-                availableCovers: [g.background_image].filter(Boolean) as string[],
-                availableBackgrounds: [g.background_image].filter(Boolean) as string[], // RAWG main image is often wide
+                availableCovers: [...(g.extraCovers || []), g.background_image].filter(Boolean),
+                availableBackgrounds: [...(g.extraBackgrounds || []), g.background_image].filter(Boolean),
                 metadata: {
                     hltb: { main: 0, extra: 0, completionist: 0 }, // Would need separate fetch
                     score: g.rating ? g.rating * 20 : 0

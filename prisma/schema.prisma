@@ -71,6 +71,7 @@ model Game {
   coverImage        String?
   backgroundImage   String?  // Image de fond haute qualité (RAWG)
   releaseDate       DateTime?
+  developer         String?
   description       String?  @db.Text
   rawgRating        Float?   // Note des joueurs (sur 5 ou 10)
   metacritic        Int?     // Score critique (souvent via RAWG)

@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Gamepad2, Monitor, Check } from 'lucide-react';
 
 // Extend the Game type to include the assumed 'developer' field
+// Although schema is updated, keeping this for safety until full type regen
 type ExtendedGame = Game & {
   developer?: string;
 };
@@ -76,6 +77,21 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
   // Safely access developer with fallback
   const developer = extendedGame.developer || "Unknown Studio";
+
+  // Parse genres
+  const genres = useMemo(() => {
+    try {
+        if (!game.genres) return [];
+        const parsed = JSON.parse(game.genres);
+        // Handle both simple array of strings or array of objects (if any)
+        if (Array.isArray(parsed)) {
+             return parsed.slice(0, 3).join(', '); // Show top 3
+        }
+        return '';
+    } catch {
+        return '';
+    }
+  }, [game.genres]);
 
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
@@ -158,16 +174,24 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
             </div>
 
             {/* Metadata Row: Year | Developer */}
-            <div className="flex items-center gap-1.5 mt-1 select-none font-inter">
-                <span className="text-[11px] font-extralight text-zinc-300 tracking-wider">
-                    {releaseYear || 'N/A'}
-                </span>
+            <div className="flex flex-col gap-0.5 mt-1 select-none font-inter">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-extralight text-zinc-300 tracking-tight">
+                        {releaseYear || 'N/A'}
+                    </span>
 
-                <span className="text-[10px] text-zinc-500 font-light">•</span>
+                    <span className="text-[10px] text-zinc-500 font-light">|</span>
 
-                <span className="text-[11px] font-extralight text-zinc-300 tracking-wider truncate max-w-[120px]">
-                    {developer || 'Unknown Studio'}
-                </span>
+                    <span className="text-[11px] font-extralight text-zinc-300 tracking-tight truncate max-w-[120px]">
+                        {developer || 'Unknown Studio'}
+                    </span>
+                </div>
+                {/* Genres */}
+                {genres && (
+                    <span className="text-[10px] font-extralight text-zinc-500 tracking-tight truncate">
+                        {genres}
+                    </span>
+                )}
             </div>
 
             {/* Bottom Section (Anchored) */}
