@@ -41,16 +41,25 @@ export async function searchGamesMultiProvider(query: string) {
     const igdbGames = igdbResults.status === 'fulfilled' ? igdbResults.value : [];
     const steamGames = steamResults.status === 'fulfilled' ? steamResults.value : [];
 
+    // Helper to calculate token overlap (Jaccard Index-ish)
+    const calculateOverlap = (s1: string, s2: string) => {
+        const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+        const t1 = new Set(tokenize(s1));
+        const t2 = new Set(tokenize(s2));
+        const intersection = new Set([...t1].filter(x => t2.has(x)));
+        const union = new Set([...t1, ...t2]);
+        return union.size === 0 ? 0 : intersection.size / union.size;
+    };
+
     const enrichedGames = games.map(game => {
         const extraCovers: string[] = [];
         const extraBackgrounds: string[] = [];
 
-        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const targetName = normalize(game.name);
+        // 1. Find matching IGDB games (Aggressive matching)
+        // Filter to find ALL matches with > 0.3 overlap (loose)
+        const igdbMatches = igdbGames.filter(i => calculateOverlap(game.name, i.name) > 0.3);
 
-        // 1. Find matching IGDB game (Relaxed matching)
-        const igdbMatch = igdbGames.find(i => normalize(i.name) === targetName || normalize(i.name).includes(targetName) || targetName.includes(normalize(i.name)));
-        if (igdbMatch) {
+        igdbMatches.forEach(igdbMatch => {
             if (igdbMatch.cover) extraCovers.push(getIgdbImageUrl(igdbMatch.cover.image_id, 'cover_big'));
             if (igdbMatch.screenshots) {
                  igdbMatch.screenshots.forEach(s => extraBackgrounds.push(getIgdbImageUrl(s.image_id, 'screenshot_huge')));
@@ -58,21 +67,26 @@ export async function searchGamesMultiProvider(query: string) {
             if (igdbMatch.artworks) {
                  igdbMatch.artworks.forEach(a => extraBackgrounds.push(getIgdbImageUrl(a.image_id, '1080p')));
             }
-        }
+        });
 
-        // 2. Find matching Steam game (Relaxed matching)
-        const steamMatch = steamGames.find(s => normalize(s.name) === targetName || normalize(s.name).includes(targetName) || targetName.includes(normalize(s.name)));
-        if (steamMatch) {
+        // 2. Find matching Steam games (Aggressive matching)
+        const steamMatches = steamGames.filter(s => calculateOverlap(game.name, s.name) > 0.3);
+
+        steamMatches.forEach(steamMatch => {
              extraCovers.push(steamMatch.imageUrl); // Steam capsule is often used as cover
              // Steam header image
              extraBackgrounds.push(`https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steamMatch.id}/header.jpg`);
              extraBackgrounds.push(`https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${steamMatch.id}/library_hero.jpg`);
-        }
+        });
+
+        // Deduplicate
+        const uniqueCovers = Array.from(new Set(extraCovers));
+        const uniqueBackgrounds = Array.from(new Set(extraBackgrounds));
 
         return {
             ...game,
-            extraCovers,
-            extraBackgrounds
+            extraCovers: uniqueCovers,
+            extraBackgrounds: uniqueBackgrounds
         };
     });
 

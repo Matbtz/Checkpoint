@@ -85,11 +85,11 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         const parsed = JSON.parse(game.genres);
         // Handle both simple array of strings or array of objects (if any)
         if (Array.isArray(parsed)) {
-             return parsed.slice(0, 3).join(', '); // Show top 3
+             return parsed.slice(0, 3); // Return array
         }
-        return '';
+        return [];
     } catch {
-        return '';
+        return [];
     }
   }, [game.genres]);
 
@@ -187,10 +187,14 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                     </span>
                 </div>
                 {/* Genres */}
-                {genres && (
-                    <span className="text-[10px] font-extralight text-zinc-500 tracking-tight truncate">
-                        {genres}
-                    </span>
+                {genres.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                        {genres.map((genre: string, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-medium text-zinc-400 backdrop-blur-sm">
+                                {genre}
+                            </span>
+                        ))}
+                    </div>
                 )}
             </div>
 

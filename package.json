@@ -42,6 +42,7 @@
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/cheerio": "^0.22.35",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
