@@ -67,7 +67,7 @@ export interface IgdbImage {
     type: 'cover' | 'background';
 }
 
-async function fetchIgdb(endpoint: string, query: string) {
+async function fetchIgdb(endpoint: string, query: string, retrying = false): Promise<any[]> {
     const token = await getValidToken();
 
     if (!IGDB_CLIENT_ID || !token) {
@@ -87,9 +87,16 @@ async function fetchIgdb(endpoint: string, query: string) {
 
         if (!response.ok) {
             console.error(`IGDB API error: ${response.status} ${response.statusText}`);
-            // If 401, maybe invalidate cache?
+
             if (response.status === 401) {
-                cachedToken = null;
+                cachedToken = null; // Invalidate cache
+
+                if (!retrying && IGDB_SECRET) {
+                    console.log("IGDB 401 received. Attempting to refresh token and retry...");
+                    return fetchIgdb(endpoint, query, true);
+                } else if (!IGDB_SECRET) {
+                    console.error("IGDB 401 Unauthorized. IGDB_SECRET is missing, so token cannot be refreshed automatically. Please update IGDB_ACCESS_TOKEN or provide IGDB_SECRET.");
+                }
             }
             return [];
         }
