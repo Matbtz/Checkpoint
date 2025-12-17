@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Loader2, ChevronDown, ChevronRight, Check, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { addGameById, searchGamesMultiProvider } from '@/actions/add-game';
+import { addCustomGame, searchGamesMultiProvider } from '@/actions/add-game';
 
 // --- Types ---
 
@@ -18,6 +18,7 @@ export interface EnrichedGameResult {
   id: string;
   title: string;
   releaseYear: number;
+  developer?: string; // Added developer field
   platforms: string[];
   availableCovers: string[];
   availableBackgrounds: string[];
@@ -54,10 +55,17 @@ const mockSearchGames = async (query: string): Promise<EnrichedGameResult[]> => 
         // Try to fetch real games if available
         const games = await searchGamesMultiProvider(query);
         if (games && games.length > 0) {
-            return games.map((g) => ({
+            return games.map((g: any) => ({
                 id: String(g.id),
                 title: g.name,
                 releaseYear: g.released ? parseInt(g.released.split('-')[0]) : new Date().getFullYear(),
+                // Try to extract developer from RAWG structure (usually in a separate details fetch, but check search results)
+                // RAWG search results usually don't have developers, only details do.
+                // However, we can leave it undefined and let the backend fetch it if missing,
+                // OR we can rely on the fact that addCustomGame will use what we provide.
+                // If we don't have it here, we can't offer it for "customization" unless we do a details fetch on selection.
+                // For now, let's assume it's missing in search and let backend handle it or user input.
+                developer: undefined,
                 platforms: g.platforms?.map((p: { platform: { name: string } }) => p.platform.name) || [],
                 availableCovers: [...(g.extraCovers || []), g.background_image].filter(Boolean),
                 availableBackgrounds: [...(g.extraBackgrounds || []), g.background_image].filter(Boolean),
@@ -194,13 +202,14 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
     // Construct the final object
     const finalData = {
-        ...selectedGame,
+        id: selectedGame.id,
         title,
-        releaseYear: parseInt(releaseYear),
+        releaseDate: new Date(parseInt(releaseYear), 0, 1), // Approximate
         status,
-        platform,
+        // platform, // Platform is stored in userLibrary or tags, but for now we ignore it in DB or need a field
         coverImage: customCoverUrl || selectedGame?.availableCovers[selectedCoverIndex],
         backgroundImage: customBackgroundUrl || selectedGame?.availableBackgrounds[selectedBackgroundIndex],
+        developer: selectedGame.developer, // Pass developer if we have it
         hltb: {
             main: parseFloat(hltbMain) || 0,
             extra: parseFloat(hltbExtra) || 0,
@@ -211,15 +220,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     console.log("Submitting Game Data:", finalData);
 
     try {
-        // Attempt to add the game using existing actions
+        // Use the new custom game action
         if (!selectedGame.id.startsWith('mock-')) {
-             await addGameById(parseInt(selectedGame.id));
-             // Note: addGameById doesn't support manual overrides yet, so we would theoretically
-             // follow up with updateLibraryEntry or similar if the API supported it.
-             // For now, this at least adds the game to the library.
+             await addCustomGame(finalData);
         } else {
-             // For mock games, we can't really add them without a 'createCustomGame' action.
-             // We'll fallback to searchAndAddGame if the title matches, or just log for now.
+             // For mock games, we can still use addCustomGame if we generate a random ID
+             // But for now, let's keep the mock warning
              console.log("Cannot persist mock game without backend support.");
         }
     } catch (e) {

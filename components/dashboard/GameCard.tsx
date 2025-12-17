@@ -157,7 +157,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
 
             {/* Header: Title & Scores */}
             <div className="flex justify-between items-start mb-1 gap-2">
-                <h2 className="text-lg font-bold leading-tight text-white/95 line-clamp-1 drop-shadow-sm flex-grow">
+                <h2 className="text-lg font-bold leading-tight text-white/95 drop-shadow-sm flex-grow">
                     {game.title}
                 </h2>
 
@@ -175,14 +175,14 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
 
             {/* Metadata Row: Year | Developer */}
             <div className="flex flex-col gap-0.5 mt-1 select-none font-inter">
-                <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-extralight text-zinc-300 tracking-tight">
+                <div className="flex items-center gap-0.5 tracking-tighter">
+                    <span className="text-[11px] font-extralight text-zinc-300">
                         {releaseYear || 'N/A'}
                     </span>
 
-                    <span className="text-[10px] text-zinc-500 font-light">|</span>
+                    <span className="text-[10px] text-zinc-500 font-light px-1">|</span>
 
-                    <span className="text-[11px] font-extralight text-zinc-300 tracking-tight truncate max-w-[120px]">
+                    <span className="text-[11px] font-extralight text-zinc-300 truncate max-w-[120px]">
                         {developer || 'Unknown Studio'}
                     </span>
                 </div>

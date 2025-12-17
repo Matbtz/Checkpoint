@@ -56,8 +56,8 @@ export async function searchGamesMultiProvider(query: string) {
         const extraBackgrounds: string[] = [];
 
         // 1. Find matching IGDB games (Aggressive matching)
-        // Filter to find ALL matches with > 0.3 overlap (loose)
-        const igdbMatches = igdbGames.filter(i => calculateOverlap(game.name, i.name) > 0.3);
+        // Filter to find ALL matches with > 0.1 overlap (very loose to allow more choices)
+        const igdbMatches = igdbGames.filter(i => calculateOverlap(game.name, i.name) > 0.1);
 
         igdbMatches.forEach(igdbMatch => {
             if (igdbMatch.cover) extraCovers.push(getIgdbImageUrl(igdbMatch.cover.image_id, 'cover_big'));
@@ -70,7 +70,7 @@ export async function searchGamesMultiProvider(query: string) {
         });
 
         // 2. Find matching Steam games (Aggressive matching)
-        const steamMatches = steamGames.filter(s => calculateOverlap(game.name, s.name) > 0.3);
+        const steamMatches = steamGames.filter(s => calculateOverlap(game.name, s.name) > 0.1);
 
         steamMatches.forEach(steamMatch => {
              extraCovers.push(steamMatch.imageUrl); // Steam capsule is often used as cover
@@ -91,6 +91,89 @@ export async function searchGamesMultiProvider(query: string) {
     });
 
     return enrichedGames;
+}
+
+interface CustomGameData {
+    id: string;
+    title: string;
+    coverImage?: string;
+    backgroundImage?: string;
+    releaseDate?: Date;
+    developer?: string;
+    genres?: string[];
+    metacritic?: number;
+    status: string;
+    hltb?: {
+        main: number;
+        extra: number;
+        completionist: number;
+    };
+}
+
+export async function addCustomGame(data: CustomGameData) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    // 1. Check if game exists in DB
+    let game = await prisma.game.findUnique({
+        where: { id: data.id },
+    });
+
+    if (!game) {
+        // Create new game with provided metadata
+        // If developer/genres are missing in data, we might need to fetch them or default them.
+        // Assuming the wizard provides what it can, and we can trigger background enrichment later.
+
+        game = await prisma.game.create({
+            data: {
+                id: data.id,
+                title: data.title,
+                coverImage: data.coverImage,
+                backgroundImage: data.backgroundImage,
+                releaseDate: data.releaseDate,
+                developer: data.developer,
+                genres: data.genres ? JSON.stringify(data.genres) : null,
+                metacritic: data.metacritic,
+                hltbMain: data.hltb?.main,
+                hltbExtra: data.hltb?.extra,
+                hltbCompletionist: data.hltb?.completionist,
+                dataMissing: true // Still flag for enrichment to get more data if possible
+            }
+        });
+    } else {
+        // Optional: Update existing game with user overrides?
+        // For now, let's respect the user's choice for *this* library entry,
+        // but updating the global game record might affect other users.
+        // The requirement is "add the game", so we proceed to library creation.
+    }
+
+    // 4. Add to user library
+    const existingEntry = await prisma.userLibrary.findUnique({
+        where: {
+            userId_gameId: {
+                userId: session.user.id,
+                gameId: game.id
+            }
+        }
+    });
+
+    if (existingEntry) {
+        // If already exists, maybe update status?
+        // throw new Error("Game already in library");
+        return game;
+    }
+
+    await prisma.userLibrary.create({
+        data: {
+            userId: session.user.id,
+            gameId: game.id,
+            status: data.status,
+            targetedCompletionType: 'MAIN' // Default
+        }
+    });
+
+    revalidatePath('/dashboard');
+    return game;
 }
 
 export async function addGameById(gameId: number) {
