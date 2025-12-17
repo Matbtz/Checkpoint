@@ -99,9 +99,9 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
   const isCompleted = progress >= 100;
 
   const getScoreColor = (score: number) => {
-    if (score >= 75) return 'border-green-500';
-    if (score >= 50) return 'border-yellow-500';
-    return 'border-red-500';
+    if (score >= 75) return 'border-green-500 text-green-500';
+    if (score >= 50) return 'border-yellow-500 text-yellow-500';
+    return 'border-red-500 text-red-500';
   };
 
   // Color Extraction
@@ -146,21 +146,21 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
              <div className="absolute inset-0 bg-zinc-800" />
         )}
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-l from-black/60 via-black/30 to-transparent z-10" />
+        <div className="absolute inset-0 bg-gradient-to-l from-black/80 via-black/40 to-black/20 z-10" />
       </div>
 
-      {/* Layer 2: Content Flex */}
-      <div className="relative z-20 flex h-full gap-4 p-4">
+      {/* Layer 2: Content Grid */}
+      <div className="relative z-20 grid h-full grid-cols-[auto_1fr_auto] gap-6 p-6">
 
-        {/* Left Column: Cover & Platform */}
-        <div className="relative h-full aspect-[2/3] shrink-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 group-hover:brightness-110 transition-all duration-300">
+        {/* Column 1: Cover Art (Fixed Width) */}
+        <div className="relative h-full aspect-[2/3] shrink-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10 group-hover:brightness-110 transition-all duration-300">
              {game.coverImage || game.backgroundImage ? (
                 <Image
                     src={game.coverImage || game.backgroundImage || ''}
                     alt={game.title}
                     fill
                     className="object-cover"
-                    sizes="(max-width: 640px) 112px, 112px"
+                    sizes="(max-width: 640px) 150px, 200px"
                 />
             ) : (
                 <div className="flex h-full w-full items-center justify-center bg-zinc-800 p-2 text-center text-xs text-zinc-500">
@@ -168,116 +168,109 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
                 </div>
             )}
 
-            {/* Platform Icon - Absolute Bottom Right */}
-            <div className="absolute bottom-1 right-1 flex items-center justify-center rounded bg-black/60 p-1 backdrop-blur-sm">
+            {/* Platform Icon - Overlaid on Cover Art */}
+            <div className="absolute bottom-1 right-1 flex items-center justify-center rounded bg-black/70 p-1.5 backdrop-blur-md border border-white/10">
                  {isSteam ? (
-                     <Gamepad2 className="h-3 w-3 text-white/90" />
+                     <Gamepad2 className="h-4 w-4 text-white/90" />
                  ) : (
-                     <Monitor className="h-3 w-3 text-white/50" />
+                     <Monitor className="h-4 w-4 text-white/50" />
                  )}
             </div>
         </div>
 
-        {/* Right Column: Details & Progress */}
-        <div className="flex flex-col h-full min-w-0 flex-grow">
-
-            {/* Header: Title & Scores */}
-            <div className="flex justify-between items-start mb-1 gap-2">
-                <h2 className="text-lg font-bold leading-tight text-white/95 line-clamp-1 drop-shadow-sm flex-grow">
+        {/* Column 2: Main Content (Flexible) */}
+        <div className="flex flex-col h-full min-w-0 justify-between py-1">
+            <div className="flex flex-col gap-1">
+                {/* Title */}
+                <h2 className="text-3xl font-black uppercase leading-[0.9] text-white drop-shadow-lg line-clamp-2 tracking-tight">
                     {game.title}
                 </h2>
 
-                {/* Circular Scores */}
-                <div className="flex gap-2 shrink-0">
-                    {scores.metacritic && (
-                         <div className={cn(
-                             "flex h-8 w-8 items-center justify-center rounded-full border-2 bg-black/40 backdrop-blur-sm",
-                             getScoreColor(scores.metacritic)
-                         )}>
-                            <span className="text-[10px] font-bold text-white font-mono">
-                                {scores.metacritic}
+                {/* Metadata: Year | Studio */}
+                <div className="flex items-center gap-2 font-inter text-sm font-extralight tracking-tight text-zinc-200/90 mt-1">
+                    <span>{releaseYear || 'N/A'}</span>
+                    <span className="text-zinc-500 font-light">|</span>
+                    <span className="truncate">{developer}</span>
+                </div>
+
+                {/* Genres */}
+                {genres.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                        {genres.slice(0, 3).map((genre: string) => (
+                            <span key={genre} className="px-2 py-0.5 rounded-full bg-white/10 border border-white/5 text-[10px] uppercase font-bold tracking-wider text-zinc-300 backdrop-blur-sm">
+                                {genre}
                             </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Progress Section (Anchored to bottom) */}
+            <div className="w-full group/progress relative mt-auto">
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-0 mb-2 px-2 py-1 bg-black/80 backdrop-blur-md rounded border border-white/10 text-[10px] font-medium text-white opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
+                    Target: {targetType === '100%' ? 'Completionist' : targetType === 'Extra' ? 'Main + Extra' : 'Main Story'} ({totalHours ? `${totalHours}h` : 'N/A'})
+                </div>
+
+                {/* Bar Container */}
+                <div className="relative h-4 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-white/5 backdrop-blur-sm">
+                    {/* Fill */}
+                    <motion.div
+                        className={cn(
+                            "absolute inset-y-0 left-0 flex items-center justify-end px-2",
+                            isCompleted
+                                ? "bg-gradient-to-r from-yellow-500 to-amber-500/90"
+                                : "bg-gradient-to-r from-cyan-500 to-blue-500/90"
+                        )}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                        transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+                    >
+                        {/* Inner Glow Helper */}
+                        <div className="absolute inset-0 bg-white/10" />
+                    </motion.div>
+
+                    {/* Text Layer */}
+                    <div className="absolute inset-0 flex items-center justify-between px-2 z-10">
+                        <div className="flex items-center gap-1 text-[9px] font-bold text-white drop-shadow-md uppercase tracking-wider">
+                            {isCompleted && <Check className="w-2.5 h-2.5 text-white" />}
+                            <span>{playedHours}h Played</span>
                         </div>
-                    )}
+                        <div className="text-[9px] font-bold text-white/60 uppercase tracking-wider group-hover/progress:text-white/90 transition-colors">
+                            {totalHours ? `/ ${totalHours}h` : ''}
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            {/* Metadata Row: Year | Developer */}
-            <div className="flex items-center gap-1.5 mt-1 select-none font-inter">
-                <span className="text-[11px] font-extralight text-zinc-300 tracking-wider">
-                    {releaseYear || 'N/A'}
-                </span>
-
-                <span className="text-[10px] text-zinc-500 font-light">•</span>
-
-                <span className="text-[11px] font-extralight text-zinc-300 tracking-wider truncate max-w-[120px]">
-                    {developer}
-                </span>
-            </div>
-
-            {/* Genres Row */}
-            {genres.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                    {genres.slice(0, 3).map((genre: string) => (
-                        <span key={genre} className="px-1.5 py-0.5 rounded-sm bg-white/5 border border-white/10 text-[9px] text-zinc-400">
-                            {genre}
+        {/* Column 3: Score (Fixed Width) */}
+        <div className="flex flex-col items-center justify-center h-full gap-2 min-w-[80px]">
+            {scores.metacritic ? (
+                <>
+                    <div className={cn(
+                        "flex h-14 w-14 items-center justify-center rounded-full border-[3px] bg-black/50 backdrop-blur-md shadow-lg",
+                        getScoreColor(scores.metacritic)
+                    )}>
+                        <span className={cn(
+                            "text-xl font-black font-mono tracking-tighter",
+                            getScoreColor(scores.metacritic).split(' ')[1] // Extract text color class
+                        )}>
+                            {scores.metacritic}
                         </span>
-                    ))}
-                    {genres.length > 3 && (
-                        <span className="px-1.5 py-0.5 text-[9px] text-zinc-500">
-                            +{genres.length - 3}
-                        </span>
-                    )}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        Metacritic
+                    </span>
+                </>
+            ) : (
+                 <div className="flex flex-col items-center justify-center opacity-30">
+                    <div className="h-12 w-12 rounded-full border-2 border-zinc-500 bg-transparent" />
+                    <span className="mt-1 text-[9px] uppercase tracking-wider text-zinc-500">N/A</span>
                 </div>
             )}
-
-            {/* Bottom Section (Anchored) */}
-            <div className="mt-auto">
-
-                {/* Progress Section */}
-                <div className="w-full group/progress relative">
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black/80 backdrop-blur-md rounded border border-white/10 text-[10px] font-medium text-white opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30">
-                        Target: {targetType === '100%' ? 'Completionist' : targetType === 'Extra' ? 'Main + Extra' : 'Main Story'} ({totalHours ? `${totalHours}h` : 'N/A'})
-                    </div>
-
-                    {/* Bar Container - Sleek */}
-                    <div className="relative h-4 w-full overflow-hidden rounded-full bg-white/10 ring-1 ring-white/5 backdrop-blur-sm">
-
-                        {/* Fill */}
-                        <motion.div
-                            className={cn(
-                                "absolute inset-y-0 left-0 flex items-center justify-end px-2",
-                                isCompleted
-                                    ? "bg-gradient-to-r from-yellow-500 to-amber-500/90"
-                                    : "bg-gradient-to-r from-cyan-500 to-blue-500/90"
-                            )}
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-                            transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-                        >
-                            {/* Inner Glow Helper */}
-                            <div className="absolute inset-0 bg-white/10" />
-                        </motion.div>
-
-                        {/* Text Layer (Overlay) */}
-                        <div className="absolute inset-0 flex items-center justify-between px-2 z-10">
-                            {/* Left: Played */}
-                            <div className="flex items-center gap-1 text-[9px] font-bold text-white drop-shadow-md">
-                                {isCompleted && <Check className="w-2.5 h-2.5 text-white" />}
-                                <span>{playedHours}h</span>
-                            </div>
-
-                            {/* Right: Target */}
-                            <div className="text-[9px] font-bold text-white/60 uppercase tracking-wider group-hover/progress:text-white/90 transition-colors">
-                                {totalHours ? `/ ${totalHours}h` : ''}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+
       </div>
     </motion.div>
   );
