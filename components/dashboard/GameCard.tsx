@@ -163,10 +163,10 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
 
                 {/* Circular Scores */}
                 <div className="flex gap-2 shrink-0">
-                    {scores.metacritic && (
+                    {(game.metacritic || scores.metacritic) && (
                          <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-green-500 bg-black/40 backdrop-blur-sm">
                             <span className="text-[10px] font-bold text-white font-mono">
-                                {scores.metacritic}
+                                {game.metacritic || scores.metacritic}
                             </span>
                         </div>
                     )}

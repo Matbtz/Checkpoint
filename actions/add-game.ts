@@ -45,8 +45,11 @@ export async function searchGamesMultiProvider(query: string) {
         const extraCovers: string[] = [];
         const extraBackgrounds: string[] = [];
 
-        // 1. Find matching IGDB game
-        const igdbMatch = igdbGames.find(i => i.name.toLowerCase() === game.name.toLowerCase());
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetName = normalize(game.name);
+
+        // 1. Find matching IGDB game (Relaxed matching)
+        const igdbMatch = igdbGames.find(i => normalize(i.name) === targetName || normalize(i.name).includes(targetName) || targetName.includes(normalize(i.name)));
         if (igdbMatch) {
             if (igdbMatch.cover) extraCovers.push(getIgdbImageUrl(igdbMatch.cover.image_id, 'cover_big'));
             if (igdbMatch.screenshots) {
@@ -57,8 +60,8 @@ export async function searchGamesMultiProvider(query: string) {
             }
         }
 
-        // 2. Find matching Steam game
-        const steamMatch = steamGames.find(s => s.name.toLowerCase() === game.name.toLowerCase());
+        // 2. Find matching Steam game (Relaxed matching)
+        const steamMatch = steamGames.find(s => normalize(s.name) === targetName || normalize(s.name).includes(targetName) || targetName.includes(normalize(s.name)));
         if (steamMatch) {
              extraCovers.push(steamMatch.imageUrl); // Steam capsule is often used as cover
              // Steam header image
@@ -101,8 +104,9 @@ export async function addGameById(gameId: number) {
                 title: details.name,
                 coverImage: details.background_image,
                 releaseDate: details.released ? new Date(details.released) : null,
-                genres: JSON.stringify(details.genres.map((g: { name: any; }) => g.name)),
+                genres: JSON.stringify(details.genres.map((g: { name: string; }) => g.name)),
                 developer: developer,
+                metacritic: details.metacritic,
                 dataMissing: true // Flag for enrichment
             }
         });
