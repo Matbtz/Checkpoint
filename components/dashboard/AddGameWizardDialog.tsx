@@ -23,6 +23,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // State
   const [step, setStep] = useState<'search' | 'customize'>('search');
   const [searchQuery, setSearchQuery] = useState('');
+  const [provider, setProvider] = useState<'igdb' | 'rawg'>('rawg');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<EnrichedGameData[]>([]);
 
@@ -32,7 +33,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // Customization State
   const [title, setTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState<string>('');
-  const [status, setStatus] = useState('BACKLOG'); // Changed default to BACKLOG to match Prisma enum convention if needed, though frontend display might differ
+  const [status, setStatus] = useState('BACKLOG');
   const [studio, setStudio] = useState('');
 
   // Media State
@@ -61,7 +62,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     try {
-        const results = await searchGamesAction(searchQuery);
+        const results = await searchGamesAction(searchQuery, provider);
         setSearchResults(results);
     } catch (e) {
         console.error(e);
@@ -103,7 +104,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         releaseDate: selectedGame.releaseDate,
         studio,
         metacritic: selectedGame.metacritic || undefined,
-        source: selectedGame.source
+        source: selectedGame.source,
+        genres: selectedGame.genres
     };
 
     console.log("Submitting Game Data:", finalData);
@@ -141,7 +143,16 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         {/* Content */}
         {step === 'search' ? (
              <div className="flex flex-col gap-4 p-6">
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                   <Select value={provider} onValueChange={(v) => setProvider(v as 'igdb' | 'rawg')}>
+                        <SelectTrigger className="w-[100px]">
+                            <SelectValue placeholder="Source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="rawg">RAWG</SelectItem>
+                            <SelectItem value="igdb">IGDB</SelectItem>
+                        </SelectContent>
+                   </Select>
                     <div className="relative flex-1">
                         <Input
                             placeholder="Enter game title..."
@@ -180,16 +191,30 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <h3 className="font-medium truncate">{game.title}</h3>
+                                        <h3 className="font-medium line-clamp-2 leading-tight">{game.title}</h3>
                                         <Badge variant="outline" className="text-[10px] h-5 px-1">{game.source.toUpperCase()}</Badge>
                                     </div>
-                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
-                                        {game.studio && (
-                                            <>
-                                                <span>•</span>
-                                                <span className="truncate">{game.studio}</span>
-                                            </>
+                                    <div className="text-xs text-muted-foreground flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
+                                            {game.studio && (
+                                                <>
+                                                    <span>|</span>
+                                                    <span className="truncate">{game.studio}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        {game.genres.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {game.genres.slice(0, 3).map((genre) => (
+                                                    <Badge key={genre} variant="secondary" className="text-[9px] px-1 h-4 rounded-sm">
+                                                        {genre}
+                                                    </Badge>
+                                                ))}
+                                                {game.genres.length > 3 && (
+                                                    <span className="text-[9px] text-muted-foreground">+{game.genres.length - 3}</span>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -327,6 +352,20 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     <Label>Studio</Label>
                                     <Input value={studio} onChange={(e) => setStudio(e.target.value)} placeholder="Developer / Studio" />
                                 </div>
+
+                                {/* Genres */}
+                                {selectedGame?.genres && selectedGame.genres.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label>Genres</Label>
+                                        <div className="flex flex-wrap gap-1">
+                                            {selectedGame.genres.map((genre) => (
+                                                <Badge key={genre} variant="secondary" className="text-xs">
+                                                    {genre}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {selectedGame?.metacritic && (
                                     <div className="space-y-2">

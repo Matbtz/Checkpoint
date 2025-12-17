@@ -5,11 +5,11 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 
-export async function searchGamesAction(query: string) {
+export async function searchGamesAction(query: string, provider: 'igdb' | 'rawg' = 'rawg') {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
-    return await searchGamesEnriched(query);
+    return await searchGamesEnriched(query, provider);
 }
 
 export interface AddGamePayload {
@@ -21,6 +21,7 @@ export interface AddGamePayload {
     studio?: string;
     metacritic?: number;
     source: 'igdb' | 'rawg';
+    genres?: string[];
 }
 
 export async function addGameExtended(payload: AddGamePayload) {
@@ -43,6 +44,7 @@ export async function addGameExtended(payload: AddGamePayload) {
                 releaseDate: payload.releaseDate ? new Date(payload.releaseDate) : null,
                 studio: payload.studio,
                 metacritic: payload.metacritic,
+                genres: payload.genres ? JSON.stringify(payload.genres) : undefined,
                 dataMissing: true // Still flag for deeper enrichment if needed (e.g. HLTB)
             }
         });

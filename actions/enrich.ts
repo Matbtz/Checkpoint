@@ -83,7 +83,7 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
 
         // Genres
         if (rawgDetails.genres && Array.isArray(rawgDetails.genres)) {
-            dataToUpdate.genres = rawgDetails.genres.map((g: any) => g.name).join(", ");
+            dataToUpdate.genres = JSON.stringify(rawgDetails.genres.map((g: any) => g.name));
         }
 
     } catch (error) {

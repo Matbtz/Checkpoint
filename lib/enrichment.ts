@@ -1,6 +1,6 @@
 
 import { searchIgdbGames, getIgdbImageUrl, IgdbGame } from './igdb';
-import { searchRawgGames, RawgGame } from './rawg';
+import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -8,20 +8,32 @@ export interface EnrichedGameData {
     releaseDate: string | null;
     studio: string | null;
     metacritic: number | null;
+    genres: string[];
     possibleCovers: string[];
     possibleBackgrounds: string[];
     source: 'igdb' | 'rawg';
     originalData: IgdbGame | RawgGame;
 }
 
-export async function searchGamesEnriched(query: string): Promise<EnrichedGameData[]> {
-    const [igdbResults, rawgResults] = await Promise.all([
-        searchIgdbGames(query, 5),
-        searchRawgGames(query, 5)
-    ]);
+export async function searchGamesEnriched(query: string, provider: 'igdb' | 'rawg' | 'all' = 'all'): Promise<EnrichedGameData[]> {
+    let igdbResults: IgdbGame[] = [];
+    let rawgResults: RawgGame[] = [];
+
+    if (provider === 'all' || provider === 'igdb') {
+        igdbResults = await searchIgdbGames(query, 5);
+    }
+    if (provider === 'all' || provider === 'rawg') {
+        const rawgList = await searchRawgGames(query, 5);
+        // Enrich RAWG results with details to get developers/studio which are missing in list view
+        rawgResults = await Promise.all(rawgList.map(async (game) => {
+             const details = await getRawgGameDetails(game.id);
+             return details || game;
+        }));
+    }
 
     const enrichedIgdb = igdbResults.map(game => {
         const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
+        const genres = game.genres?.map(g => g.name) || [];
 
         const possibleCovers: string[] = [];
         if (game.cover) {
@@ -42,6 +54,7 @@ export async function searchGamesEnriched(query: string): Promise<EnrichedGameDa
             releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : null,
             studio: developer,
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
+            genres,
             possibleCovers,
             possibleBackgrounds,
             source: 'igdb' as const,
@@ -51,12 +64,15 @@ export async function searchGamesEnriched(query: string): Promise<EnrichedGameDa
 
     const enrichedRawg = rawgResults.map(game => {
         const developer = game.developers && game.developers.length > 0 ? game.developers[0].name : null;
+        const genres = game.genres?.map(g => g.name) || [];
 
-        const possibleCovers = game.background_image ? [game.background_image] : [];
         const possibleBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
         if (game.background_image && !possibleBackgrounds.includes(game.background_image)) {
              possibleBackgrounds.unshift(game.background_image);
         }
+
+        // Use background image AND screenshots for covers as well, as RAWG doesn't have dedicated vertical covers in search
+        const possibleCovers = [game.background_image, ...(game.short_screenshots?.map(s => s.image) || [])].filter(Boolean) as string[];
 
         return {
             id: String(game.id),
@@ -64,7 +80,8 @@ export async function searchGamesEnriched(query: string): Promise<EnrichedGameDa
             releaseDate: game.released,
             studio: developer,
             metacritic: game.metacritic,
-            possibleCovers, // RAWG doesn't strictly distinguish cover/bg in search results same way, often background_image is used for both
+            genres,
+            possibleCovers,
             possibleBackgrounds,
             source: 'rawg' as const,
             originalData: game
