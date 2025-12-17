@@ -1,7 +1,7 @@
 
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
 const IGDB_SECRET = process.env.IGDB_SECRET; // This might be missing if not set in env
-let IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
+const IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
 
 const BASE_URL = 'https://api.igdb.com/v4';
 
