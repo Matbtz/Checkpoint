@@ -108,7 +108,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         animate={{ opacity: 1, scale: 1 }}
         whileHover={{ scale: 1.01 }}
         transition={{ duration: 0.3 }}
-        className="group relative h-44 w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all border border-white/20 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]"
+        className="group relative aspect-video w-full overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg hover:shadow-xl transition-all border border-white/20 shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]"
         onClick={onClick}
     >
       {/* Layer 1: Background Art */}
@@ -124,8 +124,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         ) : (
              <div className="absolute inset-0 bg-zinc-800" />
         )}
-        {/* Dark Overlay */}
-        <div className="absolute inset-0 bg-black/60 z-10" />
       </div>
 
       {/* Layer 2: Content Flex */}
