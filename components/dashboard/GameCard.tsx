@@ -7,6 +7,7 @@ import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Gamepad2, Monitor, Check } from 'lucide-react';
+import { useImageColor } from '@/hooks/use-image-color';
 
 // Extend the Game type to include the 'studio' field
 type ExtendedGame = Game & {
@@ -103,7 +104,13 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
     return 'border-red-500';
   };
 
-  const hasCustomColors = !!primaryColor && !!secondaryColor;
+  // Color Extraction
+  const { colors: extractedColors } = useImageColor(game.coverImage || game.backgroundImage);
+
+  // Use props if provided, otherwise fallback to extracted colors
+  const activePrimaryColor = primaryColor || extractedColors?.primary;
+  const activeSecondaryColor = secondaryColor || extractedColors?.secondary;
+  const hasCustomColors = !!activePrimaryColor && !!activeSecondaryColor;
 
   return (
     <motion.div
@@ -118,10 +125,10 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             hasCustomColors && "border-2 border-transparent"
         )}
         style={hasCustomColors ? {
-            backgroundImage: `linear-gradient(#18181b, #18181b), linear-gradient(to bottom right, ${primaryColor}, ${secondaryColor})`,
+            backgroundImage: `linear-gradient(#18181b, #18181b), linear-gradient(to bottom right, ${activePrimaryColor}, ${activeSecondaryColor})`,
             backgroundOrigin: 'border-box',
             backgroundClip: 'padding-box, border-box',
-            boxShadow: `0 0 20px -5px ${primaryColor}40`
+            boxShadow: `0 0 20px -5px ${activePrimaryColor}40`
         } : undefined}
         onClick={onClick}
     >
