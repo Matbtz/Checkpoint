@@ -33,7 +33,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // Customization State
   const [title, setTitle] = useState('');
   const [releaseYear, setReleaseYear] = useState<string>('');
-  const [status, setStatus] = useState('BACKLOG'); // Changed default to BACKLOG to match Prisma enum convention if needed, though frontend display might differ
+  const [status, setStatus] = useState('BACKLOG');
   const [studio, setStudio] = useState('');
 
   // Media State
@@ -191,7 +191,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <h3 className="font-medium truncate">{game.title}</h3>
+                                        <h3 className="font-medium line-clamp-2 leading-tight">{game.title}</h3>
                                         <Badge variant="outline" className="text-[10px] h-5 px-1">{game.source.toUpperCase()}</Badge>
                                     </div>
                                     <div className="text-xs text-muted-foreground flex flex-col gap-1">
@@ -352,6 +352,20 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     <Label>Studio</Label>
                                     <Input value={studio} onChange={(e) => setStudio(e.target.value)} placeholder="Developer / Studio" />
                                 </div>
+
+                                {/* Genres */}
+                                {selectedGame?.genres && selectedGame.genres.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label>Genres</Label>
+                                        <div className="flex flex-wrap gap-1">
+                                            {selectedGame.genres.map((genre) => (
+                                                <Badge key={genre} variant="secondary" className="text-xs">
+                                                    {genre}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {selectedGame?.metacritic && (
                                     <div className="space-y-2">
