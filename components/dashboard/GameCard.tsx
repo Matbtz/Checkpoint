@@ -118,21 +118,21 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
             src={game.backgroundImage || game.coverImage || ''}
             alt=""
             fill
-            className="object-cover opacity-80 blur-sm transition-transform duration-700 group-hover:scale-105"
+            className="object-cover opacity-80 blur-[2px] transition-transform duration-700 group-hover:scale-105"
             priority={false}
           />
         ) : (
              <div className="absolute inset-0 bg-zinc-800" />
         )}
-        {/* Dark Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-transparent z-10" />
+        {/* Dark Overlay */}
+        <div className="absolute inset-0 bg-black/60 z-10" />
       </div>
 
-      {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[112px_1fr] gap-4 p-4">
+      {/* Layer 2: Content Flex */}
+      <div className="relative z-20 flex h-full gap-4 p-4">
 
         {/* Left Column: Cover & Platform */}
-        <div className="relative w-full aspect-[3/4] overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10 group-hover:brightness-110 transition-all duration-300">
+        <div className="relative h-full aspect-[2/3] shrink-0 overflow-hidden rounded-xl shadow-lg ring-1 ring-white/10 group-hover:brightness-110 transition-all duration-300">
              {game.coverImage || game.backgroundImage ? (
                 <Image
                     src={game.coverImage || game.backgroundImage || ''}
@@ -158,7 +158,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
         </div>
 
         {/* Right Column: Details & Progress */}
-        <div className="flex flex-col h-full min-w-0">
+        <div className="flex flex-col h-full min-w-0 flex-grow">
 
             {/* Header: Title & Scores */}
             <div className="flex justify-between items-start mb-1 gap-2">
