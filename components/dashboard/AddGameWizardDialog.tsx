@@ -54,7 +54,7 @@ const mockSearchGames = async (query: string): Promise<EnrichedGameResult[]> => 
         // Try to fetch real games if available
         const games = await searchGamesMultiProvider(query);
         if (games && games.length > 0) {
-            return games.map((g: any) => ({
+            return games.map((g) => ({
                 id: String(g.id),
                 title: g.name,
                 releaseYear: g.released ? parseInt(g.released.split('-')[0]) : new Date().getFullYear(),
