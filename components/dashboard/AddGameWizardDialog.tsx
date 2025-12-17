@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Search, Loader2, ChevronDown, ChevronRight, Check, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { searchAndAddGame, updateLibraryEntry } from '@/actions/library';
 import { addGameById, searchGamesAction } from '@/actions/add-game';
 
 // --- Types ---
@@ -60,7 +58,7 @@ const mockSearchGames = async (query: string): Promise<EnrichedGameResult[]> => 
                 id: String(g.id),
                 title: g.name,
                 releaseYear: g.released ? parseInt(g.released.split('-')[0]) : new Date().getFullYear(),
-                platforms: g.platforms?.map((p: any) => p.platform.name) || [],
+                platforms: g.platforms?.map((p: { platform: { name: string } }) => p.platform.name) || [],
                 availableCovers: [g.background_image].filter(Boolean) as string[],
                 availableBackgrounds: [g.background_image].filter(Boolean) as string[], // RAWG main image is often wide
                 metadata: {
