@@ -14,6 +14,7 @@ export interface IgdbGame {
     involved_companies?: { company: { name: string }; developer: boolean }[];
     screenshots?: { id: number; url: string; image_id: string }[];
     artworks?: { id: number; url: string; image_id: string }[];
+    genres?: { id: number; name: string }[];
 }
 
 export interface IgdbImage {
@@ -51,12 +52,12 @@ async function fetchIgdb(endpoint: string, query: string) {
 
 export async function searchIgdbGames(query: string, limit: number = 10): Promise<IgdbGame[]> {
     // Construct query for games
-    // We need: name, cover, release date, summary, aggregated_rating, involved_companies (developer), screenshots, artworks
+    // We need: name, cover, release date, summary, aggregated_rating, involved_companies (developer), screenshots, artworks, genres
     const body = `
         search "${query}";
         fields name, cover.image_id, first_release_date, summary, aggregated_rating,
                involved_companies.company.name, involved_companies.developer,
-               screenshots.image_id, artworks.image_id;
+               screenshots.image_id, artworks.image_id, genres.name;
         limit ${limit};
     `;
     return await fetchIgdb('games', body);
@@ -70,7 +71,7 @@ export async function getIgdbGameDetails(gameId: number): Promise<IgdbGame | nul
     const body = `
         fields name, cover.image_id, first_release_date, summary, aggregated_rating,
                involved_companies.company.name, involved_companies.developer,
-               screenshots.image_id, artworks.image_id;
+               screenshots.image_id, artworks.image_id, genres.name;
         where id = ${gameId};
     `;
     const results = await fetchIgdb('games', body);

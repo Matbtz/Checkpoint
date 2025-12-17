@@ -21,6 +21,7 @@ export interface AddGamePayload {
     studio?: string;
     metacritic?: number;
     source: 'igdb' | 'rawg';
+    genres?: string[];
 }
 
 export async function addGameExtended(payload: AddGamePayload) {
@@ -43,6 +44,7 @@ export async function addGameExtended(payload: AddGamePayload) {
                 releaseDate: payload.releaseDate ? new Date(payload.releaseDate) : null,
                 studio: payload.studio,
                 metacritic: payload.metacritic,
+                genres: payload.genres ? JSON.stringify(payload.genres) : undefined,
                 dataMissing: true // Still flag for deeper enrichment if needed (e.g. HLTB)
             }
         });

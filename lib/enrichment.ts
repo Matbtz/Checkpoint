@@ -8,6 +8,7 @@ export interface EnrichedGameData {
     releaseDate: string | null;
     studio: string | null;
     metacritic: number | null;
+    genres: string[];
     possibleCovers: string[];
     possibleBackgrounds: string[];
     source: 'igdb' | 'rawg';
@@ -27,6 +28,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
 
     const enrichedIgdb = igdbResults.map(game => {
         const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
+        const genres = game.genres?.map(g => g.name) || [];
 
         const possibleCovers: string[] = [];
         if (game.cover) {
@@ -47,6 +49,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : null,
             studio: developer,
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
+            genres,
             possibleCovers,
             possibleBackgrounds,
             source: 'igdb' as const,
@@ -56,6 +59,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
 
     const enrichedRawg = rawgResults.map(game => {
         const developer = game.developers && game.developers.length > 0 ? game.developers[0].name : null;
+        const genres = game.genres?.map(g => g.name) || [];
 
         const possibleBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
         if (game.background_image && !possibleBackgrounds.includes(game.background_image)) {
@@ -71,6 +75,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             releaseDate: game.released,
             studio: developer,
             metacritic: game.metacritic,
+            genres,
             possibleCovers,
             possibleBackgrounds,
             source: 'rawg' as const,

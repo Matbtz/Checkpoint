@@ -104,7 +104,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         releaseDate: selectedGame.releaseDate,
         studio,
         metacritic: selectedGame.metacritic || undefined,
-        source: selectedGame.source
+        source: selectedGame.source,
+        genres: selectedGame.genres
     };
 
     console.log("Submitting Game Data:", finalData);
@@ -193,13 +194,27 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                         <h3 className="font-medium truncate">{game.title}</h3>
                                         <Badge variant="outline" className="text-[10px] h-5 px-1">{game.source.toUpperCase()}</Badge>
                                     </div>
-                                    <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                        <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
-                                        {game.studio && (
-                                            <>
-                                                <span>•</span>
-                                                <span className="truncate">{game.studio}</span>
-                                            </>
+                                    <div className="text-xs text-muted-foreground flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
+                                            {game.studio && (
+                                                <>
+                                                    <span>|</span>
+                                                    <span className="truncate">{game.studio}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        {game.genres.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {game.genres.slice(0, 3).map((genre) => (
+                                                    <Badge key={genre} variant="secondary" className="text-[9px] px-1 h-4 rounded-sm">
+                                                        {genre}
+                                                    </Badge>
+                                                ))}
+                                                {game.genres.length > 3 && (
+                                                    <span className="text-[9px] text-muted-foreground">+{game.genres.length - 3}</span>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 </div>
