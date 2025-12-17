@@ -5,10 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { searchGamesAction, addGameById } from '@/actions/add-game';
+import { searchGamesAction, addGameExtended } from '@/actions/add-game';
 import { Loader2, Search, Plus, Calendar } from 'lucide-react';
 import Image from 'next/image';
-import { RawgGame } from '@/lib/rawg';
+import { EnrichedGameData } from '@/lib/enrichment';
 
 interface AddGameModalProps {
   isOpen: boolean;
@@ -17,9 +17,9 @@ interface AddGameModalProps {
 
 export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<RawgGame[]>([]);
+  const [results, setResults] = useState<EnrichedGameData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [addingId, setAddingId] = useState<number | null>(null);
+  const [addingId, setAddingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -42,10 +42,19 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
     }
   };
 
-  const handleAddGame = async (gameId: number) => {
-    setAddingId(gameId);
+  const handleAddGame = async (game: EnrichedGameData) => {
+    setAddingId(game.id);
     try {
-        await addGameById(gameId);
+        await addGameExtended({
+          id: game.id,
+          title: game.title,
+          coverImage: game.possibleCovers[0] || '',
+          backgroundImage: game.possibleBackgrounds[0],
+          releaseDate: game.releaseDate,
+          studio: game.studio || undefined,
+          metacritic: game.metacritic || undefined,
+          source: game.source
+        });
         onClose();
         // Reset state
         setQuery('');
@@ -94,15 +103,15 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
                 <div className="grid grid-cols-1 gap-2">
                     {results.map((game) => (
                         <div
-                            key={game.id}
+                            key={`${game.source}-${game.id}`}
                             className="flex items-center gap-4 p-2 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border cursor-pointer group"
-                            onClick={() => handleAddGame(game.id)}
+                            onClick={() => handleAddGame(game)}
                         >
                             <div className="relative h-16 w-12 flex-shrink-0 bg-muted rounded overflow-hidden">
-                                {game.background_image ? (
+                                {game.possibleCovers && game.possibleCovers[0] ? (
                                     <Image
-                                        src={game.background_image}
-                                        alt={game.name}
+                                        src={game.possibleCovers[0]}
+                                        alt={game.title}
                                         fill
                                         className="object-cover"
                                         sizes="48px"
@@ -115,17 +124,17 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
                             </div>
 
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-medium truncate text-base">{game.name}</h3>
+                                <h3 className="font-medium truncate text-base">{game.title}</h3>
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                                    {game.released && (
+                                    {game.releaseDate && (
                                         <span className="flex items-center gap-1">
                                             <Calendar className="w-3 h-3" />
-                                            {game.released.split('-')[0]}
+                                            {new Date(game.releaseDate).getFullYear()}
                                         </span>
                                     )}
-                                    {game.platforms && game.platforms.length > 0 && (
+                                    {game.studio && (
                                         <span className="truncate">
-                                            • {game.platforms.map(p => p.platform.name).slice(0, 3).join(', ')}
+                                            • {game.studio}
                                         </span>
                                     )}
                                 </div>

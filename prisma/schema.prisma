@@ -74,6 +74,7 @@ model Game {
   description       String?  @db.Text
   rawgRating        Float?   // Note des joueurs (sur 5 ou 10)
   metacritic        Int?     // Score critique (souvent via RAWG)
+  studio            String?  // Nom du studio/développeur
   genres            String?  // JSON string
   hltbTimes         String?  // JSON string for HLTB times
   scores            String?  // JSON string for scores (metacritic, user rating)

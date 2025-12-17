@@ -10,6 +10,8 @@ export interface RawgGame {
   genres: { id: number; name: string; slug: string }[];
   description_raw?: string;
   platforms?: { platform: { id: number; name: string; slug: string } }[];
+  developers?: { id: number; name: string; slug: string }[];
+  short_screenshots?: { id: number; image: string }[];
 }
 
 export interface RawgSearchResponse {
