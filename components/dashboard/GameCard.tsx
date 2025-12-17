@@ -26,6 +26,15 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
+  // Genres
+  const genres = useMemo(() => {
+    try {
+        return game.genres ? JSON.parse(game.genres) : [];
+    } catch {
+        return [];
+    }
+  }, [game.genres]);
+
   // --- Data Preparation Logic (Preserved) ---
 
   // HLTB Times
@@ -184,6 +193,22 @@ export function GameCard({ item, paceFactor = 1.0, onClick }: GameCardProps) {
                     {developer}
                 </span>
             </div>
+
+            {/* Genres Row */}
+            {genres.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                    {genres.slice(0, 3).map((genre: string) => (
+                        <span key={genre} className="px-1.5 py-0.5 rounded-sm bg-white/5 border border-white/10 text-[9px] text-zinc-400">
+                            {genre}
+                        </span>
+                    ))}
+                    {genres.length > 3 && (
+                        <span className="px-1.5 py-0.5 text-[9px] text-zinc-500">
+                            +{genres.length - 3}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* Bottom Section (Anchored) */}
             <div className="mt-auto">

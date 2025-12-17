@@ -1,8 +1,53 @@
 
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
-const IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
+const IGDB_SECRET = process.env.IGDB_SECRET; // This might be missing if not set in env
+let IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
 
 const BASE_URL = 'https://api.igdb.com/v4';
+
+// Simple in-memory cache for the token (mostly for dev server persistence during a run)
+let cachedToken: string | null = null;
+let tokenExpiry: number | null = null;
+
+async function getValidToken(): Promise<string | null> {
+    // If we have a valid cached token, use it
+    if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
+        return cachedToken;
+    }
+
+    // If environment variable is provided, use it as fallback or primary if no secret
+    if (IGDB_ACCESS_TOKEN && !IGDB_SECRET) {
+        return IGDB_ACCESS_TOKEN;
+    }
+
+    // Attempt to fetch fresh token if we have credentials
+    if (IGDB_CLIENT_ID && IGDB_SECRET) {
+        try {
+            console.log("Fetching new IGDB access token...");
+            const response = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_SECRET}&grant_type=client_credentials`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                console.error("Failed to fetch IGDB token:", await response.text());
+                // Fallback to static token if available
+                return IGDB_ACCESS_TOKEN || null;
+            }
+
+            const data = await response.json();
+            cachedToken = data.access_token;
+            // Set expiry a bit earlier than actual (expires_in is in seconds)
+            tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
+
+            return cachedToken;
+        } catch (e) {
+            console.error("Error fetching IGDB token:", e);
+        }
+    }
+
+    // Fallback
+    return IGDB_ACCESS_TOKEN || null;
+}
 
 export interface IgdbGame {
     id: number;
@@ -23,8 +68,10 @@ export interface IgdbImage {
 }
 
 async function fetchIgdb(endpoint: string, query: string) {
-    if (!IGDB_CLIENT_ID || !IGDB_ACCESS_TOKEN) {
-        console.warn('IGDB credentials missing');
+    const token = await getValidToken();
+
+    if (!IGDB_CLIENT_ID || !token) {
+        console.warn('IGDB credentials missing or invalid');
         return [];
     }
 
@@ -33,13 +80,17 @@ async function fetchIgdb(endpoint: string, query: string) {
             method: 'POST',
             headers: {
                 'Client-ID': IGDB_CLIENT_ID,
-                'Authorization': `Bearer ${IGDB_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${token}`,
             },
             body: query,
         });
 
         if (!response.ok) {
             console.error(`IGDB API error: ${response.status} ${response.statusText}`);
+            // If 401, maybe invalidate cache?
+            if (response.status === 401) {
+                cachedToken = null;
+            }
             return [];
         }
 

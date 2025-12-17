@@ -1,6 +1,6 @@
 
 import { searchIgdbGames, getIgdbImageUrl, IgdbGame } from './igdb';
-import { searchRawgGames, RawgGame } from './rawg';
+import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -23,7 +23,12 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
         igdbResults = await searchIgdbGames(query, 5);
     }
     if (provider === 'all' || provider === 'rawg') {
-        rawgResults = await searchRawgGames(query, 5);
+        const rawgList = await searchRawgGames(query, 5);
+        // Enrich RAWG results with details to get developers/studio which are missing in list view
+        rawgResults = await Promise.all(rawgList.map(async (game) => {
+             const details = await getRawgGameDetails(game.id);
+             return details || game;
+        }));
     }
 
     const enrichedIgdb = igdbResults.map(game => {
