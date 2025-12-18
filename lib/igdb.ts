@@ -73,6 +73,7 @@ export interface IgdbGame {
     screenshots?: IgdbImageObject[];
     artworks?: IgdbImageObject[];
     genres?: { id: number; name: string }[];
+    platforms?: { id: number; name: string }[];
 }
 
 export interface EnrichedIgdbGame extends IgdbGame {
@@ -116,7 +117,7 @@ async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): 
                 tokenExpiry = null;
                 return fetchIgdb<T>(endpoint, query, true);
             }
-            
+
             console.error(`[IGDB] API Error ${response.status}: ${response.statusText}`);
             return [];
         }
@@ -139,7 +140,7 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
                screenshots.image_id, artworks.image_id, genres.name, platforms.name;
         limit ${limit};
     `;
-    
+
     const games = await fetchIgdb<IgdbGame>('games', body);
 
     // Mapping et déduplication des images
@@ -183,9 +184,9 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
                screenshots.image_id, artworks.image_id, genres.name, platforms.name;
         where id = ${gameId};
     `;
-    
+
     const results = await fetchIgdb<IgdbGame>('games', body);
-    
+
     if (results.length === 0) return null;
     const game = results[0];
 
