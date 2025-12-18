@@ -73,6 +73,7 @@ export interface IgdbGame {
     screenshots?: IgdbImageObject[];
     artworks?: IgdbImageObject[];
     genres?: { id: number; name: string }[];
+    platforms?: { id: number; name: string }[];
 }
 
 export interface EnrichedIgdbGame extends IgdbGame {

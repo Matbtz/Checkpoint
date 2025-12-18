@@ -77,8 +77,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     setIsSearching(true);
     try {
         // CORRECTION : Appel à searchOnlineGamesAction
+        // Le type de retour est maintenant Promise<EnrichedGameData[]>, donc le cast n'est plus nécessaire si on mappe correctement
         const onlineResults = await searchOnlineGamesAction(searchQuery);
-        // On ne surcharge plus les tableaux d'images car searchOnlineGamesAction renvoie désormais les bonnes données
         const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
             ...r,
             originalData: r.originalData || null,
