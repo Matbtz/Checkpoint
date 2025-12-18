@@ -70,8 +70,12 @@ export async function searchOnlineGamesAction(query: string) {
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
             opencritic: existing?.opencritic || null, // On ne fetch PAS OpenCritic ici sauf si déjà en cache
             genres: game.genres?.map(g => g.name) || [],
+            platforms: game.platforms?.map(p => p.name) || [],
             availableCovers,
-            source: 'igdb' as const
+            availableBackgrounds: game.possibleBackgrounds || [],
+            source: 'igdb' as const,
+            originalData: game,
+            description: game.summary
         };
     });
 }
