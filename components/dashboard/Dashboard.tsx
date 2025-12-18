@@ -85,7 +85,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
   };
 
   return (
-    <div className="space-y-6 pb-20 md:pb-0">
+    <div className="space-y-6 px-2 pb-20 md:pb-0">
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div className="relative w-full md:w-96">
@@ -126,7 +126,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
       {/* Grid/List Layout */}
       <motion.div
         layout
-        className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+        lassName="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4"
       >
         <AnimatePresence mode="popLayout">
             {sortedLibrary.length === 0 ? (
