@@ -109,7 +109,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
       </div>
 
       {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[90px_1fr_60px] sm:grid-cols-[100px_1fr_80px] gap-4 p-3">
+      <div className="relative z-20 grid h-full grid-cols-[90px_1fr_60px] sm:grid-cols-[100px_1fr_80px] gap-3 md:gap-4 p-2 md:p-3">
 
         {/* Column 1: Cover Art */}
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-xl ring-1 ring-white/10">

@@ -85,7 +85,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
   };
 
   return (
-    <div className="space-y-6 px-2 pb-20 md:pb-0">
+    <div className="space-y-4 md:space-y-6 px-0 md:px-2 pb-20 md:pb-0">
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div className="relative w-full md:w-96">
