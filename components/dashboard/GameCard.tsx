@@ -115,10 +115,10 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
           src={game.backgroundImage || game.coverImage || ''}
           alt=""
           fill
-          className="object-cover opacity-50"
+          className="object-cover opacity-60 saturate-150"
           priority={false}
         />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,transparent_30%,#09090b_50%,transparent_70%,transparent_100%)] z-10" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,transparent_10%,#09090b_35%,#09090b_65%,transparent_90%,transparent_100%)] z-10" />
       </div>
 
       {/* Layer 2: Content Grid */}
