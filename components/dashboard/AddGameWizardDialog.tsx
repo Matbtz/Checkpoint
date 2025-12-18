@@ -365,7 +365,90 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     <Label htmlFor="game-title">Game Title</Label>
                                     <Input id="game-title" value={title} onChange={(e) => setTitle(e.target.value)} />
                                 </div>
-                                {/* ... Rest of form ... */}
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="game-studio">Studio</Label>
+                                    <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Platforms</Label>
+                                    <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-md min-h-[40px]">
+                                        {platforms.length > 0 ? (
+                                            platforms.map((p, i) => (
+                                                <Badge key={i} variant="secondary">{p}</Badge>
+                                            ))
+                                        ) : (
+                                            <span className="text-sm text-muted-foreground">No platforms found</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Genres</Label>
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {genres.map((g, i) => (
+                                            <Badge key={i} className="cursor-pointer hover:bg-destructive" onClick={() => setGenres(genres.filter((_, idx) => idx !== i))}>
+                                                {g} ⨯
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Add genre..."
+                                            value={newGenre}
+                                            onChange={(e) => setNewGenre(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if(e.key === 'Enter' && newGenre.trim()) {
+                                                    setGenres([...genres, newGenre.trim()]);
+                                                    setNewGenre('');
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={() => {
+                                                if(newGenre.trim()) {
+                                                    setGenres([...genres, newGenre.trim()]);
+                                                    setNewGenre('');
+                                                }
+                                            }}
+                                        >
+                                            Add
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 pt-4 border-t">
+                                    <Label className="text-base font-semibold">Display Score</Label>
+                                    <RadioGroup value={selectedScoreSource} onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')} className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <RadioGroupItem value="metacritic" id="score-meta" className="peer sr-only" />
+                                            <Label
+                                                htmlFor="score-meta"
+                                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                            >
+                                                <span className="mb-2 font-bold">Metacritic</span>
+                                                <div className={cn("text-2xl font-black", getScoreColor(selectedGame?.metacritic))}>
+                                                    {selectedGame?.metacritic || 'N/A'}
+                                                </div>
+                                            </Label>
+                                        </div>
+                                        <div>
+                                            <RadioGroupItem value="opencritic" id="score-open" className="peer sr-only" />
+                                            <Label
+                                                htmlFor="score-open"
+                                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                            >
+                                                <span className="mb-2 font-bold">OpenCritic</span>
+                                                <div className={cn("text-2xl font-black", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
+                                                    {fetchedOpenCritic || selectedGame?.opencritic || 'N/A'}
+                                                </div>
+                                            </Label>
+                                        </div>
+                                    </RadioGroup>
+                                </div>
                             </div>
                         </div>
                     </ScrollArea>
