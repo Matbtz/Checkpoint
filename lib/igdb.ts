@@ -67,7 +67,7 @@ export interface IgdbImage {
     type: 'cover' | 'background';
 }
 
-async function fetchIgdb(endpoint: string, query: string) {
+async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): Promise<T[]> {
     const token = await getValidToken();
 
     if (!IGDB_CLIENT_ID || !token) {
@@ -87,9 +87,16 @@ async function fetchIgdb(endpoint: string, query: string) {
 
         if (!response.ok) {
             console.error(`IGDB API error: ${response.status} ${response.statusText}`);
-            // If 401, maybe invalidate cache?
+
             if (response.status === 401) {
-                cachedToken = null;
+                cachedToken = null; // Invalidate cache
+
+                if (!retrying && IGDB_SECRET) {
+                    console.log("IGDB 401 received. Attempting to refresh token and retry...");
+                    return fetchIgdb<T>(endpoint, query, true);
+                } else if (!IGDB_SECRET) {
+                    console.error("IGDB 401 Unauthorized. IGDB_SECRET is missing, so token cannot be refreshed automatically. Please update IGDB_ACCESS_TOKEN or provide IGDB_SECRET.");
+                }
             }
             return [];
         }
@@ -111,7 +118,7 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
                screenshots.image_id, artworks.image_id, genres.name;
         limit ${limit};
     `;
-    return await fetchIgdb('games', body);
+    return await fetchIgdb<IgdbGame>('games', body);
 }
 
 export function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot_huge' | '1080p' = 'cover_big'): string {
@@ -125,6 +132,6 @@ export async function getIgdbGameDetails(gameId: number): Promise<IgdbGame | nul
                screenshots.image_id, artworks.image_id, genres.name;
         where id = ${gameId};
     `;
-    const results = await fetchIgdb('games', body);
+    const results = await fetchIgdb<IgdbGame>('games', body);
     return results.length > 0 ? results[0] : null;
 }

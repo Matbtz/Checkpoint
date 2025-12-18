@@ -9,8 +9,8 @@ export interface EnrichedGameData {
     studio: string | null;
     metacritic: number | null;
     genres: string[];
-    possibleCovers: string[];
-    possibleBackgrounds: string[];
+    availableCovers: string[];
+    availableBackgrounds: string[];
     source: 'igdb' | 'rawg';
     originalData: IgdbGame | RawgGame;
 }
@@ -27,6 +27,10 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
         // Enrich RAWG results with details to get developers/studio which are missing in list view
         rawgResults = await Promise.all(rawgList.map(async (game) => {
              const details = await getRawgGameDetails(game.id);
+             // Preserve short_screenshots from list view as they are missing in details view
+             if (details && game.short_screenshots) {
+                 details.short_screenshots = game.short_screenshots;
+             }
              return details || game;
         }));
     }
@@ -35,17 +39,17 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
         const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
         const genres = game.genres?.map(g => g.name) || [];
 
-        const possibleCovers: string[] = [];
+        const availableCovers: string[] = [];
         if (game.cover) {
-            possibleCovers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
+            availableCovers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
         }
 
-        const possibleBackgrounds: string[] = [];
+        const availableBackgrounds: string[] = [];
         if (game.screenshots) {
-            game.screenshots.forEach(s => possibleBackgrounds.push(getIgdbImageUrl(s.image_id, '1080p')));
+            game.screenshots.forEach(s => availableBackgrounds.push(getIgdbImageUrl(s.image_id, '1080p')));
         }
         if (game.artworks) {
-            game.artworks.forEach(a => possibleBackgrounds.push(getIgdbImageUrl(a.image_id, '1080p')));
+            game.artworks.forEach(a => availableBackgrounds.push(getIgdbImageUrl(a.image_id, '1080p')));
         }
 
         return {
@@ -55,8 +59,8 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             studio: developer,
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
             genres,
-            possibleCovers,
-            possibleBackgrounds,
+            availableCovers,
+            availableBackgrounds,
             source: 'igdb' as const,
             originalData: game
         };
@@ -66,13 +70,13 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
         const developer = game.developers && game.developers.length > 0 ? game.developers[0].name : null;
         const genres = game.genres?.map(g => g.name) || [];
 
-        const possibleBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
-        if (game.background_image && !possibleBackgrounds.includes(game.background_image)) {
-             possibleBackgrounds.unshift(game.background_image);
+        const availableBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
+        if (game.background_image && !availableBackgrounds.includes(game.background_image)) {
+             availableBackgrounds.unshift(game.background_image);
         }
 
         // Use background image AND screenshots for covers as well, as RAWG doesn't have dedicated vertical covers in search
-        const possibleCovers = [game.background_image, ...(game.short_screenshots?.map(s => s.image) || [])].filter(Boolean) as string[];
+        const availableCovers = [game.background_image, ...(game.short_screenshots?.map(s => s.image) || [])].filter(Boolean) as string[];
 
         return {
             id: String(game.id),
@@ -81,8 +85,8 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             studio: developer,
             metacritic: game.metacritic,
             genres,
-            possibleCovers,
-            possibleBackgrounds,
+            availableCovers,
+            availableBackgrounds,
             source: 'rawg' as const,
             originalData: game
         };

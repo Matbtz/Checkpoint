@@ -48,8 +48,8 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
         await addGameExtended({
           id: game.id,
           title: game.title,
-          coverImage: game.possibleCovers[0] || '',
-          backgroundImage: game.possibleBackgrounds[0],
+        coverImage: game.availableCovers[0] || '',
+        backgroundImage: game.availableBackgrounds[0] || undefined,
           releaseDate: game.releaseDate,
           studio: game.studio || undefined,
           metacritic: game.metacritic || undefined,
@@ -108,9 +108,9 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
                             onClick={() => handleAddGame(game)}
                         >
                             <div className="relative h-16 w-12 flex-shrink-0 bg-muted rounded overflow-hidden">
-                                {game.possibleCovers && game.possibleCovers[0] ? (
+                                {game.availableCovers && game.availableCovers[0] ? (
                                     <Image
-                                        src={game.possibleCovers[0]}
+                                        src={game.availableCovers[0]}
                                         alt={game.title}
                                         fill
                                         className="object-cover"
