@@ -121,12 +121,12 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
       {/* Layer 1: Background Art (Clean - No Overlay) */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none">
         <Image
-          src={game.backgroundImage || game.coverImage || ''}
-          alt=""
-          fill
-          className="object-cover opacity-75 sm:opacity-60" 
-          priority={false}
-        />
+      src={game.backgroundImage || game.coverImage || ''}
+      alt=""
+      fill
+      className="object-cover opacity-100 mask-[linear-gradient(90deg,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.3)_50%,rgba(0,0,0,0.7)_100%)]"
+      priority={false}
+    />
         {/* Dark Overlay removed entirely for maximum clarity */}
       </div>
 
