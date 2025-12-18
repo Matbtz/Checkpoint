@@ -169,8 +169,16 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
                 <ScrollArea className="h-[400px] rounded-md border p-4">
                     {searchResults.length === 0 && !isSearching && (
-                        <div className="text-center text-muted-foreground py-10">
-                            Enter a title to search.
+                        <div className="text-center text-muted-foreground py-10 flex flex-col items-center gap-4">
+                            <span>{searchQuery ? "No local results found." : "Enter a title to search."}</span>
+                            {searchQuery && !hasSearchedOnline && (
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleExtendSearch}
+                                >
+                                    Search on IGDB
+                                </Button>
+                            )}
                         </div>
                     )}
                     {isSearching && (
