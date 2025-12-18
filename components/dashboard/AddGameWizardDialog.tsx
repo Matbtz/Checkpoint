@@ -122,15 +122,17 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     setCustomBackgroundUrl('');
     setStep('customize');
 
-    // Fetch OpenCritic if missing
+    // Fetch OpenCritic immediately
     setFetchedOpenCritic(null);
-    if (!game.opencritic && game.source !== 'manual') {
+    if (game.source !== 'manual' && game.source !== 'local') {
         try {
             const score = await fetchOpenCriticAction(game.title);
             if (score) setFetchedOpenCritic(score);
         } catch (e) {
             console.error("Failed to fetch OpenCritic score:", e);
         }
+    } else if (game.opencritic) {
+        setFetchedOpenCritic(game.opencritic);
     }
   };
 
