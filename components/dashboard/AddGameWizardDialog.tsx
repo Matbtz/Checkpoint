@@ -36,6 +36,15 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   const [customCoverUrl, setCustomCoverUrl] = useState('');
   const [customBackgroundUrl, setCustomBackgroundUrl] = useState('');
 
+  // Genre handling & Platforms
+  const [genres, setGenres] = useState<string[]>([]);
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [newGenre, setNewGenre] = useState('');
+
+  // Scores
+  const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
+  const [selectedScoreSource, setSelectedScoreSource] = useState<'metacritic' | 'opencritic'>('metacritic');
+
   useEffect(() => {
     if (!isOpen) {
         const timer = setTimeout(() => {
