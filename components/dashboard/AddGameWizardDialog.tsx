@@ -78,7 +78,10 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         // CORRECTION : Appel à searchOnlineGamesAction
         const onlineResults = await searchOnlineGamesAction(searchQuery);
         // On ne surcharge plus les tableaux d'images car searchOnlineGamesAction renvoie désormais les bonnes données
-        const formattedOnlineResults: EnrichedGameData[] = onlineResults;
+        const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
+            ...r,
+            originalData: r.originalData || null,
+        }));
 
         setSearchResults(prev => {
             const existingIds = new Set(prev.map(p => p.id));
