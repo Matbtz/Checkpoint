@@ -6,7 +6,7 @@ import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Gamepad2, Monitor } from 'lucide-react'; // Removed unused 'Check'
+import { Gamepad2, Monitor } from 'lucide-react';
 import { useImageColor } from '@/hooks/use-image-color';
 
 type ExtendedGame = Game & {
@@ -15,11 +15,11 @@ type ExtendedGame = Game & {
 
 type GameWithLibrary = UserLibrary & { game: Game };
 
-// Defined explicit interface to avoid 'any' error
+// Updated interface to exclude 'null', matching the expected HLTBTimes type
 interface HltbTimes {
-  main?: number | null;
-  extra?: number | null;
-  completionist?: number | null;
+  main?: number;
+  extra?: number;
+  completionist?: number;
 }
 
 interface GameCardProps {
@@ -56,16 +56,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
   const targetType = item.targetedCompletionType || 'Main';
 
   const adjustedHltbTimes = useMemo(() => {
-      const times: HltbTimes = {}; // Replaced 'any' with HltbTimes interface
+      const times: HltbTimes = {};
       try {
           const parsed = game.hltbTimes ? JSON.parse(game.hltbTimes as string) : {};
-          times.main = game.hltbMain ?? parsed.main;
-          times.extra = game.hltbExtra ?? parsed.extra;
-          times.completionist = game.hltbCompletionist ?? parsed.completionist;
+          // Explicitly convert null to undefined using double nullish coalescing
+          times.main = (game.hltbMain ?? parsed.main) ?? undefined;
+          times.extra = (game.hltbExtra ?? parsed.extra) ?? undefined;
+          times.completionist = (game.hltbCompletionist ?? parsed.completionist) ?? undefined;
       } catch {
-          times.main = game.hltbMain;
-          times.extra = game.hltbExtra;
-          times.completionist = game.hltbCompletionist;
+          times.main = game.hltbMain ?? undefined;
+          times.extra = game.hltbExtra ?? undefined;
+          times.completionist = game.hltbCompletionist ?? undefined;
       }
       
       if (times.main) times.main *= paceFactor;
@@ -74,9 +75,13 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
       return times;
   }, [game, paceFactor]);
 
+  // 'adjustedHltbTimes' now correctly matches the signature of calculateProgress
   const progress = item.progressManual ?? calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
   const playedHours = Math.round(playedMinutes / 60);
-  const timeToBeat = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main' as keyof HltbTimes];
+  
+  // Safe access using key casting
+  const hltbKey = (targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main') as keyof HltbTimes;
+  const timeToBeat = adjustedHltbTimes[hltbKey];
   const totalHours = timeToBeat ? Math.round(timeToBeat) : null;
   
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
