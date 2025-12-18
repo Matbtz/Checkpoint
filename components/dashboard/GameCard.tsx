@@ -118,16 +118,19 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         } : undefined}
         onClick={onClick}
     >
-      {/* Layer 1: Background Art (Clean - No Overlay) */}
+      {/* Layer 1: Background Art */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none">
         <Image
-      src={game.backgroundImage || game.coverImage || ''}
-      alt=""
-      fill
-      className="object-cover opacity-100 mask-[linear-gradient(90deg,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.3)_50%,rgba(0,0,0,0.7)_100%)]"
-      priority={false}
-    />
-        {/* Dark Overlay removed entirely for maximum clarity */}
+          src={game.backgroundImage || game.coverImage || ''}
+          alt=""
+          fill
+          className="object-cover opacity-100"
+          priority={false}
+          style={{
+            maskImage: 'linear-gradient(90deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.7) 100%)',
+            WebkitMaskImage: 'linear-gradient(90deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.7) 100%)'
+          }}
+        />
       </div>
 
       {/* Layer 2: Content Grid */}
