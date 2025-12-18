@@ -102,14 +102,19 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
           src={game.backgroundImage || game.coverImage || ''}
           alt=""
           fill
-          className="object-cover opacity-40 blur-[4px]"
+          // Reduced blur to 2px and adjusted opacity for better visibility
+          className="object-cover opacity-40 blur-[2px]"
           priority={false}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent z-10" />
+        {/* Reduced gradient intensity to show more background art (via-zinc-950/50 instead of /80) */}
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/50 to-transparent z-10" />
       </div>
 
-      {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[80px_1fr_50px] sm:grid-cols-[100px_1fr_70px] gap-3 p-2 md:p-3">
+      {/* Layer 2: Content Grid 
+          - Grid cols: Reduced last column width (50->40px mobile, 70->60px sm)
+          - Padding: Uneven padding to reduce right side space (pr-1.5 mobile, sm:pr-2 desktop)
+      */}
+      <div className="relative z-20 grid h-full grid-cols-[80px_1fr_40px] sm:grid-cols-[100px_1fr_60px] gap-3 pl-2 py-2 pr-1.5 sm:pl-3 sm:py-3 sm:pr-2">
 
         {/* Column 1: Cover Art */}
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-xl ring-1 ring-white/10">
