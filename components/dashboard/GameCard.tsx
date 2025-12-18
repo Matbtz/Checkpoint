@@ -97,14 +97,19 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         onClick={onClick}
     >
       {/* Layer 1: Background Art */}
-      <div className="absolute inset-0 z-0 select-none">
+      <div className="absolute inset-0 z-0 select-none pointer-events-none">
         <Image
           src={game.backgroundImage || game.coverImage || ''}
           alt=""
           fill
-          className="object-cover opacity-30"
+          // CHANGE 1: Removed 'blur-[4px]' completely.
+          // Reduced opacity slightly (40 -> 30) so the text remains readable without blur.
+          className="object-cover opacity-30" 
           priority={false}
         />
+        
+        {/* CHANGE 2: Gradient is now Transparent -> Dark -> Transparent */}
+        {/* This leaves the first and last third clear, obscuring only the middle for text */}
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-zinc-950/90 to-transparent z-10" />
       </div>
 
