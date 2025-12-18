@@ -8,6 +8,7 @@ export interface EnrichedGameData {
     releaseDate: string | null;
     studio: string | null;
     metacritic: number | null;
+    opencritic?: number | null;
     genres: string[];
     availableCovers: string[];
     availableBackgrounds: string[];

@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Loader2, ChevronRight, Check, ArrowLeft } from 'lucide-react';
+import { Search, Loader2, ChevronRight, Check, ArrowLeft, Globe } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { addGameExtended, searchGamesAction } from '@/actions/add-game';
+import { addGameExtended, searchLocalAction, searchOnlineAction } from '@/actions/add-game';
 import { EnrichedGameData } from '@/lib/enrichment';
 import { Badge } from '@/components/ui/badge';
 
@@ -23,9 +23,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // State
   const [step, setStep] = useState<'search' | 'customize'>('search');
   const [searchQuery, setSearchQuery] = useState('');
-  const [provider, setProvider] = useState<'igdb' | 'rawg'>('rawg');
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+
+  // Search Results
   const [searchResults, setSearchResults] = useState<EnrichedGameData[]>([]);
+  const [hasSearchedOnline, setHasSearchedOnline] = useState(false);
 
   // Selection State (Draft)
   const [selectedGame, setSelectedGame] = useState<EnrichedGameData | null>(null);
@@ -45,11 +48,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // Reset when closed
   useEffect(() => {
     if (!isOpen) {
-        // slight delay to allow exit animation
         const timer = setTimeout(() => {
             setStep('search');
             setSearchQuery('');
             setSearchResults([]);
+            setHasSearchedOnline(false);
             setSelectedGame(null);
             setCustomCoverUrl('');
             setCustomBackgroundUrl('');
@@ -58,17 +61,42 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     }
   }, [isOpen]);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setIsSearching(true);
-    try {
-        const results = await searchGamesAction(searchQuery, provider);
-        setSearchResults(results);
-    } catch (e) {
-        console.error(e);
-    } finally {
-        setIsSearching(false);
-    }
+  // Initial Local Search on Type
+  const handleSearchLocal = async (query: string) => {
+      if (!query.trim()) {
+          setSearchResults([]);
+          return;
+      }
+      setIsSearching(true);
+      setHasSearchedOnline(false); // Reset online state when query changes
+      try {
+          const results = await searchLocalAction(query);
+          setSearchResults(results);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsSearching(false);
+      }
+  };
+
+  const handleSearchOnline = async () => {
+      if (!searchQuery.trim()) return;
+      setIsSearchingOnline(true);
+      try {
+          const newResults = await searchOnlineAction(searchQuery);
+
+          // Merge results: Append only if not already in list (by ID)
+          setSearchResults(prev => {
+              const currentIds = new Set(prev.map(g => g.id));
+              const filteredNew = newResults.filter(g => !currentIds.has(g.id));
+              return [...prev, ...filteredNew];
+          });
+          setHasSearchedOnline(true);
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsSearchingOnline(false);
+      }
   };
 
   const selectGame = (game: EnrichedGameData) => {
@@ -104,6 +132,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         releaseDate: selectedGame.releaseDate,
         studio,
         metacritic: selectedGame.metacritic || undefined,
+        opencritic: selectedGame.opencritic, // Pass through if available locally
         source: selectedGame.source,
         genres: selectedGame.genres
     };
@@ -144,39 +173,37 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         {step === 'search' ? (
              <div className="flex flex-col gap-4 p-6">
                 <div className="flex gap-2 items-center">
-                   <Select value={provider} onValueChange={(v) => setProvider(v as 'igdb' | 'rawg')}>
-                        <SelectTrigger className="w-[100px]">
-                            <SelectValue placeholder="Source" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="rawg">RAWG</SelectItem>
-                            <SelectItem value="igdb">IGDB</SelectItem>
-                        </SelectContent>
-                   </Select>
                     <div className="relative flex-1">
                         <Input
                             placeholder="Enter game title..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                // Debounce slightly or just call
+                                // For responsiveness we call immediately if not too fast, but usually debounce 300ms is good.
+                                // Implementing manual debounce here or just relying on user pause?
+                                // Prompt says "Quand l'utilisateur tape, lance uniquement searchLocalGames".
+                                // We will just call it.
+                                handleSearchLocal(e.target.value);
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearchOnline()} // Enter triggers online search? Or just stays local?
+                            // Maybe Enter triggers online if local is empty? Let's keep it simple.
                         />
+                        {isSearching && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
+                        )}
                     </div>
-                    <Button size="icon" onClick={handleSearch} disabled={isSearching}>
-                        {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    </Button>
                 </div>
 
                 <ScrollArea className="h-[400px] rounded-md border p-4">
-                    {searchResults.length === 0 && !isSearching && (
-                        <div className="text-center text-muted-foreground py-10">
-                            Enter a title to search.
+                    {searchResults.length === 0 && !isSearching && searchQuery.trim().length > 0 && !hasSearchedOnline && (
+                        <div className="text-center text-muted-foreground py-10 flex flex-col items-center gap-2">
+                            <span>No local results found.</span>
                         </div>
                     )}
-                    {isSearching && (
-                        <div className="flex justify-center py-10">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    )}
+
                     <div className="grid gap-2">
                         {searchResults.map((game) => (
                             <button
@@ -204,29 +231,46 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                                 </>
                                             )}
                                         </div>
-                                        {game.genres.length > 0 && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {game.genres.slice(0, 3).map((genre) => (
-                                                    <Badge key={genre} variant="secondary" className="text-[9px] px-1 h-4 rounded-sm">
-                                                        {genre}
-                                                    </Badge>
-                                                ))}
-                                                {game.genres.length > 3 && (
-                                                    <span className="text-[9px] text-muted-foreground">+{game.genres.length - 3}</span>
-                                                )}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
-                                {game.metacritic && (
+                                {/* Show OpenCritic if available, else Metacritic */}
+                                {game.opencritic ? (
+                                     <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(game.opencritic))}>
+                                        OC: {game.opencritic}
+                                    </Badge>
+                                ) : game.metacritic ? (
                                     <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(game.metacritic))}>
                                         {game.metacritic}
                                     </Badge>
-                                )}
+                                ) : null}
                                 <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
                             </button>
                         ))}
                     </div>
+
+                    {/* Magic Button */}
+                    {searchQuery.trim().length > 0 && !hasSearchedOnline && (
+                         <div className="mt-4 flex justify-center">
+                             <Button
+                                variant="secondary"
+                                className="w-full"
+                                onClick={handleSearchOnline}
+                                disabled={isSearchingOnline}
+                            >
+                                {isSearchingOnline ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Searching IGDB...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Globe className="mr-2 h-4 w-4" />
+                                        Search Online / Extend Results
+                                    </>
+                                )}
+                             </Button>
+                         </div>
+                    )}
                 </ScrollArea>
              </div>
         ) : (
@@ -367,17 +411,25 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     </div>
                                 )}
 
-                                {selectedGame?.metacritic && (
-                                    <div className="space-y-2">
-                                        <Label>Metacritic Score</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Badge className={cn("text-sm h-7 px-2", getScoreColor(selectedGame.metacritic))}>
-                                                {selectedGame.metacritic}
+                                <div className="space-y-2">
+                                    <Label>Scores</Label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedGame?.opencritic ? (
+                                            <Badge className={cn("text-sm h-7 px-2", getScoreColor(selectedGame.opencritic))}>
+                                                OpenCritic: {selectedGame.opencritic}
                                             </Badge>
-                                            <span className="text-sm text-muted-foreground">Detected from {selectedGame.source.toUpperCase()}</span>
-                                        </div>
+                                        ) : (
+                                             <Badge variant="outline" className="text-sm h-7 px-2 text-muted-foreground border-dashed">
+                                                OpenCritic: N/A (Will fetch on add)
+                                            </Badge>
+                                        )}
+                                        {selectedGame?.metacritic && (
+                                            <Badge variant="outline" className="text-sm h-7 px-2">
+                                                Metacritic: {selectedGame.metacritic}
+                                            </Badge>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
 
                         </div>
