@@ -92,25 +92,33 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             backgroundImage: `linear-gradient(#18181b, #18181b), linear-gradient(to bottom right, ${activePrimaryColor}, ${activeSecondaryColor})`,
             backgroundOrigin: 'border-box',
             backgroundClip: 'padding-box, border-box',
-            boxShadow: `0 10px 30px -15px ${activePrimaryColor}60`
         } : undefined}
+        animate={hasCustomColors ? {
+            boxShadow: [
+                `0 0 15px -5px ${activePrimaryColor}40`,
+                `0 0 30px -5px ${activePrimaryColor}60`,
+                `0 0 15px -5px ${activePrimaryColor}40`
+            ]
+        } : undefined}
+        transition={{
+            boxShadow: {
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut"
+            }
+        }}
         onClick={onClick}
     >
       {/* Layer 1: Background Art */}
-      <div className="absolute inset-0 z-0 select-none pointer-events-none">
+      <div className="absolute inset-0 z-0 select-none">
         <Image
           src={game.backgroundImage || game.coverImage || ''}
           alt=""
           fill
-          // CHANGE 1: Removed 'blur-[4px]' completely.
-          // Reduced opacity slightly (40 -> 30) so the text remains readable without blur.
-          className="object-cover opacity-30" 
+          className="object-cover opacity-50"
           priority={false}
         />
-        
-        {/* CHANGE 2: Gradient is now Transparent -> Dark -> Transparent */}
-        {/* This leaves the first and last third clear, obscuring only the middle for text */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-zinc-950/90 to-transparent z-10" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,transparent_30%,#09090b_50%,transparent_70%,transparent_100%)] z-10" />
       </div>
 
       {/* Layer 2: Content Grid */}
