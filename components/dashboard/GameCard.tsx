@@ -125,7 +125,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
           alt=""
           fill
           // Opacity at 30% on black background creates a natural dimmer without needing a gradient overlay
-          className="object-cover opacity-30" 
+          className="object-cover opacity-60" 
           priority={false}
         />
         {/* Dark Overlay removed entirely for maximum clarity */}
