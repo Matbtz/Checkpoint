@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { searchGamesAction, addGameExtended } from '@/actions/add-game';
+// CORRECTION ICI : Import de searchLocalGamesAction au lieu de searchGamesAction
+import { searchLocalGamesAction, addGameExtended } from '@/actions/add-game';
 import { Loader2, Search, Plus, Calendar } from 'lucide-react';
 import Image from 'next/image';
 import { EnrichedGameData } from '@/lib/enrichment';
@@ -31,7 +32,8 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
     setResults([]);
 
     try {
-      const games = await searchGamesAction(query);
+      // CORRECTION ICI : Appel de la fonction locale
+      const games = await searchLocalGamesAction(query);
       setResults(games);
       setHasSearched(true);
     } catch (err) {
@@ -48,8 +50,8 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
         await addGameExtended({
           id: game.id,
           title: game.title,
-        coverImage: game.availableCovers[0] || '',
-        backgroundImage: game.availableBackgrounds[0] || undefined,
+          coverImage: game.availableCovers[0] || '',
+          backgroundImage: game.availableBackgrounds[0] || undefined,
           releaseDate: game.releaseDate,
           studio: game.studio || undefined,
           metacritic: game.metacritic || undefined,
