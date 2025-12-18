@@ -6,7 +6,7 @@ import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Gamepad2, Monitor, Check } from 'lucide-react';
+import { Gamepad2, Monitor } from 'lucide-react';
 import { useImageColor } from '@/hooks/use-image-color';
 
 type ExtendedGame = Game & {
@@ -85,7 +85,8 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         layoutId={game.id}
         whileHover={{ scale: 1.01 }}
         className={cn(
-            "group relative w-full min-h-[160px] overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg transition-all mb-4",
+            // Hauteur ajustée à min-h-[136px] pour correspondre parfaitement à la hauteur de la cover + padding (120px + 16px)
+            "group relative w-full min-h-[136px] overflow-hidden rounded-2xl bg-zinc-900 cursor-pointer shadow-lg transition-all mb-4",
             !hasCustomColors ? "border border-white/10" : "border-2 border-transparent"
         )}
         style={hasCustomColors ? {
@@ -102,14 +103,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
           src={game.backgroundImage || game.coverImage || ''}
           alt=""
           fill
-          className="object-cover opacity-40 blur-[4px]"
+          className="object-cover opacity-40 blur-[2px]"
           priority={false}
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/80 to-transparent z-10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/50 to-transparent z-10" />
       </div>
 
-      {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[90px_1fr_60px] sm:grid-cols-[100px_1fr_80px] gap-3 md:gap-4 p-2 md:p-3">
+      {/* Layer 2: Content Grid 
+          - Padding: pl-2 py-2 (mobile) = 8px uniform everywhere around cover
+          - Padding Desktop: pl-3 py-3 = 12px uniform
+      */}
+      <div className="relative z-20 grid h-full grid-cols-[80px_1fr_40px] sm:grid-cols-[100px_1fr_60px] gap-3 pl-2 py-2 pr-1.5 sm:pl-3 sm:py-3 sm:pr-2">
 
         {/* Column 1: Cover Art */}
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-xl ring-1 ring-white/10">
@@ -125,10 +129,11 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             </div>
         </div>
 
-        {/* Column 2: Main Content (Largest Space) */}
+        {/* Column 2: Main Content */}
         <div className="flex flex-col justify-between min-w-0 py-0.5">
             <div>
-                <h2 className="text-xl font-black uppercase leading-tight text-white line-clamp-2 tracking-tight">
+                {/* Font Size Reduced: text-base (mobile), text-lg (desktop) */}
+                <h2 className="text-base sm:text-lg font-black uppercase leading-tight text-white line-clamp-2 tracking-tight">
                     {game.title}
                 </h2>
 
@@ -165,12 +170,12 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             </div>
         </div>
 
-        {/* Column 3: Score (Pushed to Edge) */}
+        {/* Column 3: Score */}
         <div className="flex flex-col items-center justify-center h-full">
             {scores.metacritic ? (
                 <div className="flex flex-col items-center gap-1">
                     <div className={cn(
-                        "flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/40 backdrop-blur-sm",
+                        "flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/40 backdrop-blur-sm",
                         getScoreColor(scores.metacritic)
                     )}>
                         <span className="text-sm sm:text-lg font-black font-mono">
