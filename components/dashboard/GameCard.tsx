@@ -109,7 +109,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
       </div>
 
       {/* Layer 2: Content Grid */}
-      <div className="relative z-20 grid h-full grid-cols-[90px_1fr_60px] sm:grid-cols-[100px_1fr_80px] gap-4 p-3">
+      <div className="relative z-20 grid h-full grid-cols-[80px_1fr_50px] sm:grid-cols-[100px_1fr_70px] gap-3 p-2 md:p-3">
 
         {/* Column 1: Cover Art */}
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-xl ring-1 ring-white/10">
@@ -128,7 +128,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         {/* Column 2: Main Content (Largest Space) */}
         <div className="flex flex-col justify-between min-w-0 py-0.5">
             <div>
-                <h2 className="text-xl font-black uppercase leading-tight text-white line-clamp-2 tracking-tight">
+                <h2 className="text-lg sm:text-xl font-black uppercase leading-tight text-white line-clamp-2 tracking-tight">
                     {game.title}
                 </h2>
 
@@ -170,7 +170,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             {scores.metacritic ? (
                 <div className="flex flex-col items-center gap-1">
                     <div className={cn(
-                        "flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/40 backdrop-blur-sm",
+                        "flex h-9 w-9 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 bg-black/40 backdrop-blur-sm",
                         getScoreColor(scores.metacritic)
                     )}>
                         <span className="text-sm sm:text-lg font-black font-mono">
