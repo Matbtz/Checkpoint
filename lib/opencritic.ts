@@ -17,6 +17,10 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
     return null;
   }
 
+  // Timeout logic to prevent blocking
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+
   try {
     const url = `https://opencritic-api.p.rapidapi.com/game/search?criteria=${encodeURIComponent(gameTitle)}`;
 
@@ -25,8 +29,17 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
       headers: {
         'X-RapidAPI-Key': rapidApiKey,
         'X-RapidAPI-Host': 'opencritic-api.p.rapidapi.com'
-      }
+      },
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
+
+    // Strict error handling for 429 or other errors
+    if (response.status === 429) {
+        console.warn('OpenCritic API Rate Limit Exceeded (429). returning null.');
+        return null;
+    }
 
     if (!response.ok) {
       console.error(`OpenCritic API error: ${response.status} ${response.statusText}`);
@@ -39,16 +52,20 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
       return null;
     }
 
-    // Find the best match (simple approach: use the first result as requested)
-    // "Prend le premier résultat correspondant (vérifie la similarité du nom si possible) et renvoie son topCriticScore"
-
-    // Ideally we would use Levenshtein distance or string similarity,
-    // but the instruction says "Prend le premier résultat correspondant".
-    // I will check if the first result name is vaguely similar to avoid complete mismatches if possible,
-    // but relying on search engine ranking is usually the requested behavior here.
-
-    // Let's at least ensure we have a score.
     const firstResult = data[0];
+
+    // Similarity check: ensure the game title is at least vaguely contained or related
+    const normalizedQuery = gameTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalizedResult = firstResult.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Allow if one is contained in the other
+    if (!normalizedResult.includes(normalizedQuery) && !normalizedQuery.includes(normalizedResult)) {
+        // Fallback: check if the first 3 characters match (very loose) or just log a warning but proceed?
+        // "Vérifie la similarité du nom si possible" -> if not similar, maybe don't return it?
+        // Let's be safe: if they are completely different, return null.
+        console.warn(`OpenCritic Mismatch: Searched "${gameTitle}", found "${firstResult.name}". Rejecting.`);
+        return null;
+    }
 
     if (typeof firstResult.topCriticScore === 'number') {
         return Math.round(firstResult.topCriticScore);
@@ -56,7 +73,12 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
 
     return null;
 
-  } catch (error) {
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+         console.warn(`OpenCritic API timed out for game: ${gameTitle}`);
+         return null;
+    }
     console.error('Error fetching OpenCritic score:', error);
     return null;
   }
