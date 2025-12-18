@@ -145,7 +145,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     // HACK: If OpenCritic is selected, we override 'metacritic' with the OpenCritic value so GameCard displays it.
     // The DB will still fetch the real OpenCritic score in the background, but this ensures display preference is respected initially.
     if (selectedScoreSource === 'opencritic' && (fetchedOpenCritic || selectedGame.opencritic)) {
-        finalMetacritic = fetchedOpenCritic || selectedGame.opencritic;
+        finalMetacritic = fetchedOpenCritic || selectedGame.opencritic || null;
     }
 
     const finalData = {

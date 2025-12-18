@@ -10,6 +10,7 @@ export interface EnrichedGameData {
     metacritic: number | null;
     opencritic?: number | null;
     genres: string[];
+    platforms?: string[];
     availableCovers: string[];
     availableBackgrounds: string[];
     source: 'igdb' | 'rawg' | 'manual' | 'local';
