@@ -126,7 +126,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
       {/* Grid/List Layout */}
       <motion.div
         layout
-        lassName="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4"
+        className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4"
       >
         <AnimatePresence mode="popLayout">
             {sortedLibrary.length === 0 ? (
