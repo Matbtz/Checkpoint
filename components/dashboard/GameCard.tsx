@@ -6,7 +6,7 @@ import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Gamepad2, Monitor, Check } from 'lucide-react';
+import { Gamepad2, Monitor } from 'lucide-react'; // Removed unused 'Check'
 import { useImageColor } from '@/hooks/use-image-color';
 
 type ExtendedGame = Game & {
@@ -14,6 +14,13 @@ type ExtendedGame = Game & {
 };
 
 type GameWithLibrary = UserLibrary & { game: Game };
+
+// Defined explicit interface to avoid 'any' error
+interface HltbTimes {
+  main?: number | null;
+  extra?: number | null;
+  completionist?: number | null;
+}
 
 interface GameCardProps {
   item: GameWithLibrary;
@@ -27,7 +34,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
-  // Logic: Extract Genres
   const genres = useMemo(() => {
     try {
         return game.genres ? JSON.parse(game.genres as string) : [];
@@ -36,7 +42,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
     }
   }, [game.genres]);
 
-  // Logic: Extract Scores
   const scores = useMemo(() => {
       try {
           const parsed = game.scores ? JSON.parse(game.scores as string) : {};
@@ -47,12 +52,11 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
       }
   }, [game.scores, game.metacritic]);
 
-  // Logic: Progress & Time
   const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
 
   const adjustedHltbTimes = useMemo(() => {
-      const times: any = {};
+      const times: HltbTimes = {}; // Replaced 'any' with HltbTimes interface
       try {
           const parsed = game.hltbTimes ? JSON.parse(game.hltbTimes as string) : {};
           times.main = game.hltbMain ?? parsed.main;
@@ -72,7 +76,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
 
   const progress = item.progressManual ?? calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
   const playedHours = Math.round(playedMinutes / 60);
-  const timeToBeat = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main'];
+  const timeToBeat = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main' as keyof HltbTimes];
   const totalHours = timeToBeat ? Math.round(timeToBeat) : null;
   
   const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
@@ -80,14 +84,12 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
 
-  // UI Helper: Score Colors
   const getScoreColor = (score: number) => {
     if (score >= 75) return 'border-green-500 text-green-500';
     if (score >= 50) return 'border-yellow-500 text-yellow-500';
     return 'border-red-500 text-red-500';
   };
 
-  // Color Extraction for Borders
   const { colors: extractedColors } = useImageColor(game.coverImage || game.backgroundImage);
   const activePrimaryColor = primaryColor || extractedColors?.primary;
   const activeSecondaryColor = secondaryColor || extractedColors?.secondary;
@@ -109,7 +111,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         } : undefined}
         onClick={onClick}
     >
-      {/* Background Layer */}
       <div className="absolute inset-0 z-0 select-none">
         <Image
           src={game.backgroundImage || game.coverImage || ''}
@@ -121,10 +122,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/90 to-transparent z-10" />
       </div>
 
-      {/* Content Grid: 3-column layout */}
       <div className="relative z-20 grid h-full grid-cols-[70px_1fr_54px] sm:grid-cols-[90px_1fr_64px] gap-3 p-3 sm:p-4">
-
-        {/* Column 1: Poster Art */}
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-xl ring-1 ring-white/10">
              <Image
                 src={game.coverImage || game.backgroundImage || ''}
@@ -138,7 +136,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             </div>
         </div>
 
-        {/* Column 2: Info & Progress (Max space) */}
         <div className="flex flex-col justify-between min-w-0 py-0.5">
             <div className="flex flex-col">
                 <h2 className="text-lg sm:text-xl font-black uppercase leading-[1.1] text-white line-clamp-2 tracking-tighter">
@@ -177,7 +174,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             </div>
         </div>
 
-        {/* Column 3: Metacritic Score */}
         <div className="flex flex-col items-center justify-center h-full pt-1">
             {scores.metacritic ? (
                 <div className="flex flex-col items-center gap-1">
@@ -201,4 +197,3 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
     </motion.div>
   );
 }
-
