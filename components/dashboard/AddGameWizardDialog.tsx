@@ -57,7 +57,14 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     try {
         // CORRECTION : Appel à searchLocalGamesAction
         const results = await searchLocalGamesAction(searchQuery);
-        setSearchResults(results);
+        const formattedResults: EnrichedGameData[] = results.map(r => ({
+             ...r,
+             genres: [],
+             originalData: null,
+             description: '',
+             source: 'local'
+        }));
+        setSearchResults(formattedResults);
     } catch (e) {
         console.error(e);
     } finally {
