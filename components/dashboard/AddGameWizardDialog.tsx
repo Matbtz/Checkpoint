@@ -81,6 +81,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
             ...r,
             originalData: r.originalData || null,
+            availableBackgrounds: r.availableBackgrounds || [],
         }));
 
         setSearchResults(prev => {
