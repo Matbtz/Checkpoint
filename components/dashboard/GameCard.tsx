@@ -127,8 +127,8 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
           className="object-cover opacity-100"
           priority={false}
           style={{
-            maskImage: 'linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.75) 25%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0.4) 55%, rgba(0,0,0,0.75) 75%, rgba(0,0,0,1) 100%)',
-            WebkitMaskImage: 'linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.75) 25%, rgba(0,0,0,0.4) 45%, rgba(0,0,0,0.4) 55%, rgba(0,0,0,0.75) 75%, rgba(0,0,0,1) 100%)'
+            maskImage: 'linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 10%, rgba(0,0,0,0.75) 20%, rgba(0,0,0,0.55) 30%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.75) 80%, rgba(0,0,0,0.9) 90%, rgba(0,0,0,1) 100%)',
+            WebkitMaskImage: 'linear-gradient(90deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 10%, rgba(0,0,0,0.75) 20%, rgba(0,0,0,0.55) 30%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0.75) 80%, rgba(0,0,0,0.9) 90%, rgba(0,0,0,1) 100%)'
           }}
         />
       </div>
