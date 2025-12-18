@@ -79,11 +79,15 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         // CORRECTION : Appel à searchOnlineGamesAction
         const onlineResults = await searchOnlineGamesAction(searchQuery);
         // On ne surcharge plus les tableaux d'images car searchOnlineGamesAction renvoie désormais les bonnes données
+        // Le cast as unknown as EnrichedGameData[] est necessaire car le type retourné par l'action serveur peut être incomplet
+        // par rapport à l'interface client stricte lors du build, bien que l'action ait été mise à jour.
         const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
             ...r,
-            originalData: r.originalData || null,
-            availableBackgrounds: r.availableBackgrounds || [],
-        }));
+            originalData: (r as any).originalData || null,
+            availableBackgrounds: (r as any).availableBackgrounds || [],
+            platforms: (r as any).platforms || [],
+            description: (r as any).description || ''
+        })) as unknown as EnrichedGameData[];
 
         setSearchResults(prev => {
             const existingIds = new Set(prev.map(p => p.id));

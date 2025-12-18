@@ -7,6 +7,13 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 
+// --- UTILITAIRE : FETCH OPENCRITIC ON DEMAND ---
+export async function fetchOpenCriticAction(title: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+    return await getOpenCriticScore(title);
+}
+
 // --- ACTION 1 : RECHERCHE LOCALE (Gratuite) ---
 // Cette action remplace l'appel par défaut
 export async function searchLocalGamesAction(query: string) {
