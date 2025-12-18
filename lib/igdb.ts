@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
 const IGDB_SECRET = process.env.IGDB_SECRET;
 

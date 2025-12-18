@@ -29,8 +29,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // ... (Reste des states inchangé) ...
   const [selectedGame, setSelectedGame] = useState<EnrichedGameData | null>(null);
   const [title, setTitle] = useState('');
-  const [releaseYear, setReleaseYear] = useState<string>('');
-  const [status, setStatus] = useState('BACKLOG');
   const [studio, setStudio] = useState('');
   const [selectedCoverIndex, setSelectedCoverIndex] = useState(0);
   const [selectedBackgroundIndex, setSelectedBackgroundIndex] = useState(0);
@@ -89,7 +87,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   const selectGame = (game: EnrichedGameData) => {
     setSelectedGame(game);
     setTitle(game.title);
-    setReleaseYear(game.releaseDate ? new Date(game.releaseDate).getFullYear().toString() : '');
     setStudio(game.studio || '');
     setSelectedCoverIndex(0);
     setSelectedBackgroundIndex(0);

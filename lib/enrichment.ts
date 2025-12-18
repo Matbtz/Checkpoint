@@ -12,8 +12,9 @@ export interface EnrichedGameData {
     genres: string[];
     availableCovers: string[];
     availableBackgrounds: string[];
-    source: 'igdb' | 'rawg';
-    originalData: IgdbGame | RawgGame;
+    source: 'igdb' | 'rawg' | 'manual' | 'local';
+    originalData: IgdbGame | RawgGame | null;
+    description?: string;
 }
 
 export async function searchGamesEnriched(query: string, provider: 'igdb' | 'rawg' | 'all' = 'all'): Promise<EnrichedGameData[]> {
