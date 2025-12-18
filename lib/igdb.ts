@@ -1,77 +1,101 @@
+import { NextResponse } from 'next/server';
 
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
-const IGDB_SECRET = process.env.IGDB_SECRET; // This might be missing if not set in env
-const IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
+const IGDB_SECRET = process.env.IGDB_SECRET;
 
 const BASE_URL = 'https://api.igdb.com/v4';
 
-// Simple in-memory cache for the token (mostly for dev server persistence during a run)
+// Cache simple pour le token en mémoire
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
 
+/**
+ * Récupère un token valide via Client ID + Secret.
+ * Le token est mis en cache et régénéré automatiquement avant expiration.
+ */
 async function getValidToken(): Promise<string | null> {
-    // If we have a valid cached token, use it
+    // 1. Vérification du cache
     if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
         return cachedToken;
     }
 
-    // If environment variable is provided, use it as fallback or primary if no secret
-    if (IGDB_ACCESS_TOKEN && !IGDB_SECRET) {
-        return IGDB_ACCESS_TOKEN;
-    }
-
-    // Attempt to fetch fresh token if we have credentials
+    // 2. Génération d'un nouveau token
     if (IGDB_CLIENT_ID && IGDB_SECRET) {
         try {
-            console.log("Fetching new IGDB access token...");
+            // console.log("[IGDB] Refreshing access token..."); // Décommenter pour debug
             const response = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_SECRET}&grant_type=client_credentials`, {
                 method: 'POST'
             });
 
             if (!response.ok) {
-                console.error("Failed to fetch IGDB token:", await response.text());
-                // Fallback to static token if available
-                return IGDB_ACCESS_TOKEN || null;
+                console.error("[IGDB] Failed to refresh token:", await response.text());
+                return null;
             }
 
             const data = await response.json();
             cachedToken = data.access_token;
-            // Set expiry a bit earlier than actual (expires_in is in seconds)
+            // Marge de sécurité : on considère qu'il expire 1 minute avant la vraie date
             tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
-
             return cachedToken;
         } catch (e) {
-            console.error("Error fetching IGDB token:", e);
+            console.error("[IGDB] Error refreshing token:", e);
+            return null;
         }
     }
 
-    // Fallback
-    return IGDB_ACCESS_TOKEN || null;
+    console.error("[IGDB] Credentials missing. Please check IGDB_CLIENT_ID and IGDB_SECRET in .env");
+    return null;
+}
+
+// --- Interfaces ---
+
+export interface IgdbImageObject {
+    id: number;
+    image_id: string;
+}
+
+export interface IgdbCompany {
+    id: number;
+    developer: boolean;
+    publisher: boolean;
+    company: {
+        id: number;
+        name: string;
+    };
 }
 
 export interface IgdbGame {
     id: number;
     name: string;
-    cover?: { id: number; url: string; image_id: string };
+    cover?: IgdbImageObject;
     first_release_date?: number;
     summary?: string;
     aggregated_rating?: number; // Critic Score
-    involved_companies?: { company: { name: string }; developer: boolean }[];
-    screenshots?: { id: number; url: string; image_id: string }[];
-    artworks?: { id: number; url: string; image_id: string }[];
+    involved_companies?: IgdbCompany[];
+    screenshots?: IgdbImageObject[];
+    artworks?: IgdbImageObject[];
     genres?: { id: number; name: string }[];
 }
 
-export interface IgdbImage {
-    url: string;
-    type: 'cover' | 'background';
+export interface EnrichedIgdbGame extends IgdbGame {
+    possibleCovers: string[];
+    possibleBackgrounds: string[];
 }
 
+/**
+ * Helper pour construire l'URL d'une image IGDB
+ */
+export function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot_huge' | '1080p' = 'cover_big'): string {
+    return `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg`;
+}
+
+/**
+ * Fetch générique avec gestion du retry 401 (Unauthorized)
+ */
 async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): Promise<T[]> {
     const token = await getValidToken();
 
     if (!IGDB_CLIENT_ID || !token) {
-        console.warn('IGDB credentials missing or invalid');
         return [];
     }
 
@@ -81,57 +105,114 @@ async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): 
             headers: {
                 'Client-ID': IGDB_CLIENT_ID,
                 'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
             },
             body: query,
         });
 
         if (!response.ok) {
-            console.error(`IGDB API error: ${response.status} ${response.statusText}`);
-
-            if (response.status === 401) {
-                cachedToken = null; // Invalidate cache
-
-                if (!retrying && IGDB_SECRET) {
-                    console.log("IGDB 401 received. Attempting to refresh token and retry...");
-                    return fetchIgdb<T>(endpoint, query, true);
-                } else if (!IGDB_SECRET) {
-                    console.error("IGDB 401 Unauthorized. IGDB_SECRET is missing, so token cannot be refreshed automatically. Please update IGDB_ACCESS_TOKEN or provide IGDB_SECRET.");
-                }
+            // Si le token est invalide (401), on le vide et on réessaie une fois
+            if (response.status === 401 && !retrying) {
+                console.warn("[IGDB] Token expired (401). Retrying with fresh token...");
+                cachedToken = null;
+                tokenExpiry = null;
+                return fetchIgdb<T>(endpoint, query, true);
             }
+            
+            console.error(`[IGDB] API Error ${response.status}: ${response.statusText}`);
             return [];
         }
 
         return await response.json();
     } catch (error) {
-        console.error('Error fetching from IGDB:', error);
+        console.error('[IGDB] Network error:', error);
         return [];
     }
 }
 
-export async function searchIgdbGames(query: string, limit: number = 10): Promise<IgdbGame[]> {
-    // Construct query for games
-    // We need: name, cover, release date, summary, aggregated_rating, involved_companies (developer), screenshots, artworks, genres
+/**
+ * Recherche de jeux avec récupération étendue des images
+ */
+export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
     const body = `
         search "${query}";
         fields name, cover.image_id, first_release_date, summary, aggregated_rating,
-               involved_companies.company.name, involved_companies.developer,
+               involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, genres.name;
         limit ${limit};
     `;
-    return await fetchIgdb<IgdbGame>('games', body);
+    
+    const games = await fetchIgdb<IgdbGame>('games', body);
+
+    // Mapping et déduplication des images
+    return games.map(game => {
+        const covers: string[] = [];
+        const backgrounds: string[] = [];
+
+        if (game.cover?.image_id) {
+            covers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
+            backgrounds.push(getIgdbImageUrl(game.cover.image_id, 'screenshot_huge'));
+        }
+
+        if (game.artworks) {
+            game.artworks.forEach(art => {
+                covers.push(getIgdbImageUrl(art.image_id, 'cover_big'));
+                backgrounds.push(getIgdbImageUrl(art.image_id, 'screenshot_huge'));
+            });
+        }
+
+        if (game.screenshots) {
+            game.screenshots.forEach(screen => {
+                backgrounds.push(getIgdbImageUrl(screen.image_id, 'screenshot_huge'));
+            });
+        }
+
+        return {
+            ...game,
+            possibleCovers: Array.from(new Set(covers)),
+            possibleBackgrounds: Array.from(new Set(backgrounds))
+        };
+    });
 }
 
-export function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot_huge' | '1080p' = 'cover_big'): string {
-    return `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg`;
-}
-
-export async function getIgdbGameDetails(gameId: number): Promise<IgdbGame | null> {
+/**
+ * Récupère les détails d'un jeu spécifique par ID
+ */
+export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGame | null> {
     const body = `
         fields name, cover.image_id, first_release_date, summary, aggregated_rating,
-               involved_companies.company.name, involved_companies.developer,
+               involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, genres.name;
         where id = ${gameId};
     `;
+    
     const results = await fetchIgdb<IgdbGame>('games', body);
-    return results.length > 0 ? results[0] : null;
+    
+    if (results.length === 0) return null;
+    const game = results[0];
+
+    const covers: string[] = [];
+    const backgrounds: string[] = [];
+
+    if (game.cover?.image_id) {
+        covers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
+        backgrounds.push(getIgdbImageUrl(game.cover.image_id, 'screenshot_huge'));
+    }
+    if (game.artworks) {
+        game.artworks.forEach(art => {
+            covers.push(getIgdbImageUrl(art.image_id, 'cover_big'));
+            backgrounds.push(getIgdbImageUrl(art.image_id, 'screenshot_huge'));
+        });
+    }
+    if (game.screenshots) {
+        game.screenshots.forEach(screen => {
+            backgrounds.push(getIgdbImageUrl(screen.image_id, 'screenshot_huge'));
+        });
+    }
+
+    return {
+        ...game,
+        possibleCovers: Array.from(new Set(covers)),
+        possibleBackgrounds: Array.from(new Set(backgrounds))
+    };
 }
