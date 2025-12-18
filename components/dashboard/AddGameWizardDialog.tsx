@@ -77,9 +77,16 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     try {
         // CORRECTION : Appel à searchOnlineGamesAction
         const onlineResults = await searchOnlineGamesAction(searchQuery);
+        const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
+            ...r,
+            originalData: null,
+            description: '',
+            availableBackgrounds: [],
+        }));
+
         setSearchResults(prev => {
             const existingIds = new Set(prev.map(p => p.id));
-            const newResults = onlineResults.filter(r => !existingIds.has(r.id));
+            const newResults = formattedOnlineResults.filter(r => !existingIds.has(r.id));
             return [...prev, ...newResults];
         });
         setHasSearchedOnline(true);
