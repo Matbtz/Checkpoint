@@ -136,7 +136,7 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
         search "${query}";
         fields name, cover.image_id, first_release_date, summary, aggregated_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, genres.name;
+               screenshots.image_id, artworks.image_id, genres.name, platforms.name;
         limit ${limit};
     `;
     
@@ -180,7 +180,7 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
     const body = `
         fields name, cover.image_id, first_release_date, summary, aggregated_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, genres.name;
+               screenshots.image_id, artworks.image_id, genres.name, platforms.name;
         where id = ${gameId};
     `;
     

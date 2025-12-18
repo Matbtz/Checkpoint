@@ -40,6 +40,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
     const enrichedIgdb = igdbResults.map(game => {
         const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
         const genres = game.genres?.map(g => g.name) || [];
+        const platforms = game.platforms?.map(p => p.name) || [];
 
         const availableCovers: string[] = [];
         if (game.cover) {
@@ -61,6 +62,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             studio: developer,
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
             genres,
+            platforms,
             availableCovers,
             availableBackgrounds,
             source: 'igdb' as const,

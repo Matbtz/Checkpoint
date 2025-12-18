@@ -77,12 +77,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     try {
         // CORRECTION : Appel à searchOnlineGamesAction
         const onlineResults = await searchOnlineGamesAction(searchQuery);
-        const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
-            ...r,
-            originalData: null,
-            description: '',
-            availableBackgrounds: [],
-        }));
+        // On ne surcharge plus les tableaux d'images car searchOnlineGamesAction renvoie désormais les bonnes données
+        const formattedOnlineResults: EnrichedGameData[] = onlineResults;
 
         setSearchResults(prev => {
             const existingIds = new Set(prev.map(p => p.id));
@@ -102,6 +98,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     setSelectedGame(game);
     setTitle(game.title);
     setStudio(game.studio || '');
+    setGenres(game.genres || []);
+    setPlatforms(game.platforms || []);
     setSelectedCoverIndex(0);
     setSelectedBackgroundIndex(0);
     setCustomCoverUrl('');
