@@ -18,8 +18,18 @@ export async function searchLocalGamesAction(query: string) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
+    // Split query by spaces to handle multiple words (e.g. "divinity sin" should match "Divinity: Original Sin")
+    const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+
+    // Create an AND condition for each term
+    const whereCondition = terms.length > 0 ? {
+        AND: terms.map(term => ({
+            title: { contains: term, mode: 'insensitive' as const }
+        }))
+    } : {};
+
     const games = await prisma.game.findMany({
-        where: { title: { contains: query, mode: 'insensitive' } },
+        where: whereCondition,
         take: 10
     });
 
