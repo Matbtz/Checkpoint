@@ -69,9 +69,9 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         const results = await searchLocalGamesAction(searchQuery);
         const formattedResults: EnrichedGameData[] = results.map(r => ({
              ...r,
-             genres: [],
+             genres: r.genres || [],
              originalData: null,
-             description: '',
+             description: r.description || '',
              source: 'local'
         }));
         setSearchResults(formattedResults);
@@ -144,9 +144,10 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
     // Determine final score logic
     let finalMetacritic = selectedGame.metacritic;
-    // HACK: If OpenCritic is selected, we override 'metacritic' with the OpenCritic value so GameCard displays it.
-    // The DB will still fetch the real OpenCritic score in the background, but this ensures display preference is respected initially.
-    if (selectedScoreSource === 'opencritic' && (fetchedOpenCritic || selectedGame.opencritic)) {
+
+    // STRICT HACK: If OpenCritic is selected, we override 'metacritic' with the OpenCritic value so GameCard displays it.
+    // If OpenCritic is null/N/A, this will effectively hide the badge (setting metacritic to null), which is correct if the user chose OpenCritic.
+    if (selectedScoreSource === 'opencritic') {
         finalMetacritic = fetchedOpenCritic || selectedGame.opencritic || null;
     }
 
