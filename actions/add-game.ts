@@ -18,8 +18,14 @@ export async function searchLocalGamesAction(query: string) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
+    // Fix for colon search: sanitize query to replace punctuation with space
+    // e.g. "Zelda:" -> "Zelda "
+    const sanitizedQuery = query.replace(/[^\w\s\u00C0-\u00FF]/g, ' ').trim();
+
+    if (!sanitizedQuery) return [];
+
     // Split query by spaces to handle multiple words (e.g. "divinity sin" should match "Divinity: Original Sin")
-    const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+    const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
 
     // Create an AND condition for each term
     const whereCondition = terms.length > 0 ? {
