@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, ChevronRight, Check, ArrowLeft } from 'lucide-react';
+import { Loader2, ChevronRight, Check, ArrowLeft, X } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
@@ -41,6 +41,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // Genre handling & Platforms
   const [genres, setGenres] = useState<string[]>([]);
   const [platforms, setPlatforms] = useState<string[]>([]);
+  const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [newGenre, setNewGenre] = useState('');
 
   // Scores
@@ -155,7 +156,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         setTitle(game.title);
         setStudio(game.studio || '');
         setGenres(game.genres || []);
-        setPlatforms(game.platforms || []);
+
+        // Handle Platforms
+        const initialPlatforms = game.platforms || [];
+        setPlatforms(initialPlatforms); // Initially select all
+        setAvailablePlatforms(initialPlatforms); // Store available list
+
         setSelectedCoverIndex(0);
         setSelectedBackgroundIndex(0);
         setCustomCoverUrl('');
@@ -176,6 +182,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     } finally {
         setLoadingGameId(null);
     }
+  };
+
+  const togglePlatform = (p: string) => {
+    setPlatforms(prev =>
+        prev.includes(p) ? prev.filter(item => item !== p) : [...prev, p]
+    );
   };
 
   const handleFinalSubmit = async () => {
@@ -456,89 +468,81 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     </div>
                                 </div>
 
+                                {/* Platform Selection - Toggle Style */}
                                 <div className="space-y-2">
                                     <Label>Platforms</Label>
-                                    <div className="flex flex-wrap gap-2 mb-2">
-                                        {platforms.map((p, i) => (
-                                            <Badge key={i} className="cursor-pointer hover:bg-destructive" onClick={() => setPlatforms(platforms.filter((_, idx) => idx !== i))}>
-                                                {p} ⨯
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            placeholder="Add platform..."
-                                            onKeyDown={(e) => {
-                                                if(e.key === 'Enter' && e.currentTarget.value.trim()) {
-                                                    setPlatforms([...platforms, e.currentTarget.value.trim()]);
-                                                    e.currentTarget.value = '';
-                                                }
-                                            }}
-                                        />
+                                    <div className="flex flex-wrap gap-2">
+                                        {availablePlatforms.length > 0 ? availablePlatforms.map((p, i) => {
+                                            const isSelected = platforms.includes(p);
+                                            return (
+                                                <Badge
+                                                    key={i}
+                                                    variant={isSelected ? "default" : "outline"}
+                                                    className={cn(
+                                                        "cursor-pointer hover:opacity-80 transition-all",
+                                                        !isSelected && "opacity-50"
+                                                    )}
+                                                    onClick={() => togglePlatform(p)}
+                                                >
+                                                    {p}
+                                                </Badge>
+                                            );
+                                        }) : (
+                                            <span className="text-xs text-muted-foreground">No platforms found.</span>
+                                        )}
                                     </div>
                                 </div>
 
+                                {/* Genres - Tag Input Style */}
                                 <div className="space-y-2">
                                     <Label>Genres</Label>
-                                    <div className="flex flex-wrap gap-2 mb-2">
+                                    <div className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background flex flex-wrap gap-2 items-center focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                                         {genres.map((g, i) => (
-                                            <Badge key={i} className="cursor-pointer hover:bg-destructive" onClick={() => setGenres(genres.filter((_, idx) => idx !== i))}>
-                                                {g} ⨯
+                                            <Badge key={i} variant="secondary" className="hover:bg-destructive hover:text-destructive-foreground cursor-pointer transition-colors" onClick={() => setGenres(genres.filter((_, idx) => idx !== i))}>
+                                                {g}
+                                                <X className="ml-1 h-3 w-3" />
                                             </Badge>
                                         ))}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            placeholder="Add genre..."
+                                        <input
+                                            className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground min-w-[80px]"
+                                            placeholder={genres.length === 0 ? "Add genre..." : ""}
                                             value={newGenre}
                                             onChange={(e) => setNewGenre(e.target.value)}
                                             onKeyDown={(e) => {
                                                 if(e.key === 'Enter' && newGenre.trim()) {
+                                                    e.preventDefault(); // Prevent form submission if inside a form
                                                     setGenres([...genres, newGenre.trim()]);
                                                     setNewGenre('');
                                                 }
                                             }}
                                         />
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            onClick={() => {
-                                                if(newGenre.trim()) {
-                                                    setGenres([...genres, newGenre.trim()]);
-                                                    setNewGenre('');
-                                                }
-                                            }}
-                                        >
-                                            Add
-                                        </Button>
                                     </div>
                                 </div>
 
+                                {/* Compact Scores */}
                                 <div className="space-y-3 pt-4 border-t">
                                     <Label className="text-base font-semibold">Display Score</Label>
-                                    <RadioGroup value={selectedScoreSource} onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')} className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <RadioGroupItem value="metacritic" id="score-meta" className="peer sr-only" />
-                                            <Label
-                                                htmlFor="score-meta"
-                                                className="flex flex-row items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer h-full"
-                                            >
-                                                <span className="font-bold text-sm">Metacritic</span>
-                                                <div className={cn("text-lg font-black ml-2", getScoreColor(selectedGame?.metacritic))}>
+                                    <RadioGroup
+                                        value={selectedScoreSource}
+                                        onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')}
+                                        className="flex flex-col sm:flex-row gap-4 sm:gap-6"
+                                    >
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="metacritic" id="score-meta" />
+                                            <Label htmlFor="score-meta" className="cursor-pointer flex items-center gap-2 font-normal">
+                                                <span className="font-bold text-sm">Metacritic:</span>
+                                                <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(selectedGame?.metacritic))}>
                                                     {selectedGame?.metacritic || 'N/A'}
-                                                </div>
+                                                </Badge>
                                             </Label>
                                         </div>
-                                        <div>
-                                            <RadioGroupItem value="opencritic" id="score-open" className="peer sr-only" />
-                                            <Label
-                                                htmlFor="score-open"
-                                                className="flex flex-row items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer h-full"
-                                            >
-                                                <span className="font-bold text-sm">OpenCritic</span>
-                                                <div className={cn("text-lg font-black ml-2", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="opencritic" id="score-open" />
+                                            <Label htmlFor="score-open" className="cursor-pointer flex items-center gap-2 font-normal">
+                                                <span className="font-bold text-sm">OpenCritic:</span>
+                                                <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
                                                     {fetchedOpenCritic || selectedGame?.opencritic || 'N/A'}
-                                                </div>
+                                                </Badge>
                                             </Label>
                                         </div>
                                     </RadioGroup>
