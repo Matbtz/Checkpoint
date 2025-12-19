@@ -3,28 +3,57 @@
 import { prisma } from '@/lib/db';
 import { searchIgdbGames, getIgdbImageUrl } from '@/lib/igdb';
 import { EnrichedGameData } from '@/lib/enrichment';
+import { auth } from '@/lib/auth';
 
-export async function searchLocalGames(query: string): Promise<EnrichedGameData[]> {
+export type SearchResult = EnrichedGameData & {
+    isAdded: boolean;
+    libraryStatus: string | null;
+};
+
+export async function searchLocalGames(query: string): Promise<SearchResult[]> {
+    const session = await auth();
+    const userId = session?.user?.id;
+
     // 1. Search in local DB
-    // We search by title using 'contains' (case-insensitive usually depending on DB collation, but assuming simple here)
+    // Flexible Search: match full query OR any individual term
+    const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+
+    const whereClause = {
+        OR: [
+            { title: { contains: query, mode: 'insensitive' as const } },
+            ...terms.map(term => ({ title: { contains: term, mode: 'insensitive' as const } }))
+        ]
+    };
+
     const games = await prisma.game.findMany({
-        where: {
-            title: {
-                contains: query,
-                mode: 'insensitive',
-            },
-        },
+        where: whereClause,
         take: 10,
-        // Sort by local popularity? We don't have a view count yet, maybe sort by creation?
-        // Or just basic match. Prompt says "Trie par pertinence ou popularité locale".
-        // Let's use `updatedAt` as a proxy for "active" games or just title for now.
-        // If we had library counts, that would be ideal.
         orderBy: {
             updatedAt: 'desc',
         }
     });
 
-    // 2. Map to EnrichedGameData
+    // 2. Fetch Library Status if logged in
+    const libraryMap = new Map<string, string>();
+    if (userId && games.length > 0) {
+        const gameIds = games.map(g => g.id);
+        const userLibraryEntries = await prisma.userLibrary.findMany({
+            where: {
+                userId: userId,
+                gameId: { in: gameIds }
+            },
+            select: {
+                gameId: true,
+                status: true
+            }
+        });
+
+        for (const entry of userLibraryEntries) {
+            libraryMap.set(entry.gameId, entry.status);
+        }
+    }
+
+    // 3. Map to SearchResult
     return games.map(game => ({
         id: game.id,
         title: game.title,
@@ -35,19 +64,23 @@ export async function searchLocalGames(query: string): Promise<EnrichedGameData[
         genres: game.genres ? JSON.parse(game.genres) : [],
         availableCovers: game.coverImage ? [game.coverImage] : [],
         availableBackgrounds: game.backgroundImage ? [game.backgroundImage] : [],
-        source: 'igdb', // Defaulting to IGDB as source since most IDs come from there, or we could add 'local' to type
-        originalData: {} as any // We don't have the raw original data here, empty object or minimal
+        source: 'igdb',
+        originalData: {} as any,
+        isAdded: libraryMap.has(game.id),
+        libraryStatus: libraryMap.get(game.id) || null
     }));
 }
 
-export async function searchOnlineGames(query: string): Promise<EnrichedGameData[]> {
+export async function searchOnlineGames(query: string): Promise<SearchResult[]> {
+    const session = await auth();
+    const userId = session?.user?.id;
+
     // 1. Fetch from IGDB
     const igdbResults = await searchIgdbGames(query, 10);
 
     if (igdbResults.length === 0) return [];
 
     // 2. Check for existence in local DB
-    // We check by IGDB ID (stringified) OR Title
     const igdbIds = igdbResults.map(g => String(g.id));
     const titles = igdbResults.map(g => g.name);
 
@@ -55,13 +88,12 @@ export async function searchOnlineGames(query: string): Promise<EnrichedGameData
         where: {
             OR: [
                 { igdbId: { in: igdbIds } },
-                { id: { in: igdbIds } }, // Also check ID just in case
+                { id: { in: igdbIds } },
                 { title: { in: titles, mode: 'insensitive' } }
             ]
         }
     });
 
-    // Create a lookup map for faster access
     const existingMap = new Map<string, typeof existingGames[0]>();
     existingGames.forEach(g => {
         if (g.igdbId) existingMap.set(g.igdbId, g);
@@ -69,7 +101,27 @@ export async function searchOnlineGames(query: string): Promise<EnrichedGameData
         existingMap.set(g.title.toLowerCase(), g);
     });
 
-    // 3. Map results
+    // 3. Fetch Library Status for existing games
+    const libraryMap = new Map<string, string>();
+    if (userId && existingGames.length > 0) {
+        const localGameIds = existingGames.map(g => g.id);
+        const userLibraryEntries = await prisma.userLibrary.findMany({
+            where: {
+                userId: userId,
+                gameId: { in: localGameIds }
+            },
+            select: {
+                gameId: true,
+                status: true
+            }
+        });
+
+        for (const entry of userLibraryEntries) {
+            libraryMap.set(entry.gameId, entry.status);
+        }
+    }
+
+    // 4. Map results
     return igdbResults.map(game => {
         const idStr = String(game.id);
         const localMatch = existingMap.get(idStr) || existingMap.get(game.name.toLowerCase());
@@ -87,10 +139,12 @@ export async function searchOnlineGames(query: string): Promise<EnrichedGameData
                 availableCovers: localMatch.coverImage ? [localMatch.coverImage] : [],
                 availableBackgrounds: localMatch.backgroundImage ? [localMatch.backgroundImage] : [],
                 source: 'igdb',
-                originalData: game // Keep original data if needed for augmentation later
+                originalData: game, // Keep original data if needed for augmentation later
+                isAdded: libraryMap.has(localMatch.id),
+                libraryStatus: libraryMap.get(localMatch.id) || null
             };
         } else {
-            // Return IGDB object (without OpenCritic for now)
+            // Return IGDB object
             const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
             const genres = game.genres?.map(g => g.name) || [];
 
@@ -113,12 +167,13 @@ export async function searchOnlineGames(query: string): Promise<EnrichedGameData
                 releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : null,
                 studio: developer,
                 metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
-                // opencritic: undefined, // Explicitly undefined/missing
                 genres,
                 availableCovers,
                 availableBackgrounds,
                 source: 'igdb',
-                originalData: game
+                originalData: game,
+                isAdded: false,
+                libraryStatus: null
             };
         }
     });
