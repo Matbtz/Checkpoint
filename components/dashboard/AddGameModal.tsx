@@ -36,10 +36,10 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
       const localGames = await searchLocalGamesAction(query);
       const formattedGames: EnrichedGameData[] = localGames.map((game) => ({
         ...game,
-        genres: [], // Champ requis manquant
-        originalData: null, // Champ requis manquant
-        description: '', // Champ requis manquant
-        source: 'manual', // Adapter le type 'local' vers 'manual'
+        genres: game.genres || [],
+        originalData: null,
+        description: game.description || '',
+        source: 'local',
       }));
       setResults(formattedGames);
       setHasSearched(true);

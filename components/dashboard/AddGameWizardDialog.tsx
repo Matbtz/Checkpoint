@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,22 +45,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
   const [selectedScoreSource, setSelectedScoreSource] = useState<'metacritic' | 'opencritic'>('metacritic');
 
-  useEffect(() => {
-    if (!isOpen) {
-        const timer = setTimeout(() => {
-            setStep('search');
-            setSearchQuery('');
-            setSearchResults([]);
-            setHasSearchedOnline(false);
-            setSelectedGame(null);
-            setCustomCoverUrl('');
-            setCustomBackgroundUrl('');
-        }, 300);
-        return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
-
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     setHasSearchedOnline(false);
@@ -80,7 +65,37 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     } finally {
         setIsSearching(false);
     }
-  };
+  }, [searchQuery]);
+
+  // Debounce search effect
+  useEffect(() => {
+    if (step !== 'search' || !isOpen) return;
+
+    const timer = setTimeout(() => {
+        if (searchQuery.trim().length >= 2) {
+            handleSearch();
+        } else {
+            setSearchResults([]);
+        }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isOpen, step, handleSearch]);
+
+  useEffect(() => {
+    if (!isOpen) {
+        const timer = setTimeout(() => {
+            setStep('search');
+            setSearchQuery('');
+            setSearchResults([]);
+            setHasSearchedOnline(false);
+            setSelectedGame(null);
+            setCustomCoverUrl('');
+            setCustomBackgroundUrl('');
+        }, 300);
+        return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const handleExtendSearch = async () => {
     setIsSearching(true);
@@ -379,14 +394,23 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
                                 <div className="space-y-2">
                                     <Label>Platforms</Label>
-                                    <div className="flex flex-wrap gap-2 p-3 bg-muted/50 rounded-md min-h-[40px]">
-                                        {platforms.length > 0 ? (
-                                            platforms.map((p, i) => (
-                                                <Badge key={i} variant="secondary">{p}</Badge>
-                                            ))
-                                        ) : (
-                                            <span className="text-sm text-muted-foreground">No platforms found</span>
-                                        )}
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {platforms.map((p, i) => (
+                                            <Badge key={i} className="cursor-pointer hover:bg-destructive" onClick={() => setPlatforms(platforms.filter((_, idx) => idx !== i))}>
+                                                {p} ⨯
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Add platform..."
+                                            onKeyDown={(e) => {
+                                                if(e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                                    setPlatforms([...platforms, e.currentTarget.value.trim()]);
+                                                    e.currentTarget.value = '';
+                                                }
+                                            }}
+                                        />
                                     </div>
                                 </div>
 
