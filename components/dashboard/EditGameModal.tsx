@@ -534,7 +534,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold">Found Covers</Label>
                                     {foundCovers.length > 0 ? (
-                                        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-700">
+                                        <div className="grid grid-rows-2 grid-flow-col gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-700">
                                             {foundCovers.map((url, i) => (
                                                 <button
                                                     key={i}
@@ -557,7 +557,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold">Found Backgrounds</Label>
                                     {foundBackgrounds.length > 0 ? (
-                                        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-700">
+                                        <div className="grid grid-rows-2 grid-flow-col gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-700">
                                             {foundBackgrounds.map((url, i) => (
                                                 <button
                                                     key={i}
