@@ -8,9 +8,10 @@ import { calculateProgress } from '@/lib/format-utils';
 import { AddGameWizardDialog } from './AddGameWizardDialog';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trash2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { AnimatePresence, motion } from 'framer-motion';
+import { removeGamesFromLibrary } from '@/actions/library';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
@@ -46,6 +47,35 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameWithLibrary | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Delete Mode State
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(new Set());
+
+  const toggleDeleteMode = () => {
+    setIsDeleteMode(!isDeleteMode);
+    setSelectedGameIds(new Set());
+  };
+
+  const toggleGameSelection = (gameId: string) => {
+    const newSelected = new Set(selectedGameIds);
+    if (newSelected.has(gameId)) {
+        newSelected.delete(gameId);
+    } else {
+        newSelected.add(gameId);
+    }
+    setSelectedGameIds(newSelected);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedGameIds.size === 0) return;
+
+    if (confirm(`Are you sure you want to remove ${selectedGameIds.size} game(s) from your library?`)) {
+        await removeGamesFromLibrary(Array.from(selectedGameIds));
+        setIsDeleteMode(false);
+        setSelectedGameIds(new Set());
+    }
+  };
 
   // Filter Logic
   const filteredLibrary = library.filter(item => {
@@ -109,10 +139,33 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                   <option value="releaseDate">Release Date</option>
               </select>
 
-              <Button onClick={() => setIsAddGameOpen(true)} className="whitespace-nowrap">
-                  <Plus className="h-4 w-4 md:mr-2" />
-                  <span className="hidden md:inline">Add Game</span>
-              </Button>
+              <div className="flex gap-2">
+                {isDeleteMode ? (
+                    <Button
+                        variant="destructive"
+                        onClick={handleDeleteSelected}
+                        disabled={selectedGameIds.size === 0}
+                        className="whitespace-nowrap"
+                    >
+                        Delete Selected ({selectedGameIds.size})
+                    </Button>
+                ) : (
+                    <Button onClick={() => setIsAddGameOpen(true)} className="whitespace-nowrap">
+                        <Plus className="h-4 w-4 md:mr-2" />
+                        <span className="hidden md:inline">Add Game</span>
+                    </Button>
+                )}
+
+                <Button
+                    variant={isDeleteMode ? "secondary" : "ghost"}
+                    size="icon"
+                    onClick={toggleDeleteMode}
+                    className="shrink-0"
+                    title={isDeleteMode ? "Cancel" : "Remove Games"}
+                >
+                    {isDeleteMode ? <X className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              </div>
           </div>
       </div>
 
@@ -151,6 +204,9 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                         item={item}
                         paceFactor={userPaceFactor}
                         onClick={() => handleGameClick(item)}
+                        isDeleteMode={isDeleteMode}
+                        isSelected={selectedGameIds.has(item.gameId)}
+                        onToggleSelect={() => toggleGameSelection(item.gameId)}
                     />
                 ))
             )}
