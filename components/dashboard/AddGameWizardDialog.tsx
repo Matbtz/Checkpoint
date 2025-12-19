@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, ChevronRight, Check, ArrowLeft, X } from 'lucide-react';
+import { Loader2, ChevronRight, Check, ArrowLeft, X, Image as ImageIcon, List } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
@@ -23,6 +23,7 @@ interface AddGameWizardDialogProps {
 
 export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProps) {
   const [step, setStep] = useState<'search' | 'customize'>('search');
+  const [mobileTab, setMobileTab] = useState<'art' | 'details'>('art');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [loadingGameId, setLoadingGameId] = useState<string | null>(null);
@@ -101,6 +102,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
             setLoadingGameId(null);
             setStatus('BACKLOG');
             setCompletionTarget('MAIN');
+            setMobileTab('art');
         }, 300);
         return () => clearTimeout(timer);
     }
@@ -136,11 +138,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     setLoadingGameId(game.id);
 
     try {
-        // Fetch OpenCritic if not present and if source is eligible (IGDB/Online)
+        // Fetch OpenCritic if not present
         // We do this BEFORE switching view
         let score = game.opencritic;
 
-        if (!score && game.source !== 'manual' && game.source !== 'local') {
+        if (!score && game.source !== 'manual') {
             try {
                 const fetchedScore = await fetchOpenCriticAction(game.title);
                 if (fetchedScore) {
@@ -179,6 +181,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         }
 
         setStep('customize');
+        setMobileTab('art'); // Reset to art tab
     } finally {
         setLoadingGameId(null);
     }
@@ -214,8 +217,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         genres: JSON.stringify(genres),
         platforms: JSON.stringify(platforms),
         description: selectedGame.description,
-        status, // NEW
-        targetedCompletionType: completionTarget // NEW
+        status,
+        targetedCompletionType: completionTarget
     };
 
     try {
@@ -239,10 +242,32 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
           "flex flex-col gap-0 p-0 transition-all duration-300",
           step === 'search' ? "sm:max-w-[500px]" : "sm:max-w-[900px] h-[90vh]"
       )}>
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
           <DialogTitle>
             {step === 'search' ? 'Add Game' : 'Customize & Add'}
           </DialogTitle>
+          {step === 'customize' && (
+              <div className="flex md:hidden bg-muted rounded-lg p-1">
+                  <Button
+                      variant={mobileTab === 'art' ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 px-3 text-xs"
+                      onClick={() => setMobileTab('art')}
+                  >
+                      <ImageIcon className="h-3 w-3 mr-1" />
+                      Art
+                  </Button>
+                  <Button
+                      variant={mobileTab === 'details' ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 px-3 text-xs"
+                      onClick={() => setMobileTab('details')}
+                  >
+                      <List className="h-3 w-3 mr-1" />
+                      Data
+                  </Button>
+              </div>
+          )}
         </DialogHeader>
 
         {step === 'search' ? (
@@ -339,8 +364,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
              </div>
         ) : (
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-               {/* Left Panel - Increased width ratio (58%) */}
-               <div className="w-full md:w-[58%] p-6 border-r flex flex-col gap-6 overflow-y-auto">
+               {/* Left Panel - Art Selection */}
+               <div className={cn(
+                   "w-full md:w-[58%] p-6 border-r flex flex-col gap-6 overflow-y-auto md:flex",
+                   mobileTab === 'art' ? "flex" : "hidden"
+               )}>
                     {/* Cover Selection */}
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Select Cover Art</Label>
@@ -421,20 +449,24 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     </div>
                 </div>
 
-                {/* Right Panel - Decreased width ratio (42%) */}
-                <div className="w-full md:w-[42%] flex flex-col">
+                {/* Right Panel - Details */}
+                <div className={cn(
+                   "w-full md:w-[42%] flex flex-col md:flex",
+                   mobileTab === 'details' ? "flex" : "hidden"
+                )}>
                     <ScrollArea className="flex-1 p-6">
                         <div className="space-y-6">
                             {/* Basic Info */}
                             <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="game-title">Game Title</Label>
-                                    <Input id="game-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="game-studio">Studio</Label>
-                                    <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="game-title">Game Title</Label>
+                                        <Input id="game-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="game-studio">Studio</Label>
+                                        <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -468,64 +500,66 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     </div>
                                 </div>
 
-                                {/* Platform Selection - Toggle Style */}
-                                <div className="space-y-2">
-                                    <Label>Platforms</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {availablePlatforms.length > 0 ? availablePlatforms.map((p, i) => {
-                                            const isSelected = platforms.includes(p);
-                                            return (
-                                                <Badge
-                                                    key={i}
-                                                    variant={isSelected ? "default" : "outline"}
-                                                    className={cn(
-                                                        "cursor-pointer hover:opacity-80 transition-all",
-                                                        !isSelected && "opacity-50"
-                                                    )}
-                                                    onClick={() => togglePlatform(p)}
-                                                >
-                                                    {p}
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Platform Selection - Toggle Style */}
+                                    <div className="space-y-2">
+                                        <Label>Platforms</Label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {availablePlatforms.length > 0 ? availablePlatforms.map((p, i) => {
+                                                const isSelected = platforms.includes(p);
+                                                return (
+                                                    <Badge
+                                                        key={i}
+                                                        variant={isSelected ? "default" : "outline"}
+                                                        className={cn(
+                                                            "cursor-pointer hover:opacity-80 transition-all",
+                                                            !isSelected && "opacity-50"
+                                                        )}
+                                                        onClick={() => togglePlatform(p)}
+                                                    >
+                                                        {p}
+                                                    </Badge>
+                                                );
+                                            }) : (
+                                                <span className="text-xs text-muted-foreground">No platforms found.</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Genres - Tag Input Style */}
+                                    <div className="space-y-2">
+                                        <Label>Genres</Label>
+                                        <div className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background flex flex-wrap gap-2 items-center focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                                            {genres.map((g, i) => (
+                                                <Badge key={i} variant="secondary" className="hover:bg-destructive hover:text-destructive-foreground cursor-pointer transition-colors" onClick={() => setGenres(genres.filter((_, idx) => idx !== i))}>
+                                                    {g}
+                                                    <X className="ml-1 h-3 w-3" />
                                                 </Badge>
-                                            );
-                                        }) : (
-                                            <span className="text-xs text-muted-foreground">No platforms found.</span>
-                                        )}
+                                            ))}
+                                            <input
+                                                className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground min-w-[50px]"
+                                                placeholder={genres.length === 0 ? "Add..." : ""}
+                                                value={newGenre}
+                                                onChange={(e) => setNewGenre(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if(e.key === 'Enter' && newGenre.trim()) {
+                                                        e.preventDefault();
+                                                        setGenres([...genres, newGenre.trim()]);
+                                                        setNewGenre('');
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Genres - Tag Input Style */}
-                                <div className="space-y-2">
-                                    <Label>Genres</Label>
-                                    <div className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background flex flex-wrap gap-2 items-center focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
-                                        {genres.map((g, i) => (
-                                            <Badge key={i} variant="secondary" className="hover:bg-destructive hover:text-destructive-foreground cursor-pointer transition-colors" onClick={() => setGenres(genres.filter((_, idx) => idx !== i))}>
-                                                {g}
-                                                <X className="ml-1 h-3 w-3" />
-                                            </Badge>
-                                        ))}
-                                        <input
-                                            className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground min-w-[80px]"
-                                            placeholder={genres.length === 0 ? "Add genre..." : ""}
-                                            value={newGenre}
-                                            onChange={(e) => setNewGenre(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if(e.key === 'Enter' && newGenre.trim()) {
-                                                    e.preventDefault(); // Prevent form submission if inside a form
-                                                    setGenres([...genres, newGenre.trim()]);
-                                                    setNewGenre('');
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Compact Scores */}
+                                {/* Compact Scores - Always Row */}
                                 <div className="space-y-3 pt-4 border-t">
                                     <Label className="text-base font-semibold">Display Score</Label>
                                     <RadioGroup
                                         value={selectedScoreSource}
                                         onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')}
-                                        className="flex flex-col sm:flex-row gap-4 sm:gap-6"
+                                        className="flex flex-row gap-6"
                                     >
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="metacritic" id="score-meta" />
