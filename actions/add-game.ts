@@ -57,6 +57,13 @@ export async function searchLocalGamesAction(query: string) {
             parsedGenres = [];
         }
 
+        let parsedPlatforms: string[] = [];
+        try {
+            parsedPlatforms = g.platforms ? JSON.parse(g.platforms as string) : [];
+        } catch (e) {
+            parsedPlatforms = [];
+        }
+
         return {
             id: g.id,
             title: g.title,
@@ -69,7 +76,7 @@ export async function searchLocalGamesAction(query: string) {
             availableCovers: g.coverImage ? [g.coverImage] : [],
             availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
             genres: parsedGenres,
-            platforms: [], // Champ non stocké en BDD pour l'instant
+            platforms: parsedPlatforms,
             description: g.description,
             originalData: null
         };
@@ -147,7 +154,7 @@ export async function addGameExtended(payload: any) {
                 metacritic: payload.metacritic, // Score affiché (choisi par l'utilisateur)
                 opencritic: openCriticScore, // Score réel OpenCritic
                 genres: payload.genres, // Stringified JSON
-                // platforms: payload.platforms, // Pas de colonne platforms dans le schéma Game
+                platforms: payload.platforms, // Stringified JSON
                 description: payload.description,
                 // source: payload.source, // Pas de colonne source dans le schéma Game
                 dataFetched: true,

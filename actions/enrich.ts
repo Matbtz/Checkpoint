@@ -86,6 +86,15 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
             dataToUpdate.genres = JSON.stringify(rawgDetails.genres.map((g: any) => g.name));
         }
 
+        // Platforms
+        if (rawgDetails.platforms && Array.isArray(rawgDetails.platforms)) {
+             // RAWG structure: [{ platform: { id, name, slug } }, ...]
+             const platforms = rawgDetails.platforms.map((p: any) => p.platform?.name).filter(Boolean);
+             if (platforms.length > 0) {
+                 dataToUpdate.platforms = JSON.stringify(platforms);
+             }
+        }
+
     } catch (error) {
         console.error("RAWG Fetch Error:", error);
     }
