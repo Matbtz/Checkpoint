@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -242,32 +242,36 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
           "flex flex-col gap-0 p-0 transition-all duration-300",
           step === 'search' ? "sm:max-w-[500px]" : "sm:max-w-[900px] h-[90vh]"
       )}>
-        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
-          <DialogTitle>
-            {step === 'search' ? 'Add Game' : 'Customize & Add'}
-          </DialogTitle>
-          {step === 'customize' && (
-              <div className="flex md:hidden bg-muted rounded-lg p-1">
-                  <Button
-                      variant={mobileTab === 'art' ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-7 px-3 text-xs"
-                      onClick={() => setMobileTab('art')}
-                  >
-                      <ImageIcon className="h-3 w-3 mr-1" />
-                      Art
-                  </Button>
-                  <Button
-                      variant={mobileTab === 'details' ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-7 px-3 text-xs"
-                      onClick={() => setMobileTab('details')}
-                  >
-                      <List className="h-3 w-3 mr-1" />
-                      Data
-                  </Button>
-              </div>
-          )}
+        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-col gap-4">
+            <div className="flex flex-row items-center justify-between">
+                <DialogTitle>
+                    {step === 'search' ? 'Add Game' : 'Customize & Add'}
+                </DialogTitle>
+
+                {/* Switcher Centered in Mobile View, but only visible in customize step */}
+                 {step === 'customize' && (
+                    <div className="flex md:hidden bg-muted p-1 rounded-lg">
+                         <button
+                            onClick={() => setMobileTab('art')}
+                            className={cn(
+                                "text-xs font-medium px-4 py-1.5 rounded-md transition-all",
+                                mobileTab === 'art' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                         >
+                            Art
+                         </button>
+                         <button
+                            onClick={() => setMobileTab('details')}
+                            className={cn(
+                                "text-xs font-medium px-4 py-1.5 rounded-md transition-all",
+                                mobileTab === 'details' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                            )}
+                         >
+                            Data
+                         </button>
+                    </div>
+                 )}
+            </div>
         </DialogHeader>
 
         {step === 'search' ? (
@@ -363,10 +367,10 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                 </ScrollArea>
              </div>
         ) : (
-            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+            <div className="flex-1 overflow-hidden flex flex-col md:flex-row relative">
                {/* Left Panel - Art Selection */}
                <div className={cn(
-                   "w-full md:w-[58%] p-6 border-r flex flex-col gap-6 overflow-y-auto md:flex",
+                   "w-full md:w-[58%] p-6 border-r flex flex-col gap-6 overflow-y-auto md:flex h-full",
                    mobileTab === 'art' ? "flex" : "hidden"
                )}>
                     {/* Cover Selection */}
@@ -447,11 +451,18 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                            />
                         </div>
                     </div>
+
+                    {/* Mobile Only Next Button */}
+                    <div className="md:hidden pt-4 mt-auto">
+                        <Button className="w-full" onClick={() => setMobileTab('details')}>
+                            Next
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Right Panel - Details */}
                 <div className={cn(
-                   "w-full md:w-[42%] flex flex-col md:flex",
+                   "w-full md:w-[42%] flex flex-col md:flex h-full",
                    mobileTab === 'details' ? "flex" : "hidden"
                 )}>
                     <ScrollArea className="flex-1 p-6">

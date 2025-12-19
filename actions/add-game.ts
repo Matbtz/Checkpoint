@@ -27,53 +27,34 @@ export async function searchLocalGamesAction(query: string) {
     // Split query by spaces to handle multiple words (e.g. "divinity sin" should match "Divinity: Original Sin")
     const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
 
-    // Create an OR condition to be more permissive: match exact string OR sanitized string OR any individual word
-    const whereCondition = {
-        OR: [
-            { title: { contains: query, mode: 'insensitive' as const } },
-            { title: { contains: sanitizedQuery, mode: 'insensitive' as const } },
-            ...terms.map(term => ({
-                title: { contains: term, mode: 'insensitive' as const }
-            }))
-        ]
-    };
+    // Create an AND condition for each term
+    const whereCondition = terms.length > 0 ? {
+        AND: terms.map(term => ({
+            title: { contains: term, mode: 'insensitive' as const }
+        }))
+    } : {};
 
     const games = await prisma.game.findMany({
         where: whereCondition,
-        take: 50,
-        orderBy: {
-            updatedAt: 'desc',
-        }
+        take: 10
     });
 
-    console.log(`[searchLocalGamesAction] Query: "${query}", Sanitized: "${sanitizedQuery}", Terms: ${terms.length}`);
-
-    return games.map(g => {
-        let parsedGenres: string[] = [];
-        try {
-            parsedGenres = g.genres ? JSON.parse(g.genres as string) : [];
-        } catch (e) {
-            console.error(`[searchLocalGamesAction] Failed to parse genres for game ${g.id} (${g.title}):`, e);
-            parsedGenres = [];
-        }
-
-        return {
-            id: g.id,
-            title: g.title,
-            coverImage: g.coverImage,
-            releaseDate: g.releaseDate?.toISOString() ?? null,
-            studio: g.studio,
-            metacritic: g.metacritic,
-            opencritic: g.opencritic,
-            source: 'local' as const,
-            availableCovers: g.coverImage ? [g.coverImage] : [],
-            availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
-            genres: parsedGenres,
-            platforms: [], // Champ non stocké en BDD pour l'instant
-            description: g.description,
-            originalData: null
-        };
-    });
+    return games.map(g => ({
+        id: g.id,
+        title: g.title,
+        coverImage: g.coverImage,
+        releaseDate: g.releaseDate?.toISOString() ?? null,
+        studio: g.studio,
+        metacritic: g.metacritic,
+        opencritic: g.opencritic,
+        source: 'local' as const,
+        availableCovers: g.coverImage ? [g.coverImage] : [],
+        availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
+        genres: g.genres ? JSON.parse(g.genres as string) : [],
+        platforms: [], // Champ non stocké en BDD pour l'instant
+        description: g.description,
+        originalData: null
+    }));
 }
 
 // --- ACTION 2 : RECHERCHE ONLINE (IGDB) ---
