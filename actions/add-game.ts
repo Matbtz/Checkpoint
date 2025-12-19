@@ -27,23 +27,16 @@ export async function searchLocalGamesAction(query: string) {
     // Split query by spaces to handle multiple words (e.g. "divinity sin" should match "Divinity: Original Sin")
     const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
 
-    // Create an OR condition to be more permissive: match exact string OR sanitized string OR any individual word
-    const whereCondition = {
-        OR: [
-            { title: { contains: query, mode: 'insensitive' as const } },
-            { title: { contains: sanitizedQuery, mode: 'insensitive' as const } },
-            ...terms.map(term => ({
-                title: { contains: term, mode: 'insensitive' as const }
-            }))
-        ]
-    };
+    // Create an AND condition for each term
+    const whereCondition = terms.length > 0 ? {
+        AND: terms.map(term => ({
+            title: { contains: term, mode: 'insensitive' as const }
+        }))
+    } : {};
 
     const games = await prisma.game.findMany({
         where: whereCondition,
-        take: 50,
-        orderBy: {
-            updatedAt: 'desc',
-        }
+        take: 10
     });
 
     console.log(`[searchLocalGamesAction] Query: "${query}", Sanitized: "${sanitizedQuery}", Terms: ${terms.length}`);
@@ -136,7 +129,7 @@ export async function addGameExtended(payload: any) {
         let openCriticScore = payload.opencritic;
 
         if (openCriticScore === undefined || openCriticScore === null) {
-             try {
+            try {
                 openCriticScore = await getOpenCriticScore(payload.title);
             } catch (e) {
                 console.error("OpenCritic Fetch Error:", e);
@@ -196,7 +189,8 @@ export async function addGameExtended(payload: any) {
             data: {
                 userId: session.user.id,
                 gameId: game.id,
-                status: 'BACKLOG',
+                status: payload.status || 'BACKLOG',
+                targetedCompletionType: payload.targetedCompletionType || 'MAIN',
                 createdAt: new Date(),
                 playtimeManual: 0,
                 progressManual: 0

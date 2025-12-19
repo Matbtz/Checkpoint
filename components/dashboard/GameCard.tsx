@@ -21,21 +21,9 @@ interface GameCardProps {
   onClick?: () => void;
   primaryColor?: string;
   secondaryColor?: string;
-  isDeleteMode?: boolean;
-  isSelected?: boolean;
-  onToggleSelect?: () => void;
 }
 
-export function GameCard({
-  item,
-  paceFactor = 1.0,
-  onClick,
-  primaryColor,
-  secondaryColor,
-  isDeleteMode,
-  isSelected,
-  onToggleSelect
-}: GameCardProps) {
+export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, secondaryColor }: GameCardProps) {
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
@@ -120,8 +108,7 @@ export function GameCard({
         }}
         className={cn(
             "group relative w-full min-h-[150px] overflow-hidden rounded-2xl bg-zinc-950 cursor-pointer transition-all mb-4",
-            !hasCustomColors && "border border-white/10 shadow-lg",
-            isDeleteMode && "hover:ring-2 hover:ring-red-500"
+            !hasCustomColors && "border border-white/10 shadow-lg"
         )}
         style={hasCustomColors ? {
             backgroundImage: `linear-gradient(#09090b, #09090b), linear-gradient(to bottom right, ${activePrimaryColor}, ${activeSecondaryColor})`,
@@ -129,23 +116,8 @@ export function GameCard({
             backgroundClip: 'padding-box, border-box',
             border: '2px solid transparent',
         } : undefined}
-        onClick={isDeleteMode ? onToggleSelect : onClick}
+        onClick={onClick}
     >
-      {/* Delete Mode Overlay */}
-      {isDeleteMode && (
-        <div className={cn(
-          "absolute inset-0 z-50 flex items-center justify-center transition-colors duration-200",
-          isSelected ? "bg-red-500/20" : "bg-black/40 hover:bg-black/20"
-        )}>
-          <div className={cn(
-            "h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all",
-            isSelected ? "border-red-500 bg-red-500 scale-110" : "border-white/50 bg-black/50"
-          )}>
-            {isSelected && <Check className="h-5 w-5 text-white" />}
-          </div>
-        </div>
-      )}
-
       {/* Layer 1: Background Art */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none">
         <Image
