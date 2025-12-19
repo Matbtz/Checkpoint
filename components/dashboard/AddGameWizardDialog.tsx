@@ -469,15 +469,13 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                         <div className="space-y-6">
                             {/* Basic Info */}
                             <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="game-title">Game Title</Label>
-                                        <Input id="game-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="game-studio">Studio</Label>
-                                        <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
-                                    </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="game-title">Game Title</Label>
+                                    <Input id="game-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="game-studio">Studio</Label>
+                                    <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
