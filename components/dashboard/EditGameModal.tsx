@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandEmpty } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { updateLibraryEntry, fixGameMatch } from '@/actions/library';
 import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
@@ -22,7 +21,6 @@ import { Loader2, Plus, Check, ChevronsUpDown, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import { EnrichedGameData } from '@/lib/enrichment';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
@@ -64,16 +62,22 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [newPlatform, setNewPlatform] = useState('');
 
   // Scores
-  const [metacritic, setMetacritic] = useState<number | null>(item.game.metacritic);
-  const [opencritic, setOpencritic] = useState<number | null>(item.game.opencritic);
+  // We don't edit the values manually anymore, just display them.
+  // But we might want to allow them to "refresh" or "fetch" if they are null?
+  // For now, we just display what's in the DB.
+  const metacritic = item.game.metacritic;
+  const opencritic = item.game.opencritic;
   const [displaySource, setDisplaySource] = useState<'metacritic' | 'opencritic'>('metacritic');
 
   // --- Media Tab State ---
   const [currentCover, setCurrentCover] = useState(item.game.coverImage || '');
   const [currentBackground, setCurrentBackground] = useState(item.game.backgroundImage || '');
   const [isSearchingMedia, setIsSearchingMedia] = useState(false);
-  const [mediaSearchResults, setMediaSearchResults] = useState<EnrichedGameData[]>([]);
-  const [selectedMediaGame, setSelectedMediaGame] = useState<EnrichedGameData | null>(null);
+
+  // New state for aggregated media
+  const [foundCovers, setFoundCovers] = useState<string[]>([]);
+  const [foundBackgrounds, setFoundBackgrounds] = useState<string[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
 
   // --- Tags Tab State ---
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -106,22 +110,23 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       } catch {
           setPlatforms([]);
       }
-      setMetacritic(item.game.metacritic);
-      setOpencritic(item.game.opencritic);
-      // Determine default display source logic (if one is null, pick the other, usually default to metacritic if both exist)
-      // Note: We don't have a 'preferredSource' in DB, so we just let user toggle.
-      // If we save, we might overwrite 'metacritic' field if we want to force display, but here we edit both values independently.
-      // Wait, the prompt implies "choose what to display". GameCard shows 'metacritic'.
-      // So if 'opencritic' is chosen, we should probably swap the value into 'metacritic' OR logic in GameCard should be changed.
-      // But GameCard logic is complex.
-      // Strategy: We will update the actual `metacritic` column with the value chosen to be displayed.
-      // AND we keep the `opencritic` column correct.
+
+      // Initialize display source based on preferredScore if available
+      // Using type casting to access the new field since client types might lag slightly
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gameAny = item.game as any;
+      if (gameAny.preferredScore === 'OPENCRITIC') {
+          setDisplaySource('opencritic');
+      } else {
+          setDisplaySource('metacritic');
+      }
 
       // Reset Media
       setCurrentCover(item.game.coverImage || '');
       setCurrentBackground(item.game.backgroundImage || '');
-      setMediaSearchResults([]);
-      setSelectedMediaGame(null);
+      setFoundCovers([]);
+      setFoundBackgrounds([]);
+      setHasSearched(false);
     }
   }, [isOpen, item]);
 
@@ -147,11 +152,17 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
 
   const handleSearchMedia = async () => {
       setIsSearchingMedia(true);
+      setHasSearched(true);
       try {
           // Search using the game title
           const results = await searchOnlineGamesAction(item.game.title);
-          // Filter to remove duplicates if needed, but usually fine
-          setMediaSearchResults(results);
+
+          // Flatten and deduplicate
+          const covers = Array.from(new Set(results.flatMap(r => r.availableCovers))).filter(Boolean);
+          const backgrounds = Array.from(new Set(results.flatMap(r => r.availableBackgrounds))).filter(Boolean);
+
+          setFoundCovers(covers);
+          setFoundBackgrounds(backgrounds);
       } catch (e) {
           console.error(e);
       } finally {
@@ -197,31 +208,18 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       }
 
       // 3. Update Game Metadata (Metadata & Media Tabs)
-      // Determine what to save for "metacritic" (Display Score)
-      // If user selected OpenCritic as display source, we set 'metacritic' column to that value?
-      // Or do we just update the columns faithfully?
-      // The GameCard displays `metacritic`. So if user wants to "Show OpenCritic", we effectively must put the OpenCritic score into the `metacritic` field
-      // OR update GameCard to read a preference.
-      // Simpler approach for now: We update the values.
-      // But if the user toggles "Display OpenCritic", we should probably swap them?
-      // No, that's destructive.
-      // Let's assume the user just edits the values. The "Display Source" toggle in the UI will help populate the `metacritic` field
-      // with the chosen value, but we still save the real OpenCritic score to `opencritic` if known.
-
-      let finalMetacritic = metacritic;
-      if (displaySource === 'opencritic') {
-          finalMetacritic = opencritic;
-      }
-
       interface MetadataUpdate {
         platforms?: string[];
         coverImage?: string;
         backgroundImage?: string;
-        metacritic?: number | null;
-        opencritic?: number | null;
+        preferredScore?: string;
       }
 
       const metadataUpdate: MetadataUpdate = {};
+
+      // Update Preferred Score (Non-destructive)
+      metadataUpdate.preferredScore = displaySource === 'opencritic' ? 'OPENCRITIC' : 'METACRITIC';
+
       // Always update platforms if changed
       if (JSON.stringify(platforms) !== item.game.platforms) {
           metadataUpdate.platforms = platforms;
@@ -230,11 +228,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       // Update media if changed
       if (currentCover !== item.game.coverImage) metadataUpdate.coverImage = currentCover;
       if (currentBackground !== item.game.backgroundImage) metadataUpdate.backgroundImage = currentBackground;
-
-      // Update scores
-      // We assume `metacritic` field is the "Primary/Display" score.
-      if (finalMetacritic !== item.game.metacritic) metadataUpdate.metacritic = finalMetacritic;
-      if (opencritic !== item.game.opencritic) metadataUpdate.opencritic = opencritic;
 
       if (Object.keys(metadataUpdate).length > 0) {
           promises.push(updateGameMetadata(item.game.id, metadataUpdate));
@@ -262,7 +255,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                     <TabsTrigger value="general">General</TabsTrigger>
                     <TabsTrigger value="metadata">Metadata</TabsTrigger>
                     <TabsTrigger value="media">Media</TabsTrigger>
-                    <TabsTrigger value="tags">Tags</TabsTrigger>
                 </TabsList>
             </div>
 
@@ -367,209 +359,9 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                             </div>
                         )}
                     </div>
-                </TabsContent>
 
-                {/* --- METADATA TAB --- */}
-                <TabsContent value="metadata" className="space-y-6 mt-0">
-                    <div className="space-y-3">
-                        <Label>Platforms</Label>
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            {platforms.map((p, i) => (
-                                <Badge key={i} variant="secondary" className="cursor-pointer hover:bg-destructive/20 hover:text-destructive" onClick={() => setPlatforms(platforms.filter((_, idx) => idx !== i))}>
-                                    {p} <span className="ml-1 text-muted-foreground">×</span>
-                                </Badge>
-                            ))}
-                             {platforms.length === 0 && <span className="text-sm text-muted-foreground italic">No platforms listed</span>}
-                        </div>
-                        <div className="flex gap-2">
-                            <Input
-                                placeholder="Add platform (e.g. PC, PS5)..."
-                                value={newPlatform}
-                                onChange={(e) => setNewPlatform(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if(e.key === 'Enter' && newPlatform.trim()) {
-                                        setPlatforms([...platforms, newPlatform.trim()]);
-                                        setNewPlatform('');
-                                    }
-                                }}
-                            />
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => {
-                                    if(newPlatform.trim()) {
-                                        setPlatforms([...platforms, newPlatform.trim()]);
-                                        setNewPlatform('');
-                                    }
-                                }}
-                            >
-                                <Plus className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="space-y-3 pt-4 border-t">
-                        <Label className="text-base font-semibold">Scores</Label>
-                        <p className="text-xs text-muted-foreground mb-4">
-                            Choose which score to display on the card. This will update the primary score field.
-                        </p>
-
-                        <RadioGroup value={displaySource} onValueChange={(v) => setDisplaySource(v as 'metacritic' | 'opencritic')} className="grid grid-cols-2 gap-4">
-                            <div>
-                                <RadioGroupItem value="metacritic" id="meta-edit" className="peer sr-only" />
-                                <Label
-                                    htmlFor="meta-edit"
-                                    className="flex flex-col gap-2 rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                                >
-                                    <div className="flex justify-between items-center w-full">
-                                        <span className="font-bold">Metacritic</span>
-                                        {displaySource === 'metacritic' && <Check className="h-4 w-4 text-primary" />}
-                                    </div>
-                                    <Input
-                                        type="number"
-                                        value={metacritic || ''}
-                                        onChange={(e) => setMetacritic(e.target.value ? Number(e.target.value) : null)}
-                                        className="h-8 w-full mt-2"
-                                        placeholder="Score"
-                                    />
-                                </Label>
-                            </div>
-                            <div>
-                                <RadioGroupItem value="opencritic" id="open-edit" className="peer sr-only" />
-                                <Label
-                                    htmlFor="open-edit"
-                                    className="flex flex-col gap-2 rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer transition-all"
-                                >
-                                    <div className="flex justify-between items-center w-full">
-                                        <span className="font-bold">OpenCritic</span>
-                                        {displaySource === 'opencritic' && <Check className="h-4 w-4 text-primary" />}
-                                    </div>
-                                    <Input
-                                        type="number"
-                                        value={opencritic || ''}
-                                        onChange={(e) => setOpencritic(e.target.value ? Number(e.target.value) : null)}
-                                        className="h-8 w-full mt-2"
-                                        placeholder="Score"
-                                    />
-                                </Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-                </TabsContent>
-
-                {/* --- MEDIA TAB --- */}
-                <TabsContent value="media" className="space-y-6 mt-0">
-                    <div className="space-y-4">
-                        <div className="flex gap-2">
-                             <Button
-                                variant="secondary"
-                                className="w-full"
-                                onClick={handleSearchMedia}
-                                disabled={isSearchingMedia}
-                             >
-                                {isSearchingMedia ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
-                                Search Images for &quot;{item.game.title}&quot;
-                             </Button>
-                        </div>
-
-                        {mediaSearchResults.length > 0 && (
-                            <div className="p-4 border rounded-md bg-muted/20">
-                                <Label className="mb-2 block">Search Results</Label>
-                                <ScrollArea className="h-[120px]">
-                                    <div className="flex gap-2 pb-2">
-                                        {mediaSearchResults.map((res) => (
-                                            <button
-                                                key={res.id}
-                                                onClick={() => setSelectedMediaGame(res)}
-                                                className={cn(
-                                                    "relative w-[80px] h-[120px] shrink-0 rounded overflow-hidden border-2 transition-all",
-                                                    selectedMediaGame?.id === res.id ? "border-primary ring-2 ring-primary/20" : "border-transparent opacity-70 hover:opacity-100"
-                                                )}
-                                            >
-                                                {res.availableCovers[0] ? (
-                                                     <Image src={res.availableCovers[0]} alt={res.title} fill className="object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full bg-zinc-800" />
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </ScrollArea>
-                            </div>
-                        )}
-
-                        {/* Selected Result Media Picker */}
-                        {selectedMediaGame && (
-                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                <Label className="text-primary font-semibold">Found Images for: {selectedMediaGame.title}</Label>
-
-                                {/* Cover Picker */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs text-muted-foreground">Pick a Cover</Label>
-                                    <div className="flex gap-2 overflow-x-auto pb-2">
-                                        {selectedMediaGame.availableCovers.map((url, i) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => setCurrentCover(url)}
-                                                className={cn(
-                                                    "relative w-[60px] h-[90px] shrink-0 rounded overflow-hidden border-2",
-                                                    currentCover === url ? "border-primary" : "border-transparent"
-                                                )}
-                                            >
-                                                <Image src={url} alt="Cover" fill className="object-cover" />
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Background Picker */}
-                                <div className="space-y-2">
-                                    <Label className="text-xs text-muted-foreground">Pick a Background</Label>
-                                    <div className="flex gap-2 overflow-x-auto pb-2">
-                                        {selectedMediaGame.availableBackgrounds.map((url, i) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => setCurrentBackground(url)}
-                                                className={cn(
-                                                    "relative w-[120px] h-[68px] shrink-0 rounded overflow-hidden border-2",
-                                                    currentBackground === url ? "border-primary" : "border-transparent"
-                                                )}
-                                            >
-                                                <Image src={url} alt="Bg" fill className="object-cover" />
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="space-y-4 pt-4 border-t">
-                            <Label>Manual URLs</Label>
-                            <div className="grid gap-2">
-                                <Label className="text-xs text-muted-foreground">Cover Image URL</Label>
-                                <div className="flex gap-2">
-                                    <Input value={currentCover} onChange={(e) => setCurrentCover(e.target.value)} className="flex-1" />
-                                    <div className="w-10 h-14 relative bg-muted rounded shrink-0 overflow-hidden border">
-                                        {currentCover && <Image src={currentCover} alt="Preview" fill className="object-cover" />}
-                                    </div>
-                                </div>
-                            </div>
-                             <div className="grid gap-2">
-                                <Label className="text-xs text-muted-foreground">Background Image URL</Label>
-                                <div className="flex gap-2">
-                                    <Input value={currentBackground} onChange={(e) => setCurrentBackground(e.target.value)} className="flex-1" />
-                                    <div className="w-20 h-12 relative bg-muted rounded shrink-0 overflow-hidden border">
-                                        {currentBackground && <Image src={currentBackground} alt="Preview" fill className="object-cover" />}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </TabsContent>
-
-                {/* --- TAGS TAB --- */}
-                <TabsContent value="tags" className="space-y-6 mt-0">
-                    <div className="space-y-4">
+                    {/* --- MOVED TAGS SECTION --- */}
+                    <div className="space-y-4 pt-4 border-t">
                         <div className="flex flex-col gap-2">
                             <Label>Manage Tags</Label>
                             <Popover open={tagOpen} onOpenChange={setTagOpen}>
@@ -578,7 +370,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                         variant="outline"
                                         role="combobox"
                                         aria-expanded={tagOpen}
-                                        className="justify-between"
+                                        className="justify-between w-full"
                                     >
                                         {selectedTags.length > 0
                                             ? `${selectedTags.length} tags selected`
@@ -586,7 +378,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="start">
+                                <PopoverContent className="w-[400px] p-0" align="start">
                                     <Command>
                                         <CommandInput
                                             placeholder="Search tag..."
@@ -637,9 +429,175 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                      </button>
                                  </Badge>
                              ))}
-                             {selectedTags.length === 0 && (
-                                 <span className="text-sm text-muted-foreground italic">No tags assigned.</span>
-                             )}
+                        </div>
+                    </div>
+                </TabsContent>
+
+                {/* --- METADATA TAB --- */}
+                <TabsContent value="metadata" className="space-y-6 mt-0">
+                    <div className="space-y-3">
+                        <Label>Platforms</Label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {platforms.map((p, i) => (
+                                <Badge key={i} variant="secondary" className="cursor-pointer hover:bg-destructive/20 hover:text-destructive" onClick={() => setPlatforms(platforms.filter((_, idx) => idx !== i))}>
+                                    {p} <span className="ml-1 text-muted-foreground">×</span>
+                                </Badge>
+                            ))}
+                             {platforms.length === 0 && <span className="text-sm text-muted-foreground italic">No platforms listed</span>}
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Add platform (e.g. PC, PS5)..."
+                                value={newPlatform}
+                                onChange={(e) => setNewPlatform(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if(e.key === 'Enter' && newPlatform.trim()) {
+                                        setPlatforms([...platforms, newPlatform.trim()]);
+                                        setNewPlatform('');
+                                    }
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    if(newPlatform.trim()) {
+                                        setPlatforms([...platforms, newPlatform.trim()]);
+                                        setNewPlatform('');
+                                    }
+                                }}
+                            >
+                                <Plus className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3 pt-4 border-t">
+                        <Label className="text-base font-semibold">Scores</Label>
+                        <p className="text-xs text-muted-foreground mb-4">
+                            Choose which score to display on the card.
+                        </p>
+
+                        <RadioGroup value={displaySource} onValueChange={(v) => setDisplaySource(v as 'metacritic' | 'opencritic')} className="grid grid-cols-2 gap-4">
+                            <div>
+                                <RadioGroupItem value="metacritic" id="meta-edit" className="peer sr-only" />
+                                <Label
+                                    htmlFor="meta-edit"
+                                    className="flex flex-col gap-2 rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer transition-all"
+                                >
+                                    <div className="flex justify-between items-center w-full">
+                                        <span className="font-bold">Metacritic</span>
+                                        {displaySource === 'metacritic' && <Check className="h-4 w-4 text-primary" />}
+                                    </div>
+                                    <div className="mt-2 text-2xl font-black">
+                                        {metacritic ?? <span className="text-muted-foreground text-sm font-normal">N/A</span>}
+                                    </div>
+                                </Label>
+                            </div>
+                            <div>
+                                <RadioGroupItem value="opencritic" id="open-edit" className="peer sr-only" />
+                                <Label
+                                    htmlFor="open-edit"
+                                    className="flex flex-col gap-2 rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary cursor-pointer transition-all"
+                                >
+                                    <div className="flex justify-between items-center w-full">
+                                        <span className="font-bold">OpenCritic</span>
+                                        {displaySource === 'opencritic' && <Check className="h-4 w-4 text-primary" />}
+                                    </div>
+                                    <div className="mt-2 text-2xl font-black">
+                                        {opencritic ?? <span className="text-muted-foreground text-sm font-normal">N/A</span>}
+                                    </div>
+                                </Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+                </TabsContent>
+
+                {/* --- MEDIA TAB --- */}
+                <TabsContent value="media" className="space-y-6 mt-0">
+                    <div className="space-y-4">
+                        <div className="flex gap-2">
+                             <Button
+                                variant="secondary"
+                                className="w-full"
+                                onClick={handleSearchMedia}
+                                disabled={isSearchingMedia}
+                             >
+                                {isSearchingMedia ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                                Search Images for &quot;{item.game.title}&quot;
+                             </Button>
+                        </div>
+
+                        {hasSearched && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
+                                {/* Cover Picker */}
+                                <div className="space-y-2">
+                                    <Label className="text-base font-semibold">Found Covers</Label>
+                                    {foundCovers.length > 0 ? (
+                                        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-700">
+                                            {foundCovers.map((url, i) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => setCurrentCover(url)}
+                                                    className={cn(
+                                                        "relative w-[100px] h-[150px] shrink-0 rounded-md overflow-hidden border-2 transition-all hover:scale-105",
+                                                        currentCover === url ? "border-primary ring-2 ring-primary/20" : "border-transparent"
+                                                    )}
+                                                >
+                                                    <Image src={url} alt="Cover" fill className="object-cover" sizes="100px" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No covers found.</p>
+                                    )}
+                                </div>
+
+                                {/* Background Picker */}
+                                <div className="space-y-2">
+                                    <Label className="text-base font-semibold">Found Backgrounds</Label>
+                                    {foundBackgrounds.length > 0 ? (
+                                        <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-700">
+                                            {foundBackgrounds.map((url, i) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => setCurrentBackground(url)}
+                                                    className={cn(
+                                                        "relative w-[200px] h-[112px] shrink-0 rounded-md overflow-hidden border-2 transition-all hover:scale-105",
+                                                        currentBackground === url ? "border-primary ring-2 ring-primary/20" : "border-transparent"
+                                                    )}
+                                                >
+                                                    <Image src={url} alt="Bg" fill className="object-cover" sizes="200px" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No backgrounds found.</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-4 pt-4 border-t">
+                            <Label>Manual URLs</Label>
+                            <div className="grid gap-2">
+                                <Label className="text-xs text-muted-foreground">Cover Image URL</Label>
+                                <div className="flex gap-2">
+                                    <Input value={currentCover} onChange={(e) => setCurrentCover(e.target.value)} className="flex-1" />
+                                    <div className="w-10 h-14 relative bg-muted rounded shrink-0 overflow-hidden border">
+                                        {currentCover && <Image src={currentCover} alt="Preview" fill className="object-cover" />}
+                                    </div>
+                                </div>
+                            </div>
+                             <div className="grid gap-2">
+                                <Label className="text-xs text-muted-foreground">Background Image URL</Label>
+                                <div className="flex gap-2">
+                                    <Input value={currentBackground} onChange={(e) => setCurrentBackground(e.target.value)} className="flex-1" />
+                                    <div className="w-20 h-12 relative bg-muted rounded shrink-0 overflow-hidden border">
+                                        {currentBackground && <Image src={currentBackground} alt="Preview" fill className="object-cover" />}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </TabsContent>

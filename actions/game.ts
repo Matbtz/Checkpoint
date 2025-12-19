@@ -10,6 +10,7 @@ interface UpdateGameMetadataPayload {
   backgroundImage?: string;
   metacritic?: number | null;
   opencritic?: number | null;
+  preferredScore?: string;
   genres?: string[]; // JSON string
   studio?: string;
 }
@@ -27,6 +28,7 @@ export async function updateGameMetadata(gameId: string, payload: UpdateGameMeta
     if (payload.backgroundImage !== undefined) dataToUpdate.backgroundImage = payload.backgroundImage;
     if (payload.metacritic !== undefined) dataToUpdate.metacritic = payload.metacritic;
     if (payload.opencritic !== undefined) dataToUpdate.opencritic = payload.opencritic;
+    if (payload.preferredScore !== undefined) dataToUpdate.preferredScore = payload.preferredScore;
     if (payload.studio !== undefined) dataToUpdate.studio = payload.studio;
 
     if (Object.keys(dataToUpdate).length === 0) return { success: false, error: 'No data to update' };
