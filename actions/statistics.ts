@@ -176,11 +176,16 @@ export async function getUserStatistics(): Promise<UserStatistics> {
     }
   };
 
-  const statusDistribution = Object.entries(statusCounts).map(([name, value]) => ({
-    name,
-    value,
-    fill: getStatusColor(name),
-  }));
+  const ORDERED_STATUSES = ["BACKLOG", "PLAYING", "COMPLETED", "ABANDONED", "WISHLIST"];
+  const statusDistribution = ORDERED_STATUSES.map(status => {
+     // normalized is already uppercase in statusCounts keys from previous fix
+     const count = statusCounts[status] || 0;
+     return {
+         name: status,
+         value: count,
+         fill: getStatusColor(status)
+     };
+  }).filter(item => item.value > 0);
 
   return {
     counts: {
