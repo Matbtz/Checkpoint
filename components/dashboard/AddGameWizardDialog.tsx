@@ -176,8 +176,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         // Set fetched score
         if (score) {
             setFetchedOpenCritic(score);
+            setSelectedScoreSource('opencritic');
         } else {
             setFetchedOpenCritic(null);
+            if (game.metacritic) {
+                setSelectedScoreSource('metacritic');
+            }
         }
 
         setStep('customize');

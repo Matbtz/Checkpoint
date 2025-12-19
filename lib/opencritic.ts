@@ -30,6 +30,7 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
         'X-RapidAPI-Key': rapidApiKey,
         'X-RapidAPI-Host': 'opencritic-api.p.rapidapi.com'
       },
+      cache: 'no-store',
       signal: controller.signal
     });
 
@@ -67,6 +68,8 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
         // But for safety, we'll keep the rejection but log it clearly.
         console.warn(`OpenCritic Mismatch: Searched "${gameTitle}" (norm: ${normalizedQuery}), found "${firstResult.name}" (norm: ${normalizedResult}). Rejecting.`);
         return null;
+    } else {
+        console.log(`OpenCritic Match: Searched "${gameTitle}" -> Found "${firstResult.name}" (Score: ${firstResult.topCriticScore})`);
     }
 
     if (typeof firstResult.topCriticScore === 'number') {
