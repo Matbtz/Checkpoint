@@ -158,13 +158,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         releaseDate: selectedGame.releaseDate,
         studio,
         metacritic: finalMetacritic || undefined,
+        opencritic: fetchedOpenCritic || selectedGame.opencritic || null,
         source: selectedGame.source,
         genres: JSON.stringify(genres), // Convert array to string for DB
-        platforms: JSON.stringify(platforms), // Convert array to string for DB if needed, though schema check needed
-        // Assuming payload goes to addGameExtended which expects what?
-        // Let's check actions/add-game.ts type. It takes `payload: any`.
-        // Prisma schema usually stores JSON or String[] depending on provider.
-        // Based on GameCard usage: `game.genres ? JSON.parse(game.genres) : []`, it expects a JSON string.
+        platforms: JSON.stringify(platforms), // Convert array to string for DB
+        description: selectedGame.description
     };
 
     try {

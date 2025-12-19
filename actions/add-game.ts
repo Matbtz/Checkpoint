@@ -1,7 +1,6 @@
 'use server';
 
 import { searchIgdbGames, getIgdbImageUrl } from '@/lib/igdb';
-// IMPORT CRUCIAL : C'est ici qu'on branche votre fichier existant
 import { getOpenCriticScore } from '@/lib/opencritic';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
@@ -15,7 +14,6 @@ export async function fetchOpenCriticAction(title: string) {
 }
 
 // --- ACTION 1 : RECHERCHE LOCALE (Gratuite) ---
-// Cette action remplace l'appel par défaut
 export async function searchLocalGamesAction(query: string) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
@@ -32,15 +30,18 @@ export async function searchLocalGamesAction(query: string) {
         releaseDate: g.releaseDate?.toISOString() ?? null,
         studio: g.studio,
         metacritic: g.metacritic,
-        opencritic: g.opencritic, // <--- On renvoie le score stocké
+        opencritic: g.opencritic,
         source: 'local' as const,
         availableCovers: g.coverImage ? [g.coverImage] : [],
-        availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : []
+        availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
+        genres: g.genres ? JSON.parse(g.genres as string) : [],
+        platforms: [], // Champ non stocké en BDD pour l'instant
+        description: g.description,
+        originalData: null
     }));
 }
 
 // --- ACTION 2 : RECHERCHE ONLINE (IGDB) ---
-// À n'appeler QUE via le bouton "Étendre"
 export async function searchOnlineGamesAction(query: string) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
@@ -58,7 +59,6 @@ export async function searchOnlineGamesAction(query: string) {
     return igdbResults.map(game => {
         const existing = existingGames.find(e => e.id === String(game.id));
 
-        // ... (Logique images inchangée) ...
         const availableCovers: string[] = [];
         if (game.cover) availableCovers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
 
@@ -68,7 +68,7 @@ export async function searchOnlineGamesAction(query: string) {
             releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : null,
             studio: game.involved_companies?.find(c => c.developer)?.company.name || null,
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
-            opencritic: existing?.opencritic || null, // On ne fetch PAS OpenCritic ici sauf si déjà en cache
+            opencritic: existing?.opencritic || null,
             genres: game.genres?.map(g => g.name) || [],
             platforms: game.platforms?.map(p => p.name) || [],
             availableCovers,
@@ -87,14 +87,18 @@ export async function addGameExtended(payload: any) {
 
     let game = await prisma.game.findUnique({ where: { id: payload.id } });
 
-    // Si le jeu n'existe pas, C'EST LE MOMENT d'appeler OpenCritic
+    // Si le jeu n'existe pas, on le crée
     if (!game) {
-        let openCriticScore = null;
-        try {
-            // APPEL DU FICHIER OPENCRITIC.TS
-            openCriticScore = await getOpenCriticScore(payload.title);
-        } catch (e) {
-            console.error("OpenCritic Fetch Error:", e);
+        // Priorité au score passé par le frontend (payload.opencritic)
+        // Sinon, on tente de le fetcher
+        let openCriticScore = payload.opencritic;
+
+        if (openCriticScore === undefined || openCriticScore === null) {
+             try {
+                openCriticScore = await getOpenCriticScore(payload.title);
+            } catch (e) {
+                console.error("OpenCritic Fetch Error:", e);
+            }
         }
 
         game = await prisma.game.create({
@@ -102,15 +106,42 @@ export async function addGameExtended(payload: any) {
                 id: payload.id,
                 title: payload.title,
                 coverImage: payload.coverImage,
-                // ... autres champs
-                metacritic: payload.metacritic,
-                opencritic: openCriticScore, // <--- Sauvegarde en base
-                // ...
+                backgroundImage: payload.backgroundImage,
+                releaseDate: payload.releaseDate ? new Date(payload.releaseDate) : null,
+                studio: payload.studio,
+                metacritic: payload.metacritic, // Score affiché (choisi par l'utilisateur)
+                opencritic: openCriticScore, // Score réel OpenCritic
+                genres: payload.genres, // Stringified JSON
+                // platforms: payload.platforms, // Pas de colonne platforms dans le schéma Game
+                description: payload.description,
+                // source: payload.source, // Pas de colonne source dans le schéma Game
+                dataFetched: true,
+                lastSync: new Date()
             }
         });
     }
 
-    // ... reste de la logique d'ajout à la librairie ...
+    // Ajout à la librairie de l'utilisateur
+    // On vérifie s'il l'a déjà pour éviter les doublons/erreurs
+    const existingEntry = await prisma.userLibrary.findFirst({
+        where: {
+            userId: session.user.id,
+            gameId: game.id
+        }
+    });
+
+    if (!existingEntry) {
+        await prisma.userLibrary.create({
+            data: {
+                userId: session.user.id,
+                gameId: game.id,
+                status: 'BACKLOG',
+                createdAt: new Date(),
+                playtimeManual: 0,
+                progressManual: 0
+            }
+        });
+    }
 
     revalidatePath('/dashboard');
     return game;
