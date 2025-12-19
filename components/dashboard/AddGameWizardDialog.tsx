@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -206,6 +206,9 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
           <DialogTitle>
             {step === 'search' ? 'Add Game' : 'Customize & Add'}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {step === 'search' ? 'Search for a game to add to your library' : 'Customize game details before adding'}
+          </DialogDescription>
         </DialogHeader>
 
         {step === 'search' ? (
