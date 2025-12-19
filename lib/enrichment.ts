@@ -10,10 +10,12 @@ export interface EnrichedGameData {
     metacritic: number | null;
     opencritic?: number | null;
     genres: string[];
+    platforms?: string[];
     availableCovers: string[];
     availableBackgrounds: string[];
-    source: 'igdb' | 'rawg';
-    originalData: IgdbGame | RawgGame;
+    source: 'igdb' | 'rawg' | 'manual' | 'local';
+    originalData: IgdbGame | RawgGame | null;
+    description?: string;
 }
 
 export async function searchGamesEnriched(query: string, provider: 'igdb' | 'rawg' | 'all' = 'all'): Promise<EnrichedGameData[]> {
@@ -39,6 +41,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
     const enrichedIgdb = igdbResults.map(game => {
         const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
         const genres = game.genres?.map(g => g.name) || [];
+        const platforms = game.platforms?.map(p => p.name) || [];
 
         const availableCovers: string[] = [];
         if (game.cover) {
@@ -60,6 +63,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             studio: developer,
             metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
             genres,
+            platforms,
             availableCovers,
             availableBackgrounds,
             source: 'igdb' as const,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,10 @@ import { Loader2, ChevronRight, Check, ArrowLeft } from 'lucide-react'; // "Sear
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
-import { addGameExtended, searchLocalGamesAction, searchOnlineGamesAction } from '@/actions/add-game';
+import { addGameExtended, searchLocalGamesAction, searchOnlineGamesAction, fetchOpenCriticAction } from '@/actions/add-game';
 import { EnrichedGameData } from '@/lib/enrichment';
 import { Badge } from '@/components/ui/badge';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface AddGameWizardDialogProps {
   isOpen: boolean;
@@ -29,13 +30,57 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   // ... (Reste des states inchangé) ...
   const [selectedGame, setSelectedGame] = useState<EnrichedGameData | null>(null);
   const [title, setTitle] = useState('');
-  const [releaseYear, setReleaseYear] = useState<string>('');
-  const [status, setStatus] = useState('BACKLOG');
   const [studio, setStudio] = useState('');
   const [selectedCoverIndex, setSelectedCoverIndex] = useState(0);
   const [selectedBackgroundIndex, setSelectedBackgroundIndex] = useState(0);
   const [customCoverUrl, setCustomCoverUrl] = useState('');
   const [customBackgroundUrl, setCustomBackgroundUrl] = useState('');
+
+  // Genre handling & Platforms
+  const [genres, setGenres] = useState<string[]>([]);
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [newGenre, setNewGenre] = useState('');
+
+  // Scores
+  const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
+  const [selectedScoreSource, setSelectedScoreSource] = useState<'metacritic' | 'opencritic'>('metacritic');
+
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setHasSearchedOnline(false);
+    try {
+        // CORRECTION : Appel à searchLocalGamesAction
+        const results = await searchLocalGamesAction(searchQuery);
+        const formattedResults: EnrichedGameData[] = results.map(r => ({
+             ...r,
+             genres: r.genres || [],
+             originalData: null,
+             description: r.description || '',
+             source: 'local'
+        }));
+        setSearchResults(formattedResults);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsSearching(false);
+    }
+  }, [searchQuery]);
+
+  // Debounce search effect
+  useEffect(() => {
+    if (step !== 'search' || !isOpen) return;
+
+    const timer = setTimeout(() => {
+        if (searchQuery.trim().length >= 2) {
+            handleSearch();
+        } else {
+            setSearchResults([]);
+        }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, isOpen, step, handleSearch]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -52,29 +97,23 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     }
   }, [isOpen]);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setIsSearching(true);
-    setHasSearchedOnline(false);
-    try {
-        // CORRECTION : Appel à searchLocalGamesAction
-        const results = await searchLocalGamesAction(searchQuery);
-        setSearchResults(results);
-    } catch (e) {
-        console.error(e);
-    } finally {
-        setIsSearching(false);
-    }
-  };
-
   const handleExtendSearch = async () => {
     setIsSearching(true);
     try {
         // CORRECTION : Appel à searchOnlineGamesAction
+        // Le type de retour est maintenant Promise<EnrichedGameData[]>, donc le cast n'est plus nécessaire si on mappe correctement
         const onlineResults = await searchOnlineGamesAction(searchQuery);
+        const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
+            ...r,
+            originalData: r.originalData || null,
+            availableBackgrounds: r.availableBackgrounds || [],
+            platforms: r.platforms || [],
+            description: r.description || ''
+        }));
+
         setSearchResults(prev => {
             const existingIds = new Set(prev.map(p => p.id));
-            const newResults = onlineResults.filter(r => !existingIds.has(r.id));
+            const newResults = formattedOnlineResults.filter(r => !existingIds.has(r.id));
             return [...prev, ...newResults];
         });
         setHasSearchedOnline(true);
@@ -86,16 +125,30 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   };
 
   // ... (Fonction selectGame inchangée) ...
-  const selectGame = (game: EnrichedGameData) => {
+  const selectGame = async (game: EnrichedGameData) => {
     setSelectedGame(game);
     setTitle(game.title);
-    setReleaseYear(game.releaseDate ? new Date(game.releaseDate).getFullYear().toString() : '');
     setStudio(game.studio || '');
+    setGenres(game.genres || []);
+    setPlatforms(game.platforms || []);
     setSelectedCoverIndex(0);
     setSelectedBackgroundIndex(0);
     setCustomCoverUrl('');
     setCustomBackgroundUrl('');
     setStep('customize');
+
+    // Fetch OpenCritic immediately
+    setFetchedOpenCritic(null);
+    if (game.source !== 'manual' && game.source !== 'local') {
+        try {
+            const score = await fetchOpenCriticAction(game.title);
+            if (score) setFetchedOpenCritic(score);
+        } catch (e) {
+            console.error("Failed to fetch OpenCritic score:", e);
+        }
+    } else if (game.opencritic) {
+        setFetchedOpenCritic(game.opencritic);
+    }
   };
 
   // ... (Fonction handleFinalSubmit inchangée) ...
@@ -104,6 +157,15 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     const coverImage = customCoverUrl || (selectedGame.availableCovers.length > 0 ? selectedGame.availableCovers[selectedCoverIndex] : '') || '';
     const backgroundImage = customBackgroundUrl || (selectedGame.availableBackgrounds.length > 0 ? selectedGame.availableBackgrounds[selectedBackgroundIndex] : '') || undefined;
 
+    // Determine final score logic
+    let finalMetacritic = selectedGame.metacritic;
+
+    // STRICT HACK: If OpenCritic is selected, we override 'metacritic' with the OpenCritic value so GameCard displays it.
+    // If OpenCritic is null/N/A, this will effectively hide the badge (setting metacritic to null), which is correct if the user chose OpenCritic.
+    if (selectedScoreSource === 'opencritic') {
+        finalMetacritic = fetchedOpenCritic || selectedGame.opencritic || null;
+    }
+
     const finalData = {
         id: selectedGame.id,
         title,
@@ -111,9 +173,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         backgroundImage,
         releaseDate: selectedGame.releaseDate,
         studio,
-        metacritic: selectedGame.metacritic || undefined,
+        metacritic: finalMetacritic || undefined,
+        opencritic: fetchedOpenCritic || selectedGame.opencritic || null,
         source: selectedGame.source,
-        genres: selectedGame.genres
+        genres: JSON.stringify(genres), // Convert array to string for DB
+        platforms: JSON.stringify(platforms), // Convert array to string for DB
+        description: selectedGame.description
     };
 
     try {
@@ -158,8 +223,16 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
                 <ScrollArea className="h-[400px] rounded-md border p-4">
                     {searchResults.length === 0 && !isSearching && (
-                        <div className="text-center text-muted-foreground py-10">
-                            Enter a title to search.
+                        <div className="text-center text-muted-foreground py-10 flex flex-col items-center gap-4">
+                            <span>{searchQuery ? "No local results found." : "Enter a title to search."}</span>
+                            {searchQuery && !hasSearchedOnline && (
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleExtendSearch}
+                                >
+                                    Search on IGDB
+                                </Button>
+                            )}
                         </div>
                     )}
                     {isSearching && (
@@ -204,12 +277,12 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                 <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
                             </button>
                         ))}
-                        
+
                         {/* BOUTON ÉTENDRE LA RECHERCHE */}
                         {!isSearching && searchResults.length > 0 && !hasSearchedOnline && (
-                             <Button 
-                                variant="secondary" 
-                                className="w-full mt-4" 
+                             <Button
+                                variant="secondary"
+                                className="w-full mt-4"
                                 onClick={handleExtendSearch}
                              >
                                 Not found? Search on IGDB
@@ -313,7 +386,99 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                     <Label htmlFor="game-title">Game Title</Label>
                                     <Input id="game-title" value={title} onChange={(e) => setTitle(e.target.value)} />
                                 </div>
-                                {/* ... Rest of form ... */}
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="game-studio">Studio</Label>
+                                    <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Platforms</Label>
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {platforms.map((p, i) => (
+                                            <Badge key={i} className="cursor-pointer hover:bg-destructive" onClick={() => setPlatforms(platforms.filter((_, idx) => idx !== i))}>
+                                                {p} ⨯
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Add platform..."
+                                            onKeyDown={(e) => {
+                                                if(e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                                    setPlatforms([...platforms, e.currentTarget.value.trim()]);
+                                                    e.currentTarget.value = '';
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Genres</Label>
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {genres.map((g, i) => (
+                                            <Badge key={i} className="cursor-pointer hover:bg-destructive" onClick={() => setGenres(genres.filter((_, idx) => idx !== i))}>
+                                                {g} ⨯
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Add genre..."
+                                            value={newGenre}
+                                            onChange={(e) => setNewGenre(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if(e.key === 'Enter' && newGenre.trim()) {
+                                                    setGenres([...genres, newGenre.trim()]);
+                                                    setNewGenre('');
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={() => {
+                                                if(newGenre.trim()) {
+                                                    setGenres([...genres, newGenre.trim()]);
+                                                    setNewGenre('');
+                                                }
+                                            }}
+                                        >
+                                            Add
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 pt-4 border-t">
+                                    <Label className="text-base font-semibold">Display Score</Label>
+                                    <RadioGroup value={selectedScoreSource} onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')} className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <RadioGroupItem value="metacritic" id="score-meta" className="peer sr-only" />
+                                            <Label
+                                                htmlFor="score-meta"
+                                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                            >
+                                                <span className="mb-2 font-bold">Metacritic</span>
+                                                <div className={cn("text-2xl font-black", getScoreColor(selectedGame?.metacritic))}>
+                                                    {selectedGame?.metacritic || 'N/A'}
+                                                </div>
+                                            </Label>
+                                        </div>
+                                        <div>
+                                            <RadioGroupItem value="opencritic" id="score-open" className="peer sr-only" />
+                                            <Label
+                                                htmlFor="score-open"
+                                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                            >
+                                                <span className="mb-2 font-bold">OpenCritic</span>
+                                                <div className={cn("text-2xl font-black", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
+                                                    {fetchedOpenCritic || selectedGame?.opencritic || 'N/A'}
+                                                </div>
+                                            </Label>
+                                        </div>
+                                    </RadioGroup>
+                                </div>
                             </div>
                         </div>
                     </ScrollArea>

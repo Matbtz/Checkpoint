@@ -60,10 +60,12 @@ export async function getOpenCriticScore(gameTitle: string): Promise<number | nu
 
     // Allow if one is contained in the other
     if (!normalizedResult.includes(normalizedQuery) && !normalizedQuery.includes(normalizedResult)) {
-        // Fallback: check if the first 3 characters match (very loose) or just log a warning but proceed?
-        // "Vérifie la similarité du nom si possible" -> if not similar, maybe don't return it?
-        // Let's be safe: if they are completely different, return null.
-        console.warn(`OpenCritic Mismatch: Searched "${gameTitle}", found "${firstResult.name}". Rejecting.`);
+        // Fallback: Check for Levenshtein distance or simple word overlap could be better,
+        // but for now we'll log and allow if it's very close? No, stick to containment but maybe log more details.
+        // Actually, sometimes title has ": The Game" vs just "The Game".
+        // Let's relax it slightly: if the first 4 chars match (ignoring "the"), it's likely the same franchise.
+        // But for safety, we'll keep the rejection but log it clearly.
+        console.warn(`OpenCritic Mismatch: Searched "${gameTitle}" (norm: ${normalizedQuery}), found "${firstResult.name}" (norm: ${normalizedResult}). Rejecting.`);
         return null;
     }
 

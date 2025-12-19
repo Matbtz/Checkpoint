@@ -33,8 +33,15 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
 
     try {
       // CORRECTION ICI : Appel de la fonction locale
-      const games = await searchLocalGamesAction(query);
-      setResults(games);
+      const localGames = await searchLocalGamesAction(query);
+      const formattedGames: EnrichedGameData[] = localGames.map((game) => ({
+        ...game,
+        genres: game.genres || [],
+        originalData: null,
+        description: game.description || '',
+        source: 'local',
+      }));
+      setResults(formattedGames);
       setHasSearched(true);
     } catch (err) {
       setError('Failed to search games. Please try again.');
