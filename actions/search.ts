@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/db';
 import { searchIgdbGames, getIgdbImageUrl } from '@/lib/igdb';
 import { EnrichedGameData } from '@/lib/enrichment';
-import { auth } from '@/lib/auth';
+import { auth } from '@/auth';
 
 export type SearchResult = EnrichedGameData & {
     isAdded: boolean;
@@ -16,11 +16,17 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
 
     // 1. Search in local DB
     // Flexible Search: match full query OR any individual term
-    const terms = query.trim().split(/\s+/).filter(t => t.length > 0);
+    // Sanitize query: replace punctuation with space to handle "Zelda:" vs "Zelda"
+    const sanitizedQuery = query.replace(/[^\w\s\u00C0-\u00FF]/g, ' ').trim();
+
+    if (!sanitizedQuery) return [];
+
+    const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
 
     const whereClause = {
         OR: [
-            { title: { contains: query, mode: 'insensitive' as const } },
+            { title: { contains: query, mode: 'insensitive' as const } }, // Try exact original query first
+            { title: { contains: sanitizedQuery, mode: 'insensitive' as const } }, // Try sanitized full query
             ...terms.map(term => ({ title: { contains: term, mode: 'insensitive' as const } }))
         ]
     };
