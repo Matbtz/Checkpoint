@@ -46,22 +46,34 @@ export async function searchLocalGamesAction(query: string) {
         }
     });
 
-    return games.map(g => ({
-        id: g.id,
-        title: g.title,
-        coverImage: g.coverImage,
-        releaseDate: g.releaseDate?.toISOString() ?? null,
-        studio: g.studio,
-        metacritic: g.metacritic,
-        opencritic: g.opencritic,
-        source: 'local' as const,
-        availableCovers: g.coverImage ? [g.coverImage] : [],
-        availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
-        genres: g.genres ? JSON.parse(g.genres as string) : [],
-        platforms: [], // Champ non stocké en BDD pour l'instant
-        description: g.description,
-        originalData: null
-    }));
+    console.log(`[searchLocalGamesAction] Query: "${query}", Sanitized: "${sanitizedQuery}", Terms: ${terms.length}`);
+
+    return games.map(g => {
+        let parsedGenres: string[] = [];
+        try {
+            parsedGenres = g.genres ? JSON.parse(g.genres as string) : [];
+        } catch (e) {
+            console.error(`[searchLocalGamesAction] Failed to parse genres for game ${g.id} (${g.title}):`, e);
+            parsedGenres = [];
+        }
+
+        return {
+            id: g.id,
+            title: g.title,
+            coverImage: g.coverImage,
+            releaseDate: g.releaseDate?.toISOString() ?? null,
+            studio: g.studio,
+            metacritic: g.metacritic,
+            opencritic: g.opencritic,
+            source: 'local' as const,
+            availableCovers: g.coverImage ? [g.coverImage] : [],
+            availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
+            genres: parsedGenres,
+            platforms: [], // Champ non stocké en BDD pour l'instant
+            description: g.description,
+            originalData: null
+        };
+    });
 }
 
 // --- ACTION 2 : RECHERCHE ONLINE (IGDB) ---
