@@ -77,6 +77,21 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
     }
   };
 
+  const handleSelectAll = () => {
+    // Check if we should select all or deselect all
+    // If all currently visible games are selected, then deselect all
+    // Otherwise, select all currently visible games
+
+    const allVisibleIds = sortedLibrary.map(item => item.gameId);
+    const allSelected = allVisibleIds.every(id => selectedGameIds.has(id));
+
+    if (allSelected) {
+        setSelectedGameIds(new Set());
+    } else {
+        setSelectedGameIds(new Set(allVisibleIds));
+    }
+  };
+
   // Filter Logic
   const filteredLibrary = library.filter(item => {
     // Status
@@ -141,14 +156,25 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
 
               <div className="flex gap-2">
                 {isDeleteMode ? (
-                    <Button
-                        variant="destructive"
-                        onClick={handleDeleteSelected}
-                        disabled={selectedGameIds.size === 0}
-                        className="whitespace-nowrap"
-                    >
-                        Delete Selected ({selectedGameIds.size})
-                    </Button>
+                    <>
+                        <Button
+                            variant="outline"
+                            onClick={handleSelectAll}
+                            className="whitespace-nowrap"
+                        >
+                            {sortedLibrary.length > 0 && sortedLibrary.every(item => selectedGameIds.has(item.gameId))
+                                ? "Deselect All"
+                                : "Select All"}
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteSelected}
+                            disabled={selectedGameIds.size === 0}
+                            className="whitespace-nowrap"
+                        >
+                            Delete ({selectedGameIds.size})
+                        </Button>
+                    </>
                 ) : (
                     <Button onClick={() => setIsAddGameOpen(true)} className="whitespace-nowrap">
                         <Plus className="h-4 w-4 md:mr-2" />
