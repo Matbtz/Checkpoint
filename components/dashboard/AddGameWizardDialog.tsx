@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, ChevronRight, Check, ArrowLeft } from 'lucide-react'; // "Search" retiré car inutilisé
+import { Loader2, ChevronRight, Check, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
@@ -14,6 +14,7 @@ import { addGameExtended, searchLocalGamesAction, searchOnlineGamesAction, fetch
 import { EnrichedGameData } from '@/lib/enrichment';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AddGameWizardDialogProps {
   isOpen: boolean;
@@ -24,10 +25,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   const [step, setStep] = useState<'search' | 'customize'>('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [loadingGameId, setLoadingGameId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<EnrichedGameData[]>([]);
   const [hasSearchedOnline, setHasSearchedOnline] = useState(false);
 
-  // ... (Reste des states inchangé) ...
+  // Form State
   const [selectedGame, setSelectedGame] = useState<EnrichedGameData | null>(null);
   const [title, setTitle] = useState('');
   const [studio, setStudio] = useState('');
@@ -45,12 +47,15 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
   const [selectedScoreSource, setSelectedScoreSource] = useState<'metacritic' | 'opencritic'>('metacritic');
 
+  // Status & Goal
+  const [status, setStatus] = useState<string>('BACKLOG');
+  const [completionTarget, setCompletionTarget] = useState<string>('MAIN');
+
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
     setHasSearchedOnline(false);
     try {
-        // CORRECTION : Appel à searchLocalGamesAction
         const results = await searchLocalGamesAction(searchQuery);
         const formattedResults: EnrichedGameData[] = results.map(r => ({
              ...r,
@@ -77,7 +82,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         } else {
             setSearchResults([]);
         }
-    }, 500); // 500ms debounce
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchQuery, isOpen, step, handleSearch]);
@@ -92,6 +97,9 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
             setSelectedGame(null);
             setCustomCoverUrl('');
             setCustomBackgroundUrl('');
+            setLoadingGameId(null);
+            setStatus('BACKLOG');
+            setCompletionTarget('MAIN');
         }, 300);
         return () => clearTimeout(timer);
     }
@@ -100,8 +108,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
   const handleExtendSearch = async () => {
     setIsSearching(true);
     try {
-        // CORRECTION : Appel à searchOnlineGamesAction
-        // Le type de retour est maintenant Promise<EnrichedGameData[]>, donc le cast n'est plus nécessaire si on mappe correctement
         const onlineResults = await searchOnlineGamesAction(searchQuery);
         const formattedOnlineResults: EnrichedGameData[] = onlineResults.map(r => ({
             ...r,
@@ -124,44 +130,61 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     }
   };
 
-  // ... (Fonction selectGame inchangée) ...
   const selectGame = async (game: EnrichedGameData) => {
-    setSelectedGame(game);
-    setTitle(game.title);
-    setStudio(game.studio || '');
-    setGenres(game.genres || []);
-    setPlatforms(game.platforms || []);
-    setSelectedCoverIndex(0);
-    setSelectedBackgroundIndex(0);
-    setCustomCoverUrl('');
-    setCustomBackgroundUrl('');
-    setStep('customize');
+    // Start loading state for this specific game
+    setLoadingGameId(game.id);
 
-    // Fetch OpenCritic immediately
-    setFetchedOpenCritic(null);
-    if (game.source !== 'manual' && game.source !== 'local') {
-        try {
-            const score = await fetchOpenCriticAction(game.title);
-            if (score) setFetchedOpenCritic(score);
-        } catch (e) {
-            console.error("Failed to fetch OpenCritic score:", e);
+    try {
+        // Fetch OpenCritic if not present and if source is eligible (IGDB/Online)
+        // We do this BEFORE switching view
+        let score = game.opencritic;
+
+        if (!score && game.source !== 'manual' && game.source !== 'local') {
+            try {
+                const fetchedScore = await fetchOpenCriticAction(game.title);
+                if (fetchedScore) {
+                    score = fetchedScore;
+                }
+            } catch (e) {
+                console.error("Failed to fetch OpenCritic score:", e);
+            }
         }
-    } else if (game.opencritic) {
-        setFetchedOpenCritic(game.opencritic);
+
+        // Now update state and switch view
+        setSelectedGame(game);
+        setTitle(game.title);
+        setStudio(game.studio || '');
+        setGenres(game.genres || []);
+        setPlatforms(game.platforms || []);
+        setSelectedCoverIndex(0);
+        setSelectedBackgroundIndex(0);
+        setCustomCoverUrl('');
+        setCustomBackgroundUrl('');
+
+        // Reset Status/Goal defaults
+        setStatus('BACKLOG');
+        setCompletionTarget('MAIN');
+
+        // Set fetched score
+        if (score) {
+            setFetchedOpenCritic(score);
+        } else {
+            setFetchedOpenCritic(null);
+        }
+
+        setStep('customize');
+    } finally {
+        setLoadingGameId(null);
     }
   };
 
-  // ... (Fonction handleFinalSubmit inchangée) ...
   const handleFinalSubmit = async () => {
     if (!selectedGame) return;
     const coverImage = customCoverUrl || (selectedGame.availableCovers.length > 0 ? selectedGame.availableCovers[selectedCoverIndex] : '') || '';
     const backgroundImage = customBackgroundUrl || (selectedGame.availableBackgrounds.length > 0 ? selectedGame.availableBackgrounds[selectedBackgroundIndex] : '') || undefined;
 
-    // Determine final score logic
     let finalMetacritic = selectedGame.metacritic;
 
-    // STRICT HACK: If OpenCritic is selected, we override 'metacritic' with the OpenCritic value so GameCard displays it.
-    // If OpenCritic is null/N/A, this will effectively hide the badge (setting metacritic to null), which is correct if the user chose OpenCritic.
     if (selectedScoreSource === 'opencritic') {
         finalMetacritic = fetchedOpenCritic || selectedGame.opencritic || null;
     }
@@ -176,9 +199,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         metacritic: finalMetacritic || undefined,
         opencritic: fetchedOpenCritic || selectedGame.opencritic || null,
         source: selectedGame.source,
-        genres: JSON.stringify(genres), // Convert array to string for DB
-        platforms: JSON.stringify(platforms), // Convert array to string for DB
-        description: selectedGame.description
+        genres: JSON.stringify(genres),
+        platforms: JSON.stringify(platforms),
+        description: selectedGame.description,
+        status, // NEW
+        targetedCompletionType: completionTarget // NEW
     };
 
     try {
@@ -245,7 +270,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                             <button
                                 key={`${game.source}-${game.id}`}
                                 onClick={() => selectGame(game)}
-                                className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted text-left border border-transparent hover:border-border transition-colors group"
+                                disabled={loadingGameId !== null}
+                                className={cn(
+                                    "flex items-center gap-3 p-2 rounded-lg hover:bg-muted text-left border border-transparent hover:border-border transition-colors group relative",
+                                    loadingGameId === game.id && "opacity-70"
+                                )}
                             >
                                 <div className="h-14 w-10 relative bg-muted rounded overflow-hidden shrink-0">
                                     {game.availableCovers && game.availableCovers.length > 0 && (
@@ -269,16 +298,21 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                         </div>
                                     </div>
                                 </div>
-                                {game.metacritic && (
-                                    <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(game.metacritic))}>
-                                        {game.metacritic}
-                                    </Badge>
+                                {loadingGameId === game.id ? (
+                                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                ) : (
+                                    <>
+                                        {game.metacritic && (
+                                            <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(game.metacritic))}>
+                                                {game.metacritic}
+                                            </Badge>
+                                        )}
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                    </>
                                 )}
-                                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
                             </button>
                         ))}
 
-                        {/* BOUTON ÉTENDRE LA RECHERCHE */}
                         {!isSearching && searchResults.length > 0 && !hasSearchedOnline && (
                              <Button
                                 variant="secondary"
@@ -292,10 +326,9 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                 </ScrollArea>
              </div>
         ) : (
-            // ... (Partie Customize inchangée - assurez-vous de garder le code existant ici)
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-               {/* Left Panel code... */}
-               <div className="w-full md:w-1/2 p-6 border-r flex flex-col gap-6 overflow-y-auto">
+               {/* Left Panel - Increased width ratio (58%) */}
+               <div className="w-full md:w-[58%] p-6 border-r flex flex-col gap-6 overflow-y-auto">
                     {/* Cover Selection */}
                     <div className="space-y-3">
                         <Label className="text-base font-semibold">Select Cover Art</Label>
@@ -376,8 +409,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     </div>
                 </div>
 
-                {/* Right Panel code... */}
-                <div className="w-full md:w-1/2 flex flex-col">
+                {/* Right Panel - Decreased width ratio (42%) */}
+                <div className="w-full md:w-[42%] flex flex-col">
                     <ScrollArea className="flex-1 p-6">
                         <div className="space-y-6">
                             {/* Basic Info */}
@@ -390,6 +423,37 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                 <div className="space-y-2">
                                     <Label htmlFor="game-studio">Studio</Label>
                                     <Input id="game-studio" value={studio} onChange={(e) => setStudio(e.target.value)} />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Status</Label>
+                                        <Select value={status} onValueChange={setStatus}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="BACKLOG">Backlog</SelectItem>
+                                                <SelectItem value="PLAYING">Playing</SelectItem>
+                                                <SelectItem value="COMPLETED">Completed</SelectItem>
+                                                <SelectItem value="ABANDONED">Dropped</SelectItem>
+                                                <SelectItem value="WISHLIST">Wishlist</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Goal</Label>
+                                        <Select value={completionTarget} onValueChange={setCompletionTarget}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Goal" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="MAIN">Main Story</SelectItem>
+                                                <SelectItem value="EXTRA">Main + Extra</SelectItem>
+                                                <SelectItem value="COMPLETIONIST">Completionist</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -457,10 +521,10 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                             <RadioGroupItem value="metacritic" id="score-meta" className="peer sr-only" />
                                             <Label
                                                 htmlFor="score-meta"
-                                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                                className="flex flex-row items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer h-full"
                                             >
-                                                <span className="mb-2 font-bold">Metacritic</span>
-                                                <div className={cn("text-2xl font-black", getScoreColor(selectedGame?.metacritic))}>
+                                                <span className="font-bold text-sm">Metacritic</span>
+                                                <div className={cn("text-lg font-black ml-2", getScoreColor(selectedGame?.metacritic))}>
                                                     {selectedGame?.metacritic || 'N/A'}
                                                 </div>
                                             </Label>
@@ -469,10 +533,10 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                                             <RadioGroupItem value="opencritic" id="score-open" className="peer sr-only" />
                                             <Label
                                                 htmlFor="score-open"
-                                                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                                                className="flex flex-row items-center justify-between rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer h-full"
                                             >
-                                                <span className="mb-2 font-bold">OpenCritic</span>
-                                                <div className={cn("text-2xl font-black", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
+                                                <span className="font-bold text-sm">OpenCritic</span>
+                                                <div className={cn("text-lg font-black ml-2", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
                                                     {fetchedOpenCritic || selectedGame?.opencritic || 'N/A'}
                                                 </div>
                                             </Label>
@@ -485,7 +549,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
                     <div className="p-4 border-t bg-muted/20 flex justify-between items-center shrink-0">
                          <Button variant="ghost" onClick={() => setStep('search')}>
                             <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back to Search
+                            Back
                         </Button>
                         <Button onClick={handleFinalSubmit} className="px-8">
                             Add Game

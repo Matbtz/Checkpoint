@@ -151,7 +151,8 @@ export async function addGameExtended(payload: any) {
             data: {
                 userId: session.user.id,
                 gameId: game.id,
-                status: 'BACKLOG',
+                status: payload.status || 'BACKLOG',
+                targetedCompletionType: payload.targetedCompletionType || 'MAIN',
                 createdAt: new Date(),
                 playtimeManual: 0,
                 progressManual: 0
