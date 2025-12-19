@@ -10,27 +10,39 @@ export type SearchResult = EnrichedGameData & {
     libraryStatus: string | null;
 };
 
+/**
+ * Helper to sanitize search queries
+ * Replaces punctuation (like :) with spaces to allow flexible matching
+ */
+function sanitizeQuery(query: string): string {
+    // Keep alphanumerics, spaces, and accents. Replace everything else with space.
+    return query.replace(/[^\w\s\u00C0-\u00FF]/g, ' ').trim();
+}
+
 export async function searchLocalGames(query: string): Promise<SearchResult[]> {
     const session = await auth();
     const userId = session?.user?.id;
 
-    // 1. Search in local DB
-    // Flexible Search: match full query OR any individual term
-    // Sanitize query: replace punctuation with space to handle "Zelda:" vs "Zelda"
-    const sanitizedQuery = query.replace(/[^\w\s\u00C0-\u00FF]/g, ' ').trim();
-
+    // 1. Prepare Query Terms
+    const sanitizedQuery = sanitizeQuery(query);
     if (!sanitizedQuery) return [];
 
+    // Split into individual terms (e.g. "Zelda:" -> ["Zelda"])
     const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
 
+    // 2. Build Search Clause
+    // We use OR to be permissive: match exact string OR sanitized string OR any individual word
     const whereClause = {
         OR: [
-            { title: { contains: query, mode: 'insensitive' as const } }, // Try exact original query first
-            { title: { contains: sanitizedQuery, mode: 'insensitive' as const } }, // Try sanitized full query
-            ...terms.map(term => ({ title: { contains: term, mode: 'insensitive' as const } }))
+            { title: { contains: query, mode: 'insensitive' as const } },           // Match "The Legend of Zelda:"
+            { title: { contains: sanitizedQuery, mode: 'insensitive' as const } },  // Match "The Legend of Zelda "
+            ...terms.map(term => ({
+                title: { contains: term, mode: 'insensitive' as const }             // Match "Zelda"
+            }))
         ]
     };
 
+    // 3. Fetch Games
     const games = await prisma.game.findMany({
         where: whereClause,
         take: 10,
@@ -39,7 +51,7 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
         }
     });
 
-    // 2. Fetch Library Status if logged in
+    // 4. Fetch Library Status (if logged in)
     const libraryMap = new Map<string, string>();
     if (userId && games.length > 0) {
         const gameIds = games.map(g => g.id);
@@ -59,7 +71,7 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
         }
     }
 
-    // 3. Map to SearchResult
+    // 5. Map to SearchResult
     return games.map(game => ({
         id: game.id,
         title: game.title,
@@ -70,7 +82,7 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
         genres: game.genres ? JSON.parse(game.genres) : [],
         availableCovers: game.coverImage ? [game.coverImage] : [],
         availableBackgrounds: game.backgroundImage ? [game.backgroundImage] : [],
-        source: 'igdb',
+        source: 'igdb', // Local games originated from IGDB usually
         originalData: {} as any,
         isAdded: libraryMap.has(game.id),
         libraryStatus: libraryMap.get(game.id) || null
@@ -86,10 +98,11 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
 
     if (igdbResults.length === 0) return [];
 
-    // 2. Check for existence in local DB
+    // 2. Check for existence in local DB (to link to existing IDs/data)
     const igdbIds = igdbResults.map(g => String(g.id));
     const titles = igdbResults.map(g => g.name);
 
+    // We try to find matching local games to reuse their IDs or data
     const existingGames = await prisma.game.findMany({
         where: {
             OR: [
@@ -100,6 +113,7 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
         }
     });
 
+    // Create lookup map
     const existingMap = new Map<string, typeof existingGames[0]>();
     existingGames.forEach(g => {
         if (g.igdbId) existingMap.set(g.igdbId, g);
@@ -107,7 +121,7 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
         existingMap.set(g.title.toLowerCase(), g);
     });
 
-    // 3. Fetch Library Status for existing games
+    // 3. Fetch Library Status for the matches we found
     const libraryMap = new Map<string, string>();
     if (userId && existingGames.length > 0) {
         const localGameIds = existingGames.map(g => g.id);
@@ -130,6 +144,7 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
     // 4. Map results
     return igdbResults.map(game => {
         const idStr = String(game.id);
+        // Try to find if this IGDB game already exists in our DB
         const localMatch = existingMap.get(idStr) || existingMap.get(game.name.toLowerCase());
 
         if (localMatch) {
@@ -145,12 +160,12 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
                 availableCovers: localMatch.coverImage ? [localMatch.coverImage] : [],
                 availableBackgrounds: localMatch.backgroundImage ? [localMatch.backgroundImage] : [],
                 source: 'igdb',
-                originalData: game, // Keep original data if needed for augmentation later
+                originalData: game,
                 isAdded: libraryMap.has(localMatch.id),
                 libraryStatus: libraryMap.get(localMatch.id) || null
             };
         } else {
-            // Return IGDB object
+            // Return new IGDB object
             const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
             const genres = game.genres?.map(g => g.name) || [];
 
