@@ -161,6 +161,25 @@ export async function addGameExtended(payload: any) {
                 lastSync: new Date()
             }
         });
+    } else {
+        // UPDATE EXISTING GAME if platforms/genres/etc are missing or explicit update requested
+        // Since the user just customized it in the wizard, we should trust this new data.
+        await prisma.game.update({
+            where: { id: payload.id },
+            data: {
+                title: payload.title,
+                coverImage: payload.coverImage,
+                backgroundImage: payload.backgroundImage,
+                studio: payload.studio,
+                metacritic: payload.metacritic,
+                // Only update opencritic if payload has it (it might be null if not fetched)
+                ...(payload.opencritic !== undefined && { opencritic: payload.opencritic }),
+                genres: payload.genres,
+                platforms: payload.platforms,
+                description: payload.description,
+                updatedAt: new Date()
+            }
+        });
     }
 
     // Ajout à la librairie de l'utilisateur

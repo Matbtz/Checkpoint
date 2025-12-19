@@ -61,7 +61,9 @@ export async function getUserStatistics(): Promise<UserStatistics> {
   const steamImported = library.filter((entry) => entry.playtimeSteam > 0).length;
 
   const statusCounts = library.reduce((acc, entry) => {
-    acc[entry.status] = (acc[entry.status] || 0) + 1;
+    // Normalize status to UPPERCASE to ensure consistency (e.g. "Completed" -> "COMPLETED")
+    const statusKey = entry.status.toUpperCase();
+    acc[statusKey] = (acc[statusKey] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -163,7 +165,8 @@ export async function getUserStatistics(): Promise<UserStatistics> {
 
   // Helper for status colors
   const getStatusColor = (status: string) => {
-    switch (status) {
+    const normalized = status.toUpperCase();
+    switch (normalized) {
       case "COMPLETED": return "#22c55e"; // green-500
       case "PLAYING": return "#3b82f6"; // blue-500
       case "BACKLOG": return "#eab308"; // yellow-500
