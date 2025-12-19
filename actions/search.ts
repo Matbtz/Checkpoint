@@ -45,7 +45,7 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
     // 3. Fetch Games
     const games = await prisma.game.findMany({
         where: whereClause,
-        take: 50,
+        take: 10,
         orderBy: {
             updatedAt: 'desc',
         }
@@ -72,31 +72,21 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
     }
 
     // 5. Map to SearchResult
-    return games.map(game => {
-        let parsedGenres: string[] = [];
-        try {
-            parsedGenres = game.genres ? JSON.parse(game.genres) : [];
-        } catch (e) {
-            console.error(`[searchLocalGames] Failed to parse genres for game ${game.id} (${game.title}):`, e);
-            parsedGenres = [];
-        }
-
-        return {
-            id: game.id,
-            title: game.title,
-            releaseDate: game.releaseDate ? game.releaseDate.toISOString() : null,
-            studio: game.studio,
-            metacritic: game.metacritic,
-            opencritic: game.opencritic,
-            genres: parsedGenres,
-            availableCovers: game.coverImage ? [game.coverImage] : [],
-            availableBackgrounds: game.backgroundImage ? [game.backgroundImage] : [],
-            source: 'igdb', // Local games originated from IGDB usually
-            originalData: {} as any,
-            isAdded: libraryMap.has(game.id),
-            libraryStatus: libraryMap.get(game.id) || null
-        };
-    });
+    return games.map(game => ({
+        id: game.id,
+        title: game.title,
+        releaseDate: game.releaseDate ? game.releaseDate.toISOString() : null,
+        studio: game.studio,
+        metacritic: game.metacritic,
+        opencritic: game.opencritic,
+        genres: game.genres ? JSON.parse(game.genres) : [],
+        availableCovers: game.coverImage ? [game.coverImage] : [],
+        availableBackgrounds: game.backgroundImage ? [game.backgroundImage] : [],
+        source: 'igdb', // Local games originated from IGDB usually
+        originalData: {} as any,
+        isAdded: libraryMap.has(game.id),
+        libraryStatus: libraryMap.get(game.id) || null
+    }));
 }
 
 export async function searchOnlineGames(query: string): Promise<SearchResult[]> {

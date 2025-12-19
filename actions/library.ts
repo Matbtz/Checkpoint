@@ -54,20 +54,6 @@ export async function updateTargetedCompletion(gameId: string, type: string) {
   revalidatePath('/dashboard');
 }
 
-export async function removeGamesFromLibrary(gameIds: string[]) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  await prisma.userLibrary.deleteMany({
-    where: {
-      userId: session.user.id,
-      gameId: { in: gameIds }
-    }
-  });
-
-  revalidatePath('/dashboard');
-}
-
 export async function updateManualPlayTime(gameId: string, minutes: number | null) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
