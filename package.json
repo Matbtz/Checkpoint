@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --accept-data-loss && next build",
+    "build": "prisma generate && prisma db push --accept-data-loss && npx tsx scripts/db-patch.ts && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -37,6 +37,7 @@
     "pg": "^8.16.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "recharts": "^3.6.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.1.13"

@@ -78,6 +78,7 @@ model Game {
   igdbId            String?  @unique // Indexé pour recherche rapide
   studio            String?  // Nom du studio/développeur
   genres            String?  // JSON string
+  platforms         String?  // JSON string
   hltbTimes         String?  // JSON string for HLTB times
   scores            String?  // JSON string for scores (metacritic, user rating)
   dataMissing       Boolean  @default(false)

@@ -39,22 +39,41 @@ export async function searchLocalGamesAction(query: string) {
         take: 10
     });
 
-    return games.map(g => ({
-        id: g.id,
-        title: g.title,
-        coverImage: g.coverImage,
-        releaseDate: g.releaseDate?.toISOString() ?? null,
-        studio: g.studio,
-        metacritic: g.metacritic,
-        opencritic: g.opencritic,
-        source: 'local' as const,
-        availableCovers: g.coverImage ? [g.coverImage] : [],
-        availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
-        genres: g.genres ? JSON.parse(g.genres as string) : [],
-        platforms: [], // Champ non stocké en BDD pour l'instant
-        description: g.description,
-        originalData: null
-    }));
+    console.log(`[searchLocalGamesAction] Query: "${query}", Sanitized: "${sanitizedQuery}", Terms: ${terms.length}`);
+
+    return games.map(g => {
+        let parsedGenres: string[] = [];
+        try {
+            parsedGenres = g.genres ? JSON.parse(g.genres as string) : [];
+        } catch (e) {
+            console.error(`[searchLocalGamesAction] Failed to parse genres for game ${g.id} (${g.title}):`, e);
+            parsedGenres = [];
+        }
+
+        let parsedPlatforms: string[] = [];
+        try {
+            parsedPlatforms = g.platforms ? JSON.parse(g.platforms as string) : [];
+        } catch (e) {
+            parsedPlatforms = [];
+        }
+
+        return {
+            id: g.id,
+            title: g.title,
+            coverImage: g.coverImage,
+            releaseDate: g.releaseDate?.toISOString() ?? null,
+            studio: g.studio,
+            metacritic: g.metacritic,
+            opencritic: g.opencritic,
+            source: 'local' as const,
+            availableCovers: g.coverImage ? [g.coverImage] : [],
+            availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
+            genres: parsedGenres,
+            platforms: parsedPlatforms,
+            description: g.description,
+            originalData: null
+        };
+    });
 }
 
 // --- ACTION 2 : RECHERCHE ONLINE (IGDB) ---
@@ -110,7 +129,7 @@ export async function addGameExtended(payload: any) {
         let openCriticScore = payload.opencritic;
 
         if (openCriticScore === undefined || openCriticScore === null) {
-             try {
+            try {
                 openCriticScore = await getOpenCriticScore(payload.title);
             } catch (e) {
                 console.error("OpenCritic Fetch Error:", e);
@@ -128,11 +147,30 @@ export async function addGameExtended(payload: any) {
                 metacritic: payload.metacritic, // Score affiché (choisi par l'utilisateur)
                 opencritic: openCriticScore, // Score réel OpenCritic
                 genres: payload.genres, // Stringified JSON
-                // platforms: payload.platforms, // Pas de colonne platforms dans le schéma Game
+                platforms: payload.platforms, // Stringified JSON
                 description: payload.description,
                 // source: payload.source, // Pas de colonne source dans le schéma Game
                 dataFetched: true,
                 lastSync: new Date()
+            }
+        });
+    } else {
+        // UPDATE EXISTING GAME if platforms/genres/etc are missing or explicit update requested
+        // Since the user just customized it in the wizard, we should trust this new data.
+        await prisma.game.update({
+            where: { id: payload.id },
+            data: {
+                title: payload.title,
+                coverImage: payload.coverImage,
+                backgroundImage: payload.backgroundImage,
+                studio: payload.studio,
+                metacritic: payload.metacritic,
+                // Only update opencritic if payload has it (it might be null if not fetched)
+                ...(payload.opencritic !== undefined && { opencritic: payload.opencritic }),
+                genres: payload.genres,
+                platforms: payload.platforms,
+                description: payload.description,
+                updatedAt: new Date()
             }
         });
     }
