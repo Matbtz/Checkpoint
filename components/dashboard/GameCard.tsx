@@ -35,26 +35,15 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
     }
   }, [game.genres]);
 
-  // Determine display score based on preferredScore
-  const displayScore = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - preferredScore is new
-    const pref = game.preferredScore || 'METACRITIC';
-
-    if (pref === 'OPENCRITIC' && game.opencritic) {
-        return game.opencritic;
-    }
-
-    // Fallback to Metacritic or scores JSON
-    if (game.metacritic) return game.metacritic;
-
-    try {
-        const parsed = game.scores ? JSON.parse(game.scores) : {};
-        return parsed.metacritic || null;
-    } catch {
-        return null;
-    }
-  }, [game]);
+  const scores = useMemo(() => {
+      try {
+          const parsed = game.scores ? JSON.parse(game.scores) : {};
+          if (game.metacritic) parsed.metacritic = game.metacritic;
+          return parsed;
+      } catch {
+          return { metacritic: game.metacritic };
+      }
+  }, [game.scores, game.metacritic]);
 
   const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
@@ -214,14 +203,14 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         </div>
 
         {/* Absolute Score Overlay */}
-        {displayScore && (
+        {scores.metacritic && (
             <div className="absolute top-3 right-3 z-30 pointer-events-none">
                 <div className={cn(
                     "flex h-10 w-10 items-center justify-center rounded-full border-2 bg-black/60 backdrop-blur-md shadow-xl",
-                    getScoreColor(displayScore)
+                    getScoreColor(scores.metacritic)
                 )}>
                     <span className="text-sm font-black font-mono tracking-tighter">
-                        {displayScore}
+                        {scores.metacritic}
                     </span>
                 </div>
             </div>

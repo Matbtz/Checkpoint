@@ -18,7 +18,6 @@ export async function getUserLibrary() {
     },
     include: {
       game: true,
-      tags: true,
     },
     orderBy: {
       createdAt: 'desc',
