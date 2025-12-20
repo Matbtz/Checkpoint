@@ -4,6 +4,8 @@ import { auth } from '@/auth';
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { searchOnlineGames } from './search';
+import { searchRawgGames } from '@/lib/rawg';
+import { searchSteamStore } from '@/lib/steam-store';
 
 export async function updateGameMetadata(gameId: string, data: {
   title?: string;
@@ -54,33 +56,67 @@ export async function searchGameImages(query: string) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
-    // Reuse the existing online search which fetches from IGDB/RAWG
-    // and returns EnrichedGameData which includes availableCovers/Backgrounds
-    try {
-        const results = await searchOnlineGames(query);
+    // Aggregate images from multiple sources
+    // 1. IGDB (via searchOnlineGames)
+    // 2. RAWG
+    // 3. Steam
 
-        // Aggregate all images from all results
-        const covers = new Set<string>();
-        const backgrounds = new Set<string>();
+    const covers = new Set<string>();
+    const backgrounds = new Set<string>();
 
-        results.forEach(game => {
-            if (game.availableCovers && game.availableCovers.length > 0) {
+    // Parallelize the requests
+    const [igdbResults, rawgResults, steamResults] = await Promise.allSettled([
+        searchOnlineGames(query),
+        searchRawgGames(query, 5),
+        searchSteamStore(query)
+    ]);
+
+    // Process IGDB
+    if (igdbResults.status === 'fulfilled') {
+        igdbResults.value.forEach(game => {
+             if (game.availableCovers && game.availableCovers.length > 0) {
                 if (game.availableCovers[0]) covers.add(game.availableCovers[0]);
                 game.availableCovers.forEach(c => covers.add(c));
             }
-
             if (game.availableBackgrounds && game.availableBackgrounds.length > 0) {
                  if (game.availableBackgrounds[0]) backgrounds.add(game.availableBackgrounds[0]);
                  game.availableBackgrounds.forEach(b => backgrounds.add(b));
             }
         });
-
-        return {
-            covers: Array.from(covers),
-            backgrounds: Array.from(backgrounds)
-        };
-    } catch (error) {
-        console.error("Error searching game images:", error);
-        return { covers: [], backgrounds: [] };
     }
+
+    // Process RAWG
+    if (rawgResults.status === 'fulfilled') {
+        rawgResults.value.forEach(game => {
+            if (game.background_image) {
+                // RAWG often uses background_image as a cover/general art
+                covers.add(game.background_image);
+                backgrounds.add(game.background_image);
+            }
+            if (game.short_screenshots) {
+                game.short_screenshots.forEach(s => backgrounds.add(s.image));
+            }
+        });
+    }
+
+    // Process Steam
+    if (steamResults.status === 'fulfilled') {
+        steamResults.value.forEach(game => {
+            // Steam Cover (Library)
+            const libraryUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${game.id}/library_600x900.jpg`;
+            covers.add(libraryUrl);
+
+            // Steam Header
+            if (game.header_image) backgrounds.add(game.header_image);
+
+            // We can infer more backgrounds if we assume structure, but let's stick to what we know exists
+            // Or try to add a few screenshot URLs blindly if we want:
+            // https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/ss_....jpg (hard to guess)
+        });
+    }
+
+    return {
+        covers: Array.from(covers),
+        backgrounds: Array.from(backgrounds)
+    };
 }

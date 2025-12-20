@@ -450,16 +450,17 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 {/* --- MEDIA TAB --- */}
                 <TabsContent value="media" className="mt-0 space-y-6">
                     <div className="space-y-2">
-                        <Label>Search for Media</Label>
-                        <div className="flex gap-2">
-                            <Input
-                                placeholder="Search game to find covers..."
-                                value={mediaQuery}
-                                onChange={(e) => setMediaQuery(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleMediaSearch()}
-                            />
-                            <Button onClick={handleMediaSearch} disabled={searchingMedia}>
-                                {searchingMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        <Label>Find Artwork</Label>
+                        <div className="flex gap-2 items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                Search for covers and backgrounds from IGDB, RAWG, and Steam.
+                            </p>
+                            <Button onClick={() => {
+                                setMediaQuery(item.game.title);
+                                handleMediaSearch();
+                            }} disabled={searchingMedia}>
+                                {searchingMedia && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {searchingMedia ? "Searching..." : "Find Artwork"}
                             </Button>
                         </div>
                     </div>
