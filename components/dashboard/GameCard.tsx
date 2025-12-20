@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
@@ -72,13 +72,16 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
 
+  // Manage image state locally to handle fallbacks
+  const [currentCoverImage, setCurrentCoverImage] = useState(game.coverImage || game.backgroundImage || '');
+
   const getScoreColor = (score: number) => {
     if (score >= 75) return 'border-green-500 text-green-500 shadow-[0_0_15px_-3px_rgba(34,197,94,0.4)]';
     if (score >= 50) return 'border-yellow-500 text-yellow-500 shadow-[0_0_15px_-3px_rgba(234,179,8,0.4)]';
     return 'border-red-500 text-red-500';
   };
 
-  const { colors: extractedColors } = useImageColor(game.coverImage || game.backgroundImage);
+  const { colors: extractedColors } = useImageColor(currentCoverImage);
   const activePrimaryColor = primaryColor || extractedColors?.primary;
   const activeSecondaryColor = secondaryColor || extractedColors?.secondary;
   const hasCustomColors = !!activePrimaryColor && !!activeSecondaryColor;
@@ -156,11 +159,17 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
         {/* Column 1: Cover Art */}
         <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10 group-hover:scale-[1.02] transition-transform duration-500">
              <Image
-                src={game.coverImage || game.backgroundImage || ''}
+                src={currentCoverImage}
                 alt={game.title}
                 fill
                 className="object-cover"
                 sizes="150px"
+                onError={() => {
+                    // If the image fails (e.g. 404), try to fallback to portrait.png if it's a steam library URL
+                    if (currentCoverImage.includes('library_600x900.jpg')) {
+                        setCurrentCoverImage(currentCoverImage.replace('library_600x900.jpg', 'portrait.png'));
+                    }
+                }}
             />
             <div className="absolute bottom-1 right-1 rounded bg-black/80 p-1 backdrop-blur-md border border-white/10">
                  {isSteam ? <Gamepad2 className="h-3 w-3 text-white" /> : <Monitor className="h-3 w-3 text-white/50" />}
