@@ -52,6 +52,32 @@ export async function fetchSteamGames() {
   }
 }
 
+export async function getSteamImportCandidates() {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        throw new Error('Not authenticated');
+    }
+
+    // 1. Fetch all steam games
+    const steamGames = await fetchSteamGames();
+
+    // 2. Fetch user's current library game IDs
+    const userLibrary = await prisma.userLibrary.findMany({
+        where: { userId: userId },
+        select: { gameId: true }
+    });
+
+    const existingGameIds = new Set(userLibrary.map(entry => entry.gameId));
+
+    // 3. Filter out games already in library
+    // Steam Game ID is typically the 'appid'
+    const candidates = steamGames.filter(game => !existingGameIds.has(game.appid.toString()));
+
+    return candidates;
+}
+
 export async function importGames(games: SteamGame[]) {
     const session = await auth();
     const userId = session?.user?.id;
@@ -84,12 +110,15 @@ export async function importGames(games: SteamGame[]) {
 
         // Upsert UserLibrary
         try {
+            const status = game.playtime_forever > 0 ? 'PLAYING' : 'BACKLOG';
+
             await prisma.userLibrary.create({
                 data: {
                     userId: userId,
                     gameId: game.appid.toString(),
-                    status: 'Backlog', // Default status
+                    status: status,
                     playtimeSteam: game.playtime_forever,
+                    targetedCompletionType: 'MAIN'
                 }
             });
             importedCount++;
