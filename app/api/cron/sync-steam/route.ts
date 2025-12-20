@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getOwnedGames } from '@/lib/steam';
+import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Find all users with a Steam ID linked (either directly or via Account)
+    // 1. Find all users with a Steam ID linked
     const users = await prisma.user.findMany({
       where: {
         OR: [
@@ -30,53 +31,73 @@ export async function GET(request: Request) {
     let updatedUsers = 0;
     let errors = 0;
 
-    // 2. Iterate users and sync
-    // Note: This iterates all users sequentially. For a large user base,
-    // this should be refactored to use a job queue or processed in batches.
-    for (const user of users) {
-      // Resolve Steam ID
-      let steamId = user.steamId;
-      if (!steamId && user.accounts) {
-        const steamAccount = user.accounts.find(acc => acc.provider === 'steam');
-        if (steamAccount) {
-            steamId = steamAccount.providerAccountId;
-        }
-      }
+    // 2. Process users in chunks to avoid hitting execution limits
+    const CHUNK_SIZE = 5;
 
-      if (!steamId) continue;
+    for (let i = 0; i < users.length; i += CHUNK_SIZE) {
+        const chunk = users.slice(i, i + CHUNK_SIZE);
 
-      try {
-        const steamGames = await getOwnedGames(steamId);
-
-        // Get all existing library entries for this user
-        const libraryEntries = await prisma.userLibrary.findMany({
-            where: { userId: user.id },
-            select: { gameId: true, playtimeSteam: true }
-        });
-
-        const libraryGameIds = new Set(libraryEntries.map(e => e.gameId));
-
-        // Map steam games to library entries
-        const gamesToUpdate = steamGames.filter(g => libraryGameIds.has(g.appid.toString()));
-
-        for (const game of gamesToUpdate) {
-            await prisma.userLibrary.update({
-                where: {
-                    userId_gameId: {
-                        userId: user.id,
-                        gameId: game.appid.toString()
-                    }
-                },
-                data: {
-                    playtimeSteam: game.playtime_forever
+        await Promise.all(chunk.map(async (user) => {
+            // Resolve Steam ID
+            let steamId = user.steamId;
+            if (!steamId && user.accounts) {
+                const steamAccount = user.accounts.find(acc => acc.provider === 'steam');
+                if (steamAccount) {
+                    steamId = steamAccount.providerAccountId;
                 }
-            });
-        }
-        updatedUsers++;
-      } catch (error) {
-        console.error(`Failed to sync user ${user.id}:`, error);
-        errors++;
-      }
+            }
+
+            if (!steamId) return;
+
+            try {
+                const steamGames = await getOwnedGames(steamId);
+
+                // Get all existing library entries for this user with status
+                const libraryEntries = await prisma.userLibrary.findMany({
+                    where: { userId: user.id },
+                    select: { gameId: true, playtimeSteam: true, status: true }
+                });
+
+                const libraryMap = new Map(libraryEntries.map(e => [e.gameId, e]));
+
+                // Map steam games to library entries
+                const gamesToUpdate = steamGames.filter(g => libraryMap.has(g.appid.toString()));
+
+                // Process game updates for this user
+                // We use Promise.all here as well since DB writes are IO bound
+                await Promise.all(gamesToUpdate.map(async (game) => {
+                    const entry = libraryMap.get(game.appid.toString());
+                    if (!entry) return;
+
+                    const dataToUpdate: Prisma.UserLibraryUpdateInput = {
+                        playtimeSteam: game.playtime_forever
+                    };
+
+                    // Flip status from Backlog to Playing if playtime > 0
+                    if (game.playtime_forever > 0 &&
+                       (entry.status === 'Backlog' || entry.status === 'BACKLOG')) {
+                        dataToUpdate.status = 'Playing';
+                    }
+
+                    if (entry.playtimeSteam !== game.playtime_forever || dataToUpdate.status) {
+                        await prisma.userLibrary.update({
+                            where: {
+                                userId_gameId: {
+                                    userId: user.id,
+                                    gameId: game.appid.toString()
+                                }
+                            },
+                            data: dataToUpdate
+                        });
+                    }
+                }));
+
+                updatedUsers++;
+            } catch (error) {
+                console.error(`Failed to sync user ${user.id}:`, error);
+                errors++;
+            }
+        }));
     }
 
     return NextResponse.json({
