@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Library, PieChart, Settings, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { LayoutDashboard, Library, PieChart, Plus, User, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useSession } from "next-auth/react"
@@ -23,7 +23,8 @@ export function Sidebar({ className, collapsed, toggleCollapse }: SidebarProps) 
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/library", label: "Library", icon: Library },
     { href: "/statistics", label: "Statistics", icon: PieChart },
-    { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/add", label: "Add Game", icon: Plus },
+    { href: "/settings", label: "Profile", icon: User },
   ]
 
   return (
