@@ -143,14 +143,16 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       setAvailableTags(tags);
   };
 
-  const handleMediaSearch = async () => {
-      if (!mediaQuery.trim()) return;
+  const handleMediaSearch = async (overrideQuery?: string) => {
+      const query = overrideQuery ?? mediaQuery;
+      if (!query.trim()) return;
+
       setSearchingMedia(true);
       // Pass IGDB ID if available to ensure accurate results
       // Pass Release Year to strict filter
       const releaseYear = item.game.releaseDate ? new Date(item.game.releaseDate).getFullYear() : undefined;
 
-      const { covers, backgrounds } = await searchGameImages(mediaQuery, {
+      const { covers, backgrounds } = await searchGameImages(query, {
           igdbId: item.game.igdbId || undefined,
           releaseYear: releaseYear
       });
@@ -463,8 +465,9 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                 Search for covers and backgrounds from IGDB, RAWG, and Steam.
                             </p>
                             <Button onClick={() => {
-                                setMediaQuery(item.game.title);
-                                handleMediaSearch();
+                                const title = item.game.title;
+                                setMediaQuery(title);
+                                handleMediaSearch(title);
                             }} disabled={searchingMedia}>
                                 {searchingMedia && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 {searchingMedia ? "Searching..." : "Find Artwork"}
