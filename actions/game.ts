@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { searchOnlineGames } from './search';
 import { searchRawgGames } from '@/lib/rawg';
 import { searchSteamStore } from '@/lib/steam-store';
-import { getIgdbGameDetails, getIgdbImageUrl } from '@/lib/igdb';
+import { getIgdbGameDetails } from '@/lib/igdb';
 
 export async function updateGameMetadata(gameId: string, data: {
   title?: string;
@@ -61,29 +61,59 @@ function normalize(str: string) {
 }
 
 /**
- * Checks if candidate title is a valid match for the target title.
- * We want to avoid mods/sequels unless exact match.
+ * Checks if candidate is valid based on Title and Year.
  */
-function isRelevantMatch(targetTitle: string, candidateTitle: string): boolean {
+function isStrictMatch(
+    targetTitle: string,
+    targetYear: number | undefined,
+    candidateTitle: string,
+    candidateYear: number | null | undefined
+): boolean {
     const t = normalize(targetTitle);
     const c = normalize(candidateTitle);
 
-    // Exact match
+    // 1. Title Check
+    // If exact match (normalized), pass immediately
     if (t === c) return true;
 
-    // Substring match (e.g. "God of War (2018)" vs "God of War")
-    // But be careful: "Portal" vs "Portal 2".
-    // We only accept containment if the length difference is small (e.g. punctuation)
-    // OR if the user searched for the exact base name.
+    // If titles are different:
+    // "Super Smash Bros" (t) vs "Super Smash Bros Ultimate" (c)
+    // c includes t.
+    // If c is significantly longer than t (more than just a punctuation diff), it's likely a sequel/spinoff.
+    // e.g. "Ultimate" adds 8 chars.
+    const lengthDiff = Math.abs(c.length - t.length);
+    const isSubstring = c.includes(t) || t.includes(c);
 
-    // Simple heuristic: If candidate contains target or target contains candidate,
-    // AND the difference isn't a number (sequel), we allow it.
-    // Actually, simpler: Allow if it contains the full string.
+    // If it's a substring but the length difference is big (> 3 chars, covers "II", "2", "GOTY", "Ultimate"),
+    // we should be suspicious and rely on Year.
+    const ambiguousTitle = isSubstring && lengthDiff > 3;
 
-    return c.includes(t) || t.includes(c);
+    // 2. Year Check (if available)
+    if (targetYear && candidateYear) {
+        const diff = Math.abs(targetYear - candidateYear);
+        // Allow 1 year margin (regional release differences)
+        if (diff <= 1) {
+            // If year matches, we can be more lenient with title (e.g. "God of War" 2018 vs "God of War")
+            // But if title is ambiguous (like "Ultimate"), and year matches?
+            // Smash Ultimate (2018) vs Smash (1999). Years won't match.
+            // God of War (2018) vs God of War (2005). Years won't match.
+            return true;
+        } else {
+            // Year mismatch > 1.
+            // If title is EXACT, it might be a remake or just data error.
+            // But if title is NOT exact, reject.
+            if (t !== c) return false;
+        }
+    }
+
+    // If we don't have year data to confirm, and title is ambiguous (e.g. sequel), reject to be safe.
+    if (ambiguousTitle) return false;
+
+    // Fallback: substring match with small diff or contained
+    return isSubstring;
 }
 
-export async function searchGameImages(query: string, options?: { igdbId?: string }) {
+export async function searchGameImages(query: string, options?: { igdbId?: string, releaseYear?: number }) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
@@ -91,55 +121,52 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
     const backgrounds = new Set<string>();
 
     const targetTitle = query.trim();
+    const targetYear = options?.releaseYear;
 
-    // 1. IGDB: Use ID if available, otherwise strict search
+    // 1. IGDB
     let igdbPromise: Promise<any>;
     if (options?.igdbId) {
-        // Direct fetch by ID
         igdbPromise = getIgdbGameDetails(parseInt(options.igdbId)).then(game => {
-            if (game) {
-                // If ID match, we trust it 100%
-                return [game];
-            }
-            return [];
+            return game ? [game] : [];
         });
     } else {
-        // Search
         igdbPromise = searchOnlineGames(targetTitle).then(games => {
-            // Filter strictly
-            return games.filter(g => isRelevantMatch(targetTitle, g.title));
+            return games.filter(g => {
+                const year = g.releaseDate ? new Date(g.releaseDate).getFullYear() : undefined;
+                return isStrictMatch(targetTitle, targetYear, g.title, year);
+            });
         });
     }
 
-    // 2. RAWG: Search and filter
+    // 2. RAWG
     const rawgPromise = searchRawgGames(targetTitle, 5).then(games => {
-        return games.filter(g => isRelevantMatch(targetTitle, g.name));
+        return games.filter(g => {
+             const year = g.released ? new Date(g.released).getFullYear() : undefined;
+             return isStrictMatch(targetTitle, targetYear, g.name, year);
+        });
     });
 
-    // 3. Steam: Search and filter
+    // 3. Steam
     const steamPromise = searchSteamStore(targetTitle).then(games => {
-        return games.filter(g => isRelevantMatch(targetTitle, g.name));
+        return games.filter(g => {
+            return isStrictMatch(targetTitle, targetYear, g.name, g.releaseYear);
+        });
     });
 
-    // Execute parallel
     const [igdbRes, rawgRes, steamRes] = await Promise.allSettled([igdbPromise, rawgPromise, steamPromise]);
+
+    // Helper to add images
+    const addImages = (c: string[], b: string[]) => {
+        c.forEach(img => covers.add(img));
+        b.forEach(img => backgrounds.add(img));
+    };
 
     // Process IGDB
     if (igdbRes.status === 'fulfilled') {
         igdbRes.value.forEach((game: any) => {
-             // Adapt based on return type (EnrichedGameData or EnrichedIgdbGame)
-             // getIgdbGameDetails returns EnrichedIgdbGame (possibleCovers)
-             // searchOnlineGames returns SearchResult (availableCovers)
-
              const c = game.possibleCovers || game.availableCovers || [];
              const b = game.possibleBackgrounds || game.availableBackgrounds || [];
-
-             if (c && c.length > 0) {
-                 c.forEach((img: string) => covers.add(img));
-             }
-             if (b && b.length > 0) {
-                 b.forEach((img: string) => backgrounds.add(img));
-             }
+             addImages(c, b);
         });
     }
 

@@ -147,7 +147,13 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       if (!mediaQuery.trim()) return;
       setSearchingMedia(true);
       // Pass IGDB ID if available to ensure accurate results
-      const { covers, backgrounds } = await searchGameImages(mediaQuery, { igdbId: item.game.igdbId || undefined });
+      // Pass Release Year to strict filter
+      const releaseYear = item.game.releaseDate ? new Date(item.game.releaseDate).getFullYear() : undefined;
+
+      const { covers, backgrounds } = await searchGameImages(mediaQuery, {
+          igdbId: item.game.igdbId || undefined,
+          releaseYear: releaseYear
+      });
       setSearchedCovers(covers);
       setSearchedBackgrounds(backgrounds);
       setSearchingMedia(false);

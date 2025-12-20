@@ -6,6 +6,7 @@ export interface SteamStoreGame {
     name: string;
     header_image: string;
     screenshots: string[];
+    releaseYear: number | null;
 }
 
 export async function searchSteamStore(query: string): Promise<SteamStoreGame[]> {
@@ -32,17 +33,24 @@ export async function searchSteamStore(query: string): Promise<SteamStoreGame[]>
 
             const id = parseInt(idMatch[1]);
             const name = $(el).find('.title').text().trim();
-            const img = $(el).find('.search_capsule img').attr('src') || '';
+            const dateStr = $(el).find('.search_released').text().trim();
 
-            // Construct high-res URLs if possible
-            // Header: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/header.jpg
-            // Library: https://steamcdn-a.akamaihd.net/steam/apps/{id}/library_600x900.jpg
+            let releaseYear: number | null = null;
+            if (dateStr) {
+                // Steam dates format varies (e.g. "20 Oct, 2023", "Oct 2023", "2023")
+                // Extract 4 digit year
+                const yearMatch = dateStr.match(/\b(19|20)\d{2}\b/);
+                if (yearMatch) {
+                    releaseYear = parseInt(yearMatch[0]);
+                }
+            }
 
             results.push({
                 id,
                 name,
                 header_image: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`,
-                screenshots: [] // Search results don't give screenshots easily without extra requests
+                screenshots: [], // Search results don't give screenshots easily without extra requests
+                releaseYear
             });
         });
 
