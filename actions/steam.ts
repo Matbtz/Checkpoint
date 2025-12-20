@@ -2,9 +2,8 @@
 
 import { auth } from '@/auth';
 import { getOwnedGames, SteamGame } from '@/lib/steam';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/db';
+import { searchIgdbGames } from '@/lib/igdb';
 
 export async function fetchSteamGames() {
   const session = await auth();
@@ -52,6 +51,32 @@ export async function fetchSteamGames() {
   }
 }
 
+export async function getSteamImportCandidates() {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        throw new Error('Not authenticated');
+    }
+
+    // 1. Fetch all steam games
+    const steamGames = await fetchSteamGames();
+
+    // 2. Fetch user's current library game IDs
+    const userLibrary = await prisma.userLibrary.findMany({
+        where: { userId: userId },
+        select: { gameId: true }
+    });
+
+    const existingGameIds = new Set(userLibrary.map(entry => entry.gameId));
+
+    // 3. Filter out games already in library
+    // Steam Game ID is typically the 'appid'
+    const candidates = steamGames.filter(game => !existingGameIds.has(game.appid.toString()));
+
+    return candidates;
+}
+
 export async function importGames(games: SteamGame[]) {
     const session = await auth();
     const userId = session?.user?.id;
@@ -60,54 +85,118 @@ export async function importGames(games: SteamGame[]) {
         throw new Error('Not authenticated');
     }
 
-    // Process imports
-    // 1. Create Game entries if not exist
-    // 2. Create UserLibrary entries
-
+    // Process imports in batches to avoid rate limits and timeouts
+    const BATCH_SIZE = 5;
     let importedCount = 0;
 
-    for (const game of games) {
-        // Upsert Game
-        await prisma.game.upsert({
-            where: { id: game.appid.toString() },
-            update: {
-                title: game.name,
-                coverImage: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`
-            },
-            create: {
-                id: game.appid.toString(),
-                title: game.name,
-                coverImage: `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`,
-                dataMissing: true
-            }
-        });
+    for (let i = 0; i < games.length; i += BATCH_SIZE) {
+        const batch = games.slice(i, i + BATCH_SIZE);
 
-        // Upsert UserLibrary
-        try {
-            await prisma.userLibrary.create({
-                data: {
-                    userId: userId,
-                    gameId: game.appid.toString(),
-                    status: 'Backlog', // Default status
-                    playtimeSteam: game.playtime_forever,
-                }
-            });
-            importedCount++;
-        } catch {
-            // Probably already exists
-             await prisma.userLibrary.update({
-                where: {
-                    userId_gameId: {
-                        userId: userId,
-                        gameId: game.appid.toString()
+        const results = await Promise.allSettled(batch.map(async (game) => {
+            // Prepare initial game data
+            const gameId = game.appid.toString();
+            const steamCover = `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`;
+
+            // Enrich with IGDB
+            let enrichedData = {
+                genres: undefined as string | undefined,
+                studio: undefined as string | undefined,
+                description: undefined as string | undefined,
+                releaseDate: undefined as Date | undefined,
+                metacritic: undefined as number | undefined,
+                platforms: JSON.stringify(["PC", "Steam Deck"]) // Default as requested
+            };
+
+            try {
+                // Search IGDB by name (limit 1 for best match)
+                const igdbResults = await searchIgdbGames(game.name, 1);
+                if (igdbResults.length > 0) {
+                    const igdbGame = igdbResults[0];
+
+                    // Extract Genres
+                    if (igdbGame.genres && igdbGame.genres.length > 0) {
+                        enrichedData.genres = JSON.stringify(igdbGame.genres.map(g => g.name));
                     }
+
+                    // Extract Studio (Developer)
+                    if (igdbGame.involved_companies) {
+                        const dev = igdbGame.involved_companies.find(c => c.developer);
+                        if (dev) {
+                            enrichedData.studio = dev.company.name;
+                        }
+                    }
+
+                    // Extract Description
+                    if (igdbGame.summary) {
+                        enrichedData.description = igdbGame.summary;
+                    }
+
+                    // Extract Release Date
+                    if (igdbGame.first_release_date) {
+                        enrichedData.releaseDate = new Date(igdbGame.first_release_date * 1000);
+                    }
+
+                    // Extract Metacritic (Aggregated Rating)
+                    if (igdbGame.aggregated_rating) {
+                        enrichedData.metacritic = Math.round(igdbGame.aggregated_rating);
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to enrich game ${game.name}:`, error);
+                // Continue with basic data
+            }
+
+            // Upsert Game with potentially enriched data
+            await prisma.game.upsert({
+                where: { id: gameId },
+                update: {
+                    title: game.name,
+                    coverImage: steamCover,
+                    ...enrichedData,
+                    dataMissing: !enrichedData.description
                 },
-                data: {
-                    playtimeSteam: game.playtime_forever
+                create: {
+                    id: gameId,
+                    title: game.name,
+                    coverImage: steamCover,
+                    ...enrichedData,
+                    dataMissing: !enrichedData.description
                 }
             });
-            importedCount++;
-        }
+
+            // Upsert UserLibrary
+            // Use Title Case for Status ("Backlog", "Playing") and "Main" for completion
+            const status = game.playtime_forever > 0 ? 'Playing' : 'Backlog';
+
+            try {
+                await prisma.userLibrary.create({
+                    data: {
+                        userId: userId,
+                        gameId: gameId,
+                        status: status,
+                        playtimeSteam: game.playtime_forever,
+                        targetedCompletionType: 'Main'
+                    }
+                });
+                return true;
+            } catch {
+                // If already exists, update playtime
+                await prisma.userLibrary.update({
+                    where: {
+                        userId_gameId: {
+                            userId: userId,
+                            gameId: gameId
+                        }
+                    },
+                    data: {
+                        playtimeSteam: game.playtime_forever
+                    }
+                });
+                return true;
+            }
+        }));
+
+        importedCount += results.filter(r => r.status === 'fulfilled' && r.value === true).length;
     }
 
     return { success: true, count: importedCount };

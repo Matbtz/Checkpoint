@@ -6,6 +6,7 @@ import { GameCard } from './GameCard';
 import { FilterStrip } from './FilterStrip';
 import { calculateProgress } from '@/lib/format-utils';
 import { AddGameWizardDialog } from './AddGameWizardDialog';
+import SteamImportModal from './SteamImportModal';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Trash2, X, CheckSquare, Square } from 'lucide-react';
@@ -166,6 +167,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                   <option value="releaseDate">Release Date</option>
               </select>
 
+              <SteamImportModal />
               <Button onClick={() => setIsAddGameOpen(true)} className="whitespace-nowrap">
                   <Plus className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Add Game</span>
