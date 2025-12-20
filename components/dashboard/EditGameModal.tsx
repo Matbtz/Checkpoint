@@ -146,7 +146,8 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const handleMediaSearch = async () => {
       if (!mediaQuery.trim()) return;
       setSearchingMedia(true);
-      const { covers, backgrounds } = await searchGameImages(mediaQuery);
+      // Pass IGDB ID if available to ensure accurate results
+      const { covers, backgrounds } = await searchGameImages(mediaQuery, { igdbId: item.game.igdbId || undefined });
       setSearchedCovers(covers);
       setSearchedBackgrounds(backgrounds);
       setSearchingMedia(false);
@@ -465,47 +466,92 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <div>
-                            <Label className="mb-2 block">Cover Image</Label>
-                            <div className="grid grid-cols-[100px_1fr] gap-4">
-                                <div className="aspect-[3/4] relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border">
-                                    {coverImage && <Image src={coverImage} alt="Cover" fill className="object-cover" />}
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <Input value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="Image URL" />
-                                    {searchedCovers.length > 0 && (
-                                        <div className="h-32 overflow-y-hidden overflow-x-auto whitespace-nowrap space-x-2 border p-2 rounded-md">
-                                            {searchedCovers.map((src, i) => (
-                                                <button key={i} onClick={() => setCoverImage(src)} className="inline-block h-full aspect-[3/4] relative rounded-md overflow-hidden border hover:border-blue-500">
-                                                    <Image src={src} alt="" fill className="object-cover" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                    <div className="space-y-6">
 
-                        <div>
-                            <Label className="mb-2 block">Background Image</Label>
-                            <div className="grid grid-cols-[160px_1fr] gap-4">
-                                <div className="aspect-video relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border">
-                                    {backgroundImage && <Image src={backgroundImage} alt="Background" fill className="object-cover" />}
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <Input value={backgroundImage} onChange={(e) => setBackgroundImage(e.target.value)} placeholder="Image URL" />
-                                    {searchedBackgrounds.length > 0 && (
-                                        <div className="h-24 overflow-y-hidden overflow-x-auto whitespace-nowrap space-x-2 border p-2 rounded-md">
-                                            {searchedBackgrounds.map((src, i) => (
-                                                <button key={i} onClick={() => setBackgroundImage(src)} className="inline-block h-full aspect-video relative rounded-md overflow-hidden border hover:border-blue-500">
-                                                    <Image src={src} alt="" fill className="object-cover" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                        {/* Search Results Area */}
+                        {(searchedCovers.length > 0 || searchedBackgrounds.length > 0) && (
+                            <div className="space-y-4 border rounded-md p-4 bg-zinc-50 dark:bg-zinc-900/50">
+                                {searchedCovers.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Covers</Label>
+                                        <ScrollArea className="h-[240px] border rounded-md bg-background p-2">
+                                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                                {searchedCovers.map((src, i) => (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setCoverImage(src)}
+                                                        className={`relative aspect-[3/4] rounded-md overflow-hidden border-2 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary ${coverImage === src ? 'border-primary ring-2 ring-primary ring-offset-2' : 'border-transparent hover:border-zinc-300'}`}
+                                                    >
+                                                        <Image src={src} alt="" fill className="object-cover" sizes="(max-width: 768px) 25vw, 15vw" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </div>
+                                )}
+
+                                {searchedBackgrounds.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Backgrounds</Label>
+                                        <ScrollArea className="h-[200px] border rounded-md bg-background p-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                {searchedBackgrounds.map((src, i) => (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setBackgroundImage(src)}
+                                                        className={`relative aspect-video rounded-md overflow-hidden border-2 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary ${backgroundImage === src ? 'border-primary ring-2 ring-primary ring-offset-2' : 'border-transparent hover:border-zinc-300'}`}
+                                                    >
+                                                        <Image src={src} alt="" fill className="object-cover" sizes="(max-width: 768px) 50vw, 33vw" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </div>
+                                )}
                             </div>
+                        )}
+
+                        {/* Current Selection & Manual Input */}
+                        <div className="space-y-4 pt-4 border-t">
+                             <Label className="text-base font-semibold">Current Selection</Label>
+
+                             <div className="grid sm:grid-cols-2 gap-6">
+                                {/* Cover Selection */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-muted-foreground">Cover Art</Label>
+                                    <div className="aspect-[3/4] relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm w-[140px] mx-auto sm:mx-0">
+                                        {coverImage ? (
+                                            <Image src={coverImage} alt="Cover" fill className="object-cover" />
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Cover</div>
+                                        )}
+                                    </div>
+                                    <Input
+                                        value={coverImage}
+                                        onChange={(e) => setCoverImage(e.target.value)}
+                                        placeholder="Cover URL"
+                                        className="font-mono text-xs h-8"
+                                    />
+                                </div>
+
+                                {/* Background Selection */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-muted-foreground">Background Art</Label>
+                                    <div className="aspect-video relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm">
+                                        {backgroundImage ? (
+                                            <Image src={backgroundImage} alt="Background" fill className="object-cover" />
+                                        ) : (
+                                             <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Background</div>
+                                        )}
+                                    </div>
+                                     <Input
+                                        value={backgroundImage}
+                                        onChange={(e) => setBackgroundImage(e.target.value)}
+                                        placeholder="Background URL"
+                                        className="font-mono text-xs h-8"
+                                    />
+                                </div>
+                             </div>
                         </div>
                     </div>
                 </TabsContent>

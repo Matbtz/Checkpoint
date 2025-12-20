@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { searchOnlineGames } from './search';
 import { searchRawgGames } from '@/lib/rawg';
 import { searchSteamStore } from '@/lib/steam-store';
+import { getIgdbGameDetails, getIgdbImageUrl } from '@/lib/igdb';
 
 export async function updateGameMetadata(gameId: string, data: {
   title?: string;
@@ -21,7 +22,7 @@ export async function updateGameMetadata(gameId: string, data: {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  // Verify user has this game in library to allow editing (simple permission check)
+  // Verify user has this game in library to allow editing
   const userLib = await prisma.userLibrary.findUnique({
     where: {
       userId_gameId: {
@@ -52,44 +53,100 @@ export async function updateGameMetadata(gameId: string, data: {
   revalidatePath('/dashboard');
 }
 
-export async function searchGameImages(query: string) {
+/**
+ * Normalizes a string for comparison (lowercase, remove special chars)
+ */
+function normalize(str: string) {
+    return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Checks if candidate title is a valid match for the target title.
+ * We want to avoid mods/sequels unless exact match.
+ */
+function isRelevantMatch(targetTitle: string, candidateTitle: string): boolean {
+    const t = normalize(targetTitle);
+    const c = normalize(candidateTitle);
+
+    // Exact match
+    if (t === c) return true;
+
+    // Substring match (e.g. "God of War (2018)" vs "God of War")
+    // But be careful: "Portal" vs "Portal 2".
+    // We only accept containment if the length difference is small (e.g. punctuation)
+    // OR if the user searched for the exact base name.
+
+    // Simple heuristic: If candidate contains target or target contains candidate,
+    // AND the difference isn't a number (sequel), we allow it.
+    // Actually, simpler: Allow if it contains the full string.
+
+    return c.includes(t) || t.includes(c);
+}
+
+export async function searchGameImages(query: string, options?: { igdbId?: string }) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
-
-    // Aggregate images from multiple sources
-    // 1. IGDB (via searchOnlineGames)
-    // 2. RAWG
-    // 3. Steam
 
     const covers = new Set<string>();
     const backgrounds = new Set<string>();
 
-    // Parallelize the requests
-    const [igdbResults, rawgResults, steamResults] = await Promise.allSettled([
-        searchOnlineGames(query),
-        searchRawgGames(query, 5),
-        searchSteamStore(query)
-    ]);
+    const targetTitle = query.trim();
+
+    // 1. IGDB: Use ID if available, otherwise strict search
+    let igdbPromise: Promise<any>;
+    if (options?.igdbId) {
+        // Direct fetch by ID
+        igdbPromise = getIgdbGameDetails(parseInt(options.igdbId)).then(game => {
+            if (game) {
+                // If ID match, we trust it 100%
+                return [game];
+            }
+            return [];
+        });
+    } else {
+        // Search
+        igdbPromise = searchOnlineGames(targetTitle).then(games => {
+            // Filter strictly
+            return games.filter(g => isRelevantMatch(targetTitle, g.title));
+        });
+    }
+
+    // 2. RAWG: Search and filter
+    const rawgPromise = searchRawgGames(targetTitle, 5).then(games => {
+        return games.filter(g => isRelevantMatch(targetTitle, g.name));
+    });
+
+    // 3. Steam: Search and filter
+    const steamPromise = searchSteamStore(targetTitle).then(games => {
+        return games.filter(g => isRelevantMatch(targetTitle, g.name));
+    });
+
+    // Execute parallel
+    const [igdbRes, rawgRes, steamRes] = await Promise.allSettled([igdbPromise, rawgPromise, steamPromise]);
 
     // Process IGDB
-    if (igdbResults.status === 'fulfilled') {
-        igdbResults.value.forEach(game => {
-             if (game.availableCovers && game.availableCovers.length > 0) {
-                if (game.availableCovers[0]) covers.add(game.availableCovers[0]);
-                game.availableCovers.forEach(c => covers.add(c));
-            }
-            if (game.availableBackgrounds && game.availableBackgrounds.length > 0) {
-                 if (game.availableBackgrounds[0]) backgrounds.add(game.availableBackgrounds[0]);
-                 game.availableBackgrounds.forEach(b => backgrounds.add(b));
-            }
+    if (igdbRes.status === 'fulfilled') {
+        igdbRes.value.forEach((game: any) => {
+             // Adapt based on return type (EnrichedGameData or EnrichedIgdbGame)
+             // getIgdbGameDetails returns EnrichedIgdbGame (possibleCovers)
+             // searchOnlineGames returns SearchResult (availableCovers)
+
+             const c = game.possibleCovers || game.availableCovers || [];
+             const b = game.possibleBackgrounds || game.availableBackgrounds || [];
+
+             if (c && c.length > 0) {
+                 c.forEach((img: string) => covers.add(img));
+             }
+             if (b && b.length > 0) {
+                 b.forEach((img: string) => backgrounds.add(img));
+             }
         });
     }
 
     // Process RAWG
-    if (rawgResults.status === 'fulfilled') {
-        rawgResults.value.forEach(game => {
+    if (rawgRes.status === 'fulfilled') {
+        rawgRes.value.forEach(game => {
             if (game.background_image) {
-                // RAWG often uses background_image as a cover/general art
                 covers.add(game.background_image);
                 backgrounds.add(game.background_image);
             }
@@ -100,18 +157,11 @@ export async function searchGameImages(query: string) {
     }
 
     // Process Steam
-    if (steamResults.status === 'fulfilled') {
-        steamResults.value.forEach(game => {
-            // Steam Cover (Library)
+    if (steamRes.status === 'fulfilled') {
+        steamRes.value.forEach(game => {
             const libraryUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${game.id}/library_600x900.jpg`;
             covers.add(libraryUrl);
-
-            // Steam Header
             if (game.header_image) backgrounds.add(game.header_image);
-
-            // We can infer more backgrounds if we assume structure, but let's stick to what we know exists
-            // Or try to add a few screenshot URLs blindly if we want:
-            // https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/ss_....jpg (hard to guess)
         });
     }
 
