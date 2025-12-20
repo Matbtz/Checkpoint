@@ -2,16 +2,17 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Search, Plus, User } from "lucide-react"
+import { LayoutDashboard, Library, PieChart, Plus, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function BottomNav() {
   const pathname = usePathname()
 
   const links = [
-    { href: "/dashboard", label: "Home", icon: Home },
-    { href: "/library", label: "Library", icon: Search },
-    { href: "/add", label: "Add", icon: Plus },
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/library", label: "Library", icon: Library },
+    { href: "/statistics", label: "Statistics", icon: PieChart },
+    { href: "/add", label: "", icon: Plus },
     { href: "/settings", label: "Profile", icon: User },
   ]
 
@@ -28,7 +29,7 @@ export function BottomNav() {
             )}
           >
             <link.icon className="h-5 w-5" />
-            <span>{link.label}</span>
+            {link.label && <span>{link.label}</span>}
           </Link>
         ))}
       </div>
