@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, ChevronRight, Check, ArrowLeft, X, Image as ImageIcon, List } from 'lucide-react';
+import { Loader2, ChevronRight, Check, ArrowLeft, X } from 'lucide-react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
@@ -219,7 +219,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         opencritic: fetchedOpenCritic || selectedGame.opencritic || null,
         source: selectedGame.source,
         genres: JSON.stringify(genres),
-        platforms: JSON.stringify(platforms),
+        platforms: platforms, // Json type, pass array directly
         description: selectedGame.description,
         status,
         targetedCompletionType: completionTarget

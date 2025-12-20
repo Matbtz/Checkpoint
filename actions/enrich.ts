@@ -89,9 +89,25 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
         // Platforms
         if (rawgDetails.platforms && Array.isArray(rawgDetails.platforms)) {
              // RAWG structure: [{ platform: { id, name, slug } }, ...]
-             const platforms = rawgDetails.platforms.map((p: any) => p.platform?.name).filter(Boolean);
+             // Schema expects Json? which matches [{ name: "Switch", date: "2017-10-27" }]
+             // RAWG usually gives released_at inside the platform object if detailed, or main released date.
+             // For now, mapping names to simple objects or just array of strings if that's what we want.
+             // But let's stick to the requested structure or just name.
+             // If we just have name, we can do { name: p.platform.name }.
+
+             // Previous behavior was stringified array of strings ["PC", "PS5"].
+             // The new schema expects Json.
+             // Let's store [{ name: "PC" }, { name: "PS5" }] to be consistent with the new object structure idea
+             // OR just the array of strings if we want to keep it simple, as Json can be any valid JSON.
+             // Given the other components seem to handle string[] or {name} objects, let's store objects.
+
+             const platforms = rawgDetails.platforms.map((p: any) => ({
+                 name: p.platform?.name,
+                 slug: p.platform?.slug
+             })).filter((p: any) => p.name);
+
              if (platforms.length > 0) {
-                 dataToUpdate.platforms = JSON.stringify(platforms);
+                 dataToUpdate.platforms = platforms;
              }
         }
 
