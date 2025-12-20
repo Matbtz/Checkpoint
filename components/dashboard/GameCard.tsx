@@ -21,9 +21,12 @@ interface GameCardProps {
   onClick?: () => void;
   primaryColor?: string;
   secondaryColor?: string;
+  isDeleteMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
-export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, secondaryColor }: GameCardProps) {
+export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, secondaryColor, isDeleteMode, isSelected, onToggleSelect }: GameCardProps) {
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
@@ -116,8 +119,22 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             backgroundClip: 'padding-box, border-box',
             border: '2px solid transparent',
         } : undefined}
-        onClick={onClick}
+        onClick={isDeleteMode ? onToggleSelect : onClick}
     >
+      {isDeleteMode && (
+        <div className={cn(
+            "absolute inset-0 z-50 flex items-center justify-center bg-black/20 transition-all",
+            isSelected ? "bg-red-500/20 ring-2 ring-red-500" : "hover:bg-black/40"
+        )}>
+             <div className={cn(
+                "absolute top-3 left-3 h-6 w-6 rounded-md border-2 flex items-center justify-center transition-all shadow-lg",
+                isSelected ? "bg-red-500 border-red-500 scale-110" : "border-white/60 bg-black/40"
+             )}>
+                {isSelected && <Check className="h-4 w-4 text-white font-bold" />}
+             </div>
+        </div>
+      )}
+
       {/* Layer 1: Background Art */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none">
         <Image

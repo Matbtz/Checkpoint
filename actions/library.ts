@@ -133,6 +133,20 @@ export async function searchAndAddGame(query: string) {
     return game;
 }
 
+export async function removeGamesFromLibrary(gameIds: string[]) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await prisma.userLibrary.deleteMany({
+    where: {
+      userId: session.user.id,
+      gameId: { in: gameIds }
+    }
+  });
+
+  revalidatePath('/dashboard');
+}
+
 export async function fixGameMatch(gameId: string, hltbData: { main: number, extra: number, completionist: number }) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
