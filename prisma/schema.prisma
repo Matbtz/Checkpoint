@@ -101,6 +101,13 @@ model Game {
   opencriticScore Int?
   igdbScore       Int?
 
+  // Steam Specific
+  steamAppId         String? @unique
+  steamReviewScore   String?
+  steamReviewCount   Int?
+  steamReviewPercent Int?
+  isDlc              Boolean @default(false)
+
   igdbId    String? @unique // Indexé pour recherche rapide
   studio    String? // Nom du studio/développeur
   genres    String? // JSON string
