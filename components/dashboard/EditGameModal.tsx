@@ -1,24 +1,27 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateLibraryEntry, fixGameMatch } from '@/actions/library';
-import { assignTag, removeTag, getUserTags } from '@/actions/tag';
+import { updateGameMetadata, searchGameImages } from '@/actions/game';
+import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
-import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Loader2, Plus, Search, X } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
+import Image from 'next/image';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
-interface UpdateData {
-  status?: string;
-  targetedCompletionType?: string;
-  playtimeManual?: number | null;
-  progressManual?: number | null;
+interface EditGameModalProps {
+  item: GameWithLibrary;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySelected: boolean; libraryId: string }) {
@@ -51,103 +54,137 @@ function TagBadge({ tag, initiallySelected, libraryId }: { tag: Tag; initiallySe
     );
 }
 
-interface EditGameModalProps {
-  item: GameWithLibrary;
-  isOpen: boolean;
-  onClose: () => void;
-}
-
 export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
+  const [activeTab, setActiveTab] = useState("general");
+  const [loading, setLoading] = useState(false);
+
+  // --- GENERAL TAB STATE ---
   const [status, setStatus] = useState(item.status);
   const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
 
-  // Time state (Converted to Hours for display)
+  // Time
   const initialMinutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
-  const initialHours = Math.round((initialMinutes / 60) * 10) / 10; // Round to 1 decimal
-
+  const initialHours = Math.round((initialMinutes / 60) * 10) / 10;
   const [useManualTime, setUseManualTime] = useState(item.playtimeManual !== null);
   const [manualTimeHours, setManualTimeHours] = useState(initialHours.toString());
 
-  // Progress state
+  // Progress
   const [useManualProgress, setUseManualProgress] = useState(item.progressManual !== null);
   const [manualProgress, setManualProgress] = useState(item.progressManual?.toString() || '0');
 
-  const [loading, setLoading] = useState(false);
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-
-  // Fix Match State
-  const [showFixMatch, setShowFixMatch] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      getUserTags().then(setAvailableTags);
-      // Reset fields on open
-      setStatus(item.status);
-      setCompletionType(item.targetedCompletionType || 'Main');
-
-      const minutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
-      const hours = Math.round((minutes / 60) * 10) / 10;
-
-      setUseManualTime(item.playtimeManual !== null);
-      setManualTimeHours(hours.toString());
-
-      setUseManualProgress(item.progressManual !== null);
-      setManualProgress(item.progressManual?.toString() || '0');
-    }
-  }, [isOpen, item]);
-
-  // Manual HLTB inputs
+  // Fix Match (HLTB)
   const hltbTimes = item.game.hltbTimes ? JSON.parse(item.game.hltbTimes) : {};
+  const [showFixMatch, setShowFixMatch] = useState(false);
   const [hltbMain, setHltbMain] = useState(hltbTimes.main || 0);
   const [hltbExtra, setHltbExtra] = useState(hltbTimes.extra || 0);
   const [hltbCompletionist, setHltbCompletionist] = useState(hltbTimes.completionist || 0);
 
+  // Tags
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [newTagName, setNewTagName] = useState("");
+
+  // --- METADATA TAB STATE ---
+  const [title, setTitle] = useState(item.game.title);
+  const [studio, setStudio] = useState(item.game.studio || "");
+  const [releaseDate, setReleaseDate] = useState(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
+  const [genres, setGenres] = useState<string[]>(item.game.genres ? JSON.parse(item.game.genres) : []);
+  const [platforms, setPlatforms] = useState<string[]>(item.game.platforms ? JSON.parse(item.game.platforms) : []);
+  const [metacritic, setMetacritic] = useState(item.game.metacritic?.toString() || "");
+  const [opencritic, setOpencritic] = useState(item.game.opencritic?.toString() || "");
+
+  const [newGenre, setNewGenre] = useState("");
+  const [newPlatform, setNewPlatform] = useState("");
+
+  // --- MEDIA TAB STATE ---
+  const [coverImage, setCoverImage] = useState(item.game.coverImage || "");
+  const [backgroundImage, setBackgroundImage] = useState(item.game.backgroundImage || "");
+  const [mediaQuery, setMediaQuery] = useState("");
+  const [searchedCovers, setSearchedCovers] = useState<string[]>([]);
+  const [searchedBackgrounds, setSearchedBackgrounds] = useState<string[]>([]);
+  const [searchingMedia, setSearchingMedia] = useState(false);
+
+
+  useEffect(() => {
+    if (isOpen) {
+      getUserTags().then(setAvailableTags);
+
+      // Reset General
+      setStatus(item.status);
+      setCompletionType(item.targetedCompletionType || 'Main');
+      const minutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
+      setUseManualTime(item.playtimeManual !== null);
+      setManualTimeHours((Math.round((minutes / 60) * 10) / 10).toString());
+      setUseManualProgress(item.progressManual !== null);
+      setManualProgress(item.progressManual?.toString() || '0');
+
+      // Reset Metadata
+      setTitle(item.game.title);
+      setStudio(item.game.studio || "");
+      setReleaseDate(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
+      setGenres(item.game.genres ? JSON.parse(item.game.genres) : []);
+      setPlatforms(item.game.platforms ? JSON.parse(item.game.platforms) : []);
+      setMetacritic(item.game.metacritic?.toString() || "");
+      setOpencritic(item.game.opencritic?.toString() || "");
+
+      // Reset Media
+      setCoverImage(item.game.coverImage || "");
+      setBackgroundImage(item.game.backgroundImage || "");
+      setSearchedCovers([]);
+      setSearchedBackgrounds([]);
+      setMediaQuery("");
+    }
+  }, [isOpen, item]);
+
+  const handleCreateTag = async () => {
+      if (!newTagName.trim()) return;
+      await createTag(newTagName);
+      setNewTagName("");
+      const tags = await getUserTags();
+      setAvailableTags(tags);
+  };
+
+  const handleMediaSearch = async (overrideQuery?: string) => {
+      const query = overrideQuery ?? mediaQuery;
+      if (!query.trim()) return;
+
+      setSearchingMedia(true);
+      // Pass IGDB ID if available to ensure accurate results
+      // Pass Release Year to strict filter
+      const releaseYear = item.game.releaseDate ? new Date(item.game.releaseDate).getFullYear() : undefined;
+
+      const { covers, backgrounds } = await searchGameImages(query, {
+          igdbId: item.game.igdbId || undefined,
+          releaseYear: releaseYear
+      });
+      setSearchedCovers(covers);
+      setSearchedBackgrounds(backgrounds);
+      setSearchingMedia(false);
+  };
+
   const handleSave = async () => {
     setLoading(true);
     try {
-      const dataToUpdate: UpdateData = {};
+      // 1. Update Library Entry (General Tab)
+      const libData: Partial<Parameters<typeof updateLibraryEntry>[1]> = {};
+      if (status !== item.status) libData.status = status;
+      if (completionType !== item.targetedCompletionType) libData.targetedCompletionType = completionType;
 
-      if (status !== item.status) {
-          dataToUpdate.status = status;
-      }
-
-      if (completionType !== item.targetedCompletionType) {
-          dataToUpdate.targetedCompletionType = completionType;
-      }
-
-      // Handle Manual Time (Convert Hours back to Minutes)
       if (useManualTime) {
-          const hoursVal = parseFloat(manualTimeHours);
-          if (!isNaN(hoursVal)) {
-              const minutesVal = Math.round(hoursVal * 60);
-              if (minutesVal !== item.playtimeManual) {
-                  dataToUpdate.playtimeManual = minutesVal;
-              }
-          }
-      } else if (item.playtimeManual !== null) {
-          // If was manual but now unchecked, reset to null
-          dataToUpdate.playtimeManual = null;
+          const m = parseFloat(manualTimeHours);
+          if (!isNaN(m)) libData.playtimeManual = Math.round(m * 60);
+      } else {
+          libData.playtimeManual = null;
       }
 
-      // Handle Manual Progress
       if (useManualProgress) {
-          let progressVal = parseInt(manualProgress);
-          if (!isNaN(progressVal)) {
-               // Clamp between 0 and 100
-               progressVal = Math.min(100, Math.max(0, progressVal));
-               if (progressVal !== item.progressManual) {
-                   dataToUpdate.progressManual = progressVal;
-               }
-          }
-      } else if (item.progressManual !== null) {
-           dataToUpdate.progressManual = null;
+          const p = parseInt(manualProgress);
+          if (!isNaN(p)) libData.progressManual = Math.min(100, Math.max(0, p));
+      } else {
+          libData.progressManual = null;
       }
 
       const promises = [];
-
-      if (Object.keys(dataToUpdate).length > 0) {
-          promises.push(updateLibraryEntry(item.id, dataToUpdate));
-      }
+      if (Object.keys(libData).length > 0) promises.push(updateLibraryEntry(item.id, libData));
 
       if (showFixMatch) {
           promises.push(fixGameMatch(item.gameId, {
@@ -157,155 +194,386 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           }));
       }
 
+      // 2. Update Game Metadata (Metadata & Media Tabs)
+      const metaData: Parameters<typeof updateGameMetadata>[1] = {};
+      if (title !== item.game.title) metaData.title = title;
+      if (studio !== item.game.studio) metaData.studio = studio;
+      if (releaseDate) metaData.releaseDate = new Date(releaseDate);
+
+      // Compare arrays
+      const currentGenres = item.game.genres ? JSON.parse(item.game.genres) : [];
+      if (JSON.stringify([...genres].sort()) !== JSON.stringify([...currentGenres].sort())) metaData.genres = genres;
+
+      const currentPlatforms = item.game.platforms ? JSON.parse(item.game.platforms) : [];
+      if (JSON.stringify([...platforms].sort()) !== JSON.stringify([...currentPlatforms].sort())) metaData.platforms = platforms;
+
+      // Handle Scores (allow clearing)
+      if (metacritic === "") {
+         if (item.game.metacritic !== null) metaData.metacritic = null;
+      } else {
+         const metaVal = parseInt(metacritic);
+         if (!isNaN(metaVal) && metaVal !== item.game.metacritic) metaData.metacritic = metaVal;
+      }
+
+      if (opencritic === "") {
+          if (item.game.opencritic !== null) metaData.opencritic = null;
+      } else {
+          const openVal = parseInt(opencritic);
+          if (!isNaN(openVal) && openVal !== item.game.opencritic) metaData.opencritic = openVal;
+      }
+
+      // Handle Release Date (allow clearing)
+      if (releaseDate === "") {
+          if (item.game.releaseDate !== null) metaData.releaseDate = null;
+      } else {
+          const dateVal = new Date(releaseDate);
+          if (dateVal.getTime() !== (item.game.releaseDate ? new Date(item.game.releaseDate).getTime() : 0)) {
+              metaData.releaseDate = dateVal;
+          }
+      }
+
+      if (coverImage !== item.game.coverImage) metaData.coverImage = coverImage;
+      if (backgroundImage !== item.game.backgroundImage) metaData.backgroundImage = backgroundImage;
+
+      if (Object.keys(metaData).length > 0) {
+          promises.push(updateGameMetadata(item.gameId, metaData));
+      }
+
       await Promise.all(promises);
       onClose();
-    } catch (error) {
-      console.error("Failed to update game", error);
+    } catch (e) {
+        console.error("Failed to save", e);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
+  };
+
+  const addItem = (list: string[], setList: (l: string[]) => void, val: string, setVal: (v: string) => void) => {
+      if (val.trim() && !list.includes(val.trim())) {
+          setList([...list, val.trim()]);
+          setVal("");
+      }
+  };
+
+  const removeItem = (list: string[], setList: (l: string[]) => void, val: string) => {
+      setList(list.filter(i => i !== val));
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Edit {item.game.title}</DialogTitle>
+      <DialogContent className="sm:max-w-[800px] h-[80vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="p-6 pb-2">
+            <DialogTitle>Edit {item.game.title}</DialogTitle>
+             <DialogDescription className="sr-only">Edit game details</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
 
-          {/* Status */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="status" className="text-right">Status</Label>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Wishlist">Wishlist</SelectItem>
-                <SelectItem value="Backlog">Backlog</SelectItem>
-                <SelectItem value="Up Next">Up Next</SelectItem>
-                <SelectItem value="Playing">Playing</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Abandoned">Abandoned</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Completion Style */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="completion" className="text-right">Goal</Label>
-            <Select value={completionType} onValueChange={setCompletionType}>
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Select goal" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Main">Main Story</SelectItem>
-                <SelectItem value="Extra">Main + Extra</SelectItem>
-                <SelectItem value="100%">100% Completion</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Time Override (Hours) */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="time" className="text-right">Time (hours)</Label>
-            <div className="col-span-3 flex items-center gap-2">
-                <Checkbox
-                    id="manual-time-check"
-                    checked={useManualTime}
-                    onCheckedChange={(c) => setUseManualTime(c === true)}
-                />
-                <Label htmlFor="manual-time-check" className="text-xs text-muted-foreground mr-2">Manual</Label>
-                <Input
-                    id="time"
-                    type="number"
-                    step="0.1"
-                    value={manualTimeHours}
-                    onChange={(e) => setManualTimeHours(e.target.value)}
-                    disabled={!useManualTime}
-                    className="flex-1"
-                />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+            <div className="px-6 border-b">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="general">General</TabsTrigger>
+                    <TabsTrigger value="metadata">Metadata</TabsTrigger>
+                    <TabsTrigger value="media">Media</TabsTrigger>
+                </TabsList>
             </div>
-          </div>
 
-          {/* Progress Override */}
-           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="progress" className="text-right">Progress (%)</Label>
-            <div className="col-span-3 flex items-center gap-2">
-                <Checkbox
-                    id="manual-progress-check"
-                    checked={useManualProgress}
-                    onCheckedChange={(c) => setUseManualProgress(c === true)}
-                />
-                <Label htmlFor="manual-progress-check" className="text-xs text-muted-foreground mr-2">Manual</Label>
-                <Input
-                    id="progress"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={manualProgress}
-                    onChange={(e) => setManualProgress(e.target.value)}
-                    disabled={!useManualProgress}
-                    className="flex-1"
-                />
-            </div>
-          </div>
+            <ScrollArea className="flex-1 p-6">
 
-          {/* Fix Match Toggle */}
-          <div className="flex justify-end">
-              <Button variant="link" size="sm" onClick={() => setShowFixMatch(!showFixMatch)}>
-                  {showFixMatch ? "Cancel Fix Match" : "Fix Match Data (HLTB)"}
-              </Button>
-          </div>
+                {/* --- GENERAL TAB --- */}
+                <TabsContent value="general" className="mt-0 space-y-6">
+                    {/* Status & Goal */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Status</Label>
+                            <Select value={status} onValueChange={setStatus}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Wishlist">Wishlist</SelectItem>
+                                    <SelectItem value="Backlog">Backlog</SelectItem>
+                                    <SelectItem value="Up Next">Up Next</SelectItem>
+                                    <SelectItem value="Playing">Playing</SelectItem>
+                                    <SelectItem value="Completed">Completed</SelectItem>
+                                    <SelectItem value="Abandoned">Abandoned</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Completion Goal</Label>
+                            <Select value={completionType} onValueChange={setCompletionType}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Main">Main Story</SelectItem>
+                                    <SelectItem value="Extra">Main + Extra</SelectItem>
+                                    <SelectItem value="100%">100% Completion</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
 
-          {/* Fix Match Inputs */}
-          {showFixMatch && (
-              <div className="space-y-2 border p-2 rounded-md bg-zinc-50 dark:bg-zinc-900">
-                  <p className="text-xs text-muted-foreground mb-2">Override HLTB Times (Hours)</p>
-                  <div className="grid grid-cols-3 gap-2">
-                      <div>
-                          <Label className="text-xs">Main</Label>
-                          <Input type="number" step="0.1" value={hltbMain} onChange={(e) => setHltbMain(Number(e.target.value))} />
-                      </div>
-                      <div>
-                          <Label className="text-xs">Extra</Label>
-                          <Input type="number" step="0.1" value={hltbExtra} onChange={(e) => setHltbExtra(Number(e.target.value))} />
-                      </div>
-                      <div>
-                          <Label className="text-xs">100%</Label>
-                          <Input type="number" step="0.1" value={hltbCompletionist} onChange={(e) => setHltbCompletionist(Number(e.target.value))} />
-                      </div>
-                  </div>
-              </div>
-          )}
+                    {/* Time & Progress */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                             <div className="flex items-center justify-between">
+                                <Label>Playtime (Hours)</Label>
+                                <div className="flex items-center gap-2">
+                                    <Label htmlFor="manual-time" className="text-xs text-muted-foreground">Manual Override</Label>
+                                    <Checkbox id="manual-time" checked={useManualTime} onCheckedChange={(c) => setUseManualTime(c === true)} />
+                                </div>
+                            </div>
+                            <Input
+                                type="number"
+                                step="0.1"
+                                value={manualTimeHours}
+                                onChange={(e) => setManualTimeHours(e.target.value)}
+                                disabled={!useManualTime}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label>Progress (%)</Label>
+                                <div className="flex items-center gap-2">
+                                    <Label htmlFor="manual-prog" className="text-xs text-muted-foreground">Manual Override</Label>
+                                    <Checkbox id="manual-prog" checked={useManualProgress} onCheckedChange={(c) => setUseManualProgress(c === true)} />
+                                </div>
+                            </div>
+                            <Input
+                                type="number"
+                                min="0" max="100"
+                                value={manualProgress}
+                                onChange={(e) => setManualProgress(e.target.value)}
+                                disabled={!useManualProgress}
+                            />
+                        </div>
+                    </div>
 
-          {/* Tags */}
-          <div className="grid gap-2">
-            <Label>Tags</Label>
-            <div className="flex flex-wrap gap-2">
-                {availableTags.map(tag => {
-                    return (
-                        <TagBadge
-                            key={tag.id}
-                            tag={tag}
-                            initiallySelected={item.tags?.some(t => t.id === tag.id) || false}
-                            libraryId={item.id}
-                        />
-                    )
-                })}
-                 {availableTags.length === 0 && <span className="text-sm text-zinc-500">Go to Settings to create tags.</span>}
-            </div>
-          </div>
+                    {/* Tags */}
+                    <div className="space-y-2">
+                        <Label>Tags</Label>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Create new tag..."
+                                value={newTagName}
+                                onChange={(e) => setNewTagName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreateTag()}
+                            />
+                            <Button variant="outline" size="icon" onClick={handleCreateTag}>
+                                <Plus className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            {availableTags.map(tag => (
+                                <TagBadge
+                                    key={tag.id}
+                                    tag={tag}
+                                    initiallySelected={item.tags?.some(t => t.id === tag.id) || false}
+                                    libraryId={item.id}
+                                />
+                            ))}
+                        </div>
+                    </div>
 
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleSave} disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save Changes
-          </Button>
-        </DialogFooter>
+                    {/* Fix Match */}
+                    <div className="pt-4 border-t">
+                        <Button variant="ghost" size="sm" onClick={() => setShowFixMatch(!showFixMatch)} className="w-full">
+                            {showFixMatch ? "Hide HLTB Data" : "Edit HLTB Data (Fix Match)"}
+                        </Button>
+                        {showFixMatch && (
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                                <div><Label className="text-xs">Main</Label><Input type="number" step="0.1" value={hltbMain} onChange={(e) => setHltbMain(Number(e.target.value))} /></div>
+                                <div><Label className="text-xs">Extra</Label><Input type="number" step="0.1" value={hltbExtra} onChange={(e) => setHltbExtra(Number(e.target.value))} /></div>
+                                <div><Label className="text-xs">100%</Label><Input type="number" step="0.1" value={hltbCompletionist} onChange={(e) => setHltbCompletionist(Number(e.target.value))} /></div>
+                            </div>
+                        )}
+                    </div>
+                </TabsContent>
+
+                {/* --- METADATA TAB --- */}
+                <TabsContent value="metadata" className="mt-0 space-y-6">
+                    <div className="space-y-2">
+                        <Label>Title</Label>
+                        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Studio</Label>
+                            <Input value={studio} onChange={(e) => setStudio(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Release Date</Label>
+                            <Input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Genres</Label>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Add genre..."
+                                value={newGenre}
+                                onChange={(e) => setNewGenre(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && addItem(genres, setGenres, newGenre, setNewGenre)}
+                            />
+                            <Button size="icon" variant="outline" onClick={() => addItem(genres, setGenres, newGenre, setNewGenre)}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                            {genres.map(g => (
+                                <span key={g} className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-md text-xs flex items-center gap-1">
+                                    {g} <button onClick={() => removeItem(genres, setGenres, g)}><X className="h-3 w-3" /></button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Platforms</Label>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Add platform..."
+                                value={newPlatform}
+                                onChange={(e) => setNewPlatform(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && addItem(platforms, setPlatforms, newPlatform, setNewPlatform)}
+                            />
+                            <Button size="icon" variant="outline" onClick={() => addItem(platforms, setPlatforms, newPlatform, setNewPlatform)}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                            {platforms.map(p => (
+                                <span key={p} className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-md text-xs flex items-center gap-1">
+                                    {p} <button onClick={() => removeItem(platforms, setPlatforms, p)}><X className="h-3 w-3" /></button>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label>Metacritic Score</Label>
+                            <Input type="number" value={metacritic} onChange={(e) => setMetacritic(e.target.value)} />
+                         </div>
+                         <div className="space-y-2">
+                            <Label>OpenCritic Score</Label>
+                            <Input type="number" value={opencritic} onChange={(e) => setOpencritic(e.target.value)} />
+                         </div>
+                    </div>
+                </TabsContent>
+
+                {/* --- MEDIA TAB --- */}
+                <TabsContent value="media" className="mt-0 space-y-6">
+                    <div className="space-y-2">
+                        <Label>Find Artwork</Label>
+                        <div className="flex gap-2 items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                Search for covers and backgrounds from IGDB, RAWG, and Steam.
+                            </p>
+                            <Button onClick={() => {
+                                const title = item.game.title;
+                                setMediaQuery(title);
+                                handleMediaSearch(title);
+                            }} disabled={searchingMedia}>
+                                {searchingMedia && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {searchingMedia ? "Searching..." : "Find Artwork"}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6">
+
+                        {/* Search Results Area */}
+                        {(searchedCovers.length > 0 || searchedBackgrounds.length > 0) && (
+                            <div className="space-y-4 border rounded-md p-4 bg-zinc-50 dark:bg-zinc-900/50">
+                                {searchedCovers.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Covers</Label>
+                                        <ScrollArea className="h-[240px] border rounded-md bg-background p-2">
+                                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                                {searchedCovers.map((src, i) => (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setCoverImage(src)}
+                                                        className={`relative aspect-[3/4] rounded-md overflow-hidden border-2 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary ${coverImage === src ? 'border-primary ring-2 ring-primary ring-offset-2' : 'border-transparent hover:border-zinc-300'}`}
+                                                    >
+                                                        <Image src={src} alt="" fill className="object-cover" sizes="(max-width: 768px) 25vw, 15vw" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </div>
+                                )}
+
+                                {searchedBackgrounds.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Backgrounds</Label>
+                                        <ScrollArea className="h-[200px] border rounded-md bg-background p-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                {searchedBackgrounds.map((src, i) => (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => setBackgroundImage(src)}
+                                                        className={`relative aspect-video rounded-md overflow-hidden border-2 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary ${backgroundImage === src ? 'border-primary ring-2 ring-primary ring-offset-2' : 'border-transparent hover:border-zinc-300'}`}
+                                                    >
+                                                        <Image src={src} alt="" fill className="object-cover" sizes="(max-width: 768px) 50vw, 33vw" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Current Selection & Manual Input */}
+                        <div className="space-y-4 pt-4 border-t">
+                             <Label className="text-base font-semibold">Current Selection</Label>
+
+                             <div className="grid sm:grid-cols-2 gap-6">
+                                {/* Cover Selection */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-muted-foreground">Cover Art</Label>
+                                    <div className="aspect-[3/4] relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm w-[140px] mx-auto sm:mx-0">
+                                        {coverImage ? (
+                                            <Image src={coverImage} alt="Cover" fill className="object-cover" />
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Cover</div>
+                                        )}
+                                    </div>
+                                    <Input
+                                        value={coverImage}
+                                        onChange={(e) => setCoverImage(e.target.value)}
+                                        placeholder="Cover URL"
+                                        className="font-mono text-xs h-8"
+                                    />
+                                </div>
+
+                                {/* Background Selection */}
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-muted-foreground">Background Art</Label>
+                                    <div className="aspect-video relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm">
+                                        {backgroundImage ? (
+                                            <Image src={backgroundImage} alt="Background" fill className="object-cover" />
+                                        ) : (
+                                             <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Background</div>
+                                        )}
+                                    </div>
+                                     <Input
+                                        value={backgroundImage}
+                                        onChange={(e) => setBackgroundImage(e.target.value)}
+                                        placeholder="Background URL"
+                                        className="font-mono text-xs h-8"
+                                    />
+                                </div>
+                             </div>
+                        </div>
+                    </div>
+                </TabsContent>
+            </ScrollArea>
+
+            <DialogFooter className="p-6 pt-2 border-t mt-auto">
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button onClick={handleSave} disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                </Button>
+            </DialogFooter>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
