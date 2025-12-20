@@ -49,9 +49,7 @@ export function useImageColor(url: string | null | undefined): { colors: ImageCo
 
         img.onerror = () => {
              if (isMounted) {
-                 console.warn('Image failed to load for color extraction', url);
-                 // Try again without crossOrigin if it was a CORS issue?
-                 // But canvas tainting will block extracting data.
+                 // Silently fail to avoid console noise for 404s or CORS blocks
                  setLoading(false);
              }
         };
