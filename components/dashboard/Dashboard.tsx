@@ -8,9 +8,18 @@ import { calculateProgress } from '@/lib/format-utils';
 import { AddGameWizardDialog } from './AddGameWizardDialog';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trash2, X, CheckSquare, Square } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { AnimatePresence, motion } from 'framer-motion';
+import { removeGamesFromLibrary } from '@/actions/library';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
@@ -46,6 +55,54 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameWithLibrary | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Delete Mode State
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(new Set());
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  const toggleDeleteMode = () => {
+    setIsDeleteMode(!isDeleteMode);
+    setSelectedGameIds(new Set());
+  };
+
+  const toggleSelection = (gameId: string) => {
+    const newSelected = new Set(selectedGameIds);
+    if (newSelected.has(gameId)) {
+        newSelected.delete(gameId);
+    } else {
+        newSelected.add(gameId);
+    }
+    setSelectedGameIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedGameIds.size === filteredLibrary.length) {
+        setSelectedGameIds(new Set());
+    } else {
+        setSelectedGameIds(new Set(filteredLibrary.map(g => g.gameId)));
+    }
+  };
+
+  const handleDelete = async () => {
+      if (selectedGameIds.size === 0) return;
+
+      try {
+          const idsToDelete = Array.from(selectedGameIds);
+          // Optimistic Update: Immediately remove from local state
+          setLibrary(prev => prev.filter(g => !selectedGameIds.has(g.gameId)));
+
+          await removeGamesFromLibrary(idsToDelete);
+
+          setIsDeleteConfirmOpen(false);
+          setIsDeleteMode(false);
+          setSelectedGameIds(new Set());
+      } catch (error) {
+          console.error("Failed to delete games", error);
+          // Revert on error could be implemented here by reloading the page or fetching data
+          // But for now, we rely on the initial state being correct if we didn't mutate it destructively (we filtered a new array)
+      }
+  };
 
   // Filter Logic
   const filteredLibrary = library.filter(item => {
@@ -113,8 +170,40 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                   <Plus className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Add Game</span>
               </Button>
+
+              {isDeleteMode ? (
+                  <>
+                    <Button variant="outline" onClick={toggleDeleteMode} size="icon" className="shrink-0">
+                        <X className="h-4 w-4" />
+                    </Button>
+                    <Button variant="destructive" onClick={() => setIsDeleteConfirmOpen(true)} disabled={selectedGameIds.size === 0} className="whitespace-nowrap">
+                        <Trash2 className="h-4 w-4 md:mr-2" />
+                        <span className="hidden md:inline">Delete ({selectedGameIds.size})</span>
+                    </Button>
+                  </>
+              ) : (
+                  <Button variant="secondary" size="icon" onClick={toggleDeleteMode} className="shrink-0">
+                      <Trash2 className="h-4 w-4" />
+                  </Button>
+              )}
           </div>
       </div>
+
+      {isDeleteMode && (
+          <div className="flex justify-end -mt-2 mb-2">
+              <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
+                  {selectedGameIds.size === filteredLibrary.length && filteredLibrary.length > 0 ? (
+                      <>
+                        <CheckSquare className="h-4 w-4 mr-2" /> Unselect All
+                      </>
+                  ) : (
+                      <>
+                        <Square className="h-4 w-4 mr-2" /> Select All
+                      </>
+                  )}
+              </Button>
+          </div>
+      )}
 
       {/* Horizontal Filter Strip */}
       <FilterStrip
@@ -151,6 +240,9 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                         item={item}
                         paceFactor={userPaceFactor}
                         onClick={() => handleGameClick(item)}
+                        isDeleteMode={isDeleteMode}
+                        isSelected={selectedGameIds.has(item.gameId)}
+                        onToggleSelect={() => toggleSelection(item.gameId)}
                     />
                 ))
             )}
@@ -158,6 +250,21 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
       </motion.div>
 
       {/* Modals */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Confirm Deletion</DialogTitle>
+                <DialogDescription>
+                    Are you sure you want to remove {selectedGameIds.size} game{selectedGameIds.size !== 1 && 's'} from your library?
+                    This action cannot be undone, but the games will remain in the database.
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDeleteConfirmOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleDelete}>Delete Games</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* <AddGameModal isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} /> */}
       <AddGameWizardDialog isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} />
 
