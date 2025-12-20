@@ -136,12 +136,12 @@ export async function getUserStatistics(): Promise<UserStatistics> {
   library.forEach((entry) => {
     if (entry.game.platforms) {
       try {
-        const platforms = JSON.parse(entry.game.platforms);
+        const platforms = entry.game.platforms;
         if (Array.isArray(platforms)) {
             platforms.forEach((p: any) => {
                 let name = "";
                 if (typeof p === "string") name = p;
-                else if (typeof p === "object" && p.name) name = p.name; // IGDB structure often
+                else if (typeof p === "object" && p !== null && p.name) name = p.name; // IGDB structure often
 
                 if (name) {
                     platformCounts[name] = (platformCounts[name] || 0) + 1;

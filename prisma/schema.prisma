@@ -24,7 +24,7 @@ model Account {
 
   // Champ spécifique pour supporter le provider Steam qui envoie parfois cette donnée en doublon.
   // Fix: Ensure this field is present for NextAuth Steam provider.
-  steamId            String?
+  steamId String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -44,66 +44,102 @@ model VerificationToken {
   token      String   @unique
   expires    DateTime
 
-
   @@unique([identifier, token])
 }
 
 model User {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
   emailVerified DateTime?
   image         String?
   password      String?
-  steamId       String?  @unique
-  preferences   String?  // JSON string
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  accounts      Account[]
-  sessions      Session[]
-  library       UserLibrary[]
-  tags          Tag[]
+  steamId       String?   @unique
+  preferences   String? // JSON string
+  isPublic      Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  library  UserLibrary[]
+  tags     Tag[]
+
+  // Social
+  followedBy User[] @relation("UserFollows")
+  following  User[] @relation("UserFollows")
+
+  // Activity
+  activityLogs ActivityLog[]
 }
 
 model Game {
-  id                String   @id // ID externe (IGDB ou Steam généré)
-  title             String
-  coverImage        String?
-  backgroundImage   String?  // Image de fond haute qualité (RAWG)
-  releaseDate       DateTime?
-  description       String?  @db.Text
-  rawgRating        Float?   // Note des joueurs (sur 5 ou 10)
-  metacritic        Int?     // Score critique (souvent via RAWG)
-  opencritic        Int?     // Score OpenCritic (RapidAPI)
-  igdbId            String?  @unique // Indexé pour recherche rapide
-  studio            String?  // Nom du studio/développeur
-  genres            String?  // JSON string
-  platforms         String?  // JSON string
-  hltbTimes         String?  // JSON string for HLTB times
-  scores            String?  // JSON string for scores (metacritic, user rating)
-  dataMissing       Boolean  @default(false)
-  dataFetched       Boolean  @default(false)
-  lastSync          DateTime? // Pour savoir quand on a mis à jour pour la dernière fois
-  hltbMain          Int?     // En minutes (Keeping for backward compatibility or direct access if needed, but logic seems to use JSON or different fields)
+  id              String    @id // ID externe (IGDB ou Steam généré)
+  title           String
+  coverImage      String?
+  backgroundImage String? // Image de fond haute qualité (RAWG)
+  releaseDate     DateTime?
+  description     String?   @db.Text
+
+  // Media
+  screenshots String[]
+  videos      String[] // trailers
+
+  // External Links
+  steamUrl      String?
+  opencriticUrl String?
+  igdbUrl       String?
+  hltbUrl       String?
+
+  // Scores
+  rawgRating Float? // Note des joueurs (sur 5 ou 10)
+  metacritic Int? // Score critique (souvent via RAWG) - Keeping for legacy
+  opencritic Int? // Score OpenCritic (RapidAPI) - Keeping for legacy
+
+  metacriticScore Int?
+  opencriticScore Int?
+  igdbScore       Int?
+
+  igdbId    String? @unique // Indexé pour recherche rapide
+  studio    String? // Nom du studio/développeur
+  genres    String? // JSON string
+  platforms Json? // Structure: [{ name: "Switch", date: "2017-10-27" }]
+
+  // Playtime Data
+  timeToBeat     Json? // { main, extra, completionist }
+  igdbTime       Json? // { storyline, completionist }
+  customPlaytime Int? // Computed field (in minutes)
+
+  hltbTimes String? // JSON string for HLTB times
+  scores    String? // JSON string for scores (metacritic, user rating)
+
+  dataMissing Boolean   @default(false)
+  dataFetched Boolean   @default(false)
+  lastSync    DateTime? // Pour savoir quand on a mis à jour pour la dernière fois
+
+  hltbMain          Int? // En minutes
   hltbExtra         Int?
   hltbCompletionist Int?
-  updatedAt         DateTime @updatedAt
-  users             UserLibrary[]
+
+  updatedAt    DateTime      @updatedAt
+  users        UserLibrary[]
+  activityLogs ActivityLog[]
 }
 
 model UserLibrary {
-  id             String   @id @default(cuid())
-  userId         String
-  gameId         String
-  status         String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
-  playtimeSteam  Int      @default(0) // En minutes
-  playtimeManual Int?     // Override
-  progressManual Int?     // Percentage 0-100 manual override
-  targetedCompletionType String @default("MAIN")
-  createdAt      DateTime @default(now())
-  user           User     @relation(fields: [userId], references: [id])
-  game           Game     @relation(fields: [gameId], references: [id])
-  tags           Tag[]
+  id                     String   @id @default(cuid())
+  userId                 String
+  gameId                 String
+  status                 String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
+  playtimeSteam          Int      @default(0) // En minutes
+  playtimeManual         Int? // Override
+  progressManual         Int? // Percentage 0-100 manual override
+  targetedCompletionType String   @default("MAIN")
+  createdAt              DateTime @default(now())
+  user                   User     @relation(fields: [userId], references: [id])
+  game                   Game     @relation(fields: [gameId], references: [id])
+  tags                   Tag[]
 
   @@unique([userId, gameId])
 }
@@ -116,4 +152,19 @@ model Tag {
   libraries UserLibrary[]
 
   @@unique([userId, name])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  gameId    String
+  type      String // e.g., "PLAY_SESSION", "STATUS_CHANGE"
+  details   Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gameId])
 }

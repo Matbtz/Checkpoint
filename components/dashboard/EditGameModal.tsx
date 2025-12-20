@@ -12,8 +12,8 @@ import { updateLibraryEntry, fixGameMatch } from '@/actions/library';
 import { updateGameMetadata, searchGameImages } from '@/actions/game';
 import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
-import { Loader2, Plus, Search, X } from 'lucide-react';
-import { useEffect, useState, useTransition } from 'react';
+import { Loader2, Plus, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
@@ -88,7 +88,17 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [studio, setStudio] = useState(item.game.studio || "");
   const [releaseDate, setReleaseDate] = useState(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
   const [genres, setGenres] = useState<string[]>(item.game.genres ? JSON.parse(item.game.genres) : []);
-  const [platforms, setPlatforms] = useState<string[]>(item.game.platforms ? JSON.parse(item.game.platforms) : []);
+
+  // Handle platforms: Json type (Array of strings or objects)
+  const [platforms, setPlatforms] = useState<string[]>(() => {
+      const p = item.game.platforms;
+      if (Array.isArray(p)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return p.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean);
+      }
+      return [];
+  });
+
   const [metacritic, setMetacritic] = useState(item.game.metacritic?.toString() || "");
   const [opencritic, setOpencritic] = useState(item.game.opencritic?.toString() || "");
 
@@ -122,7 +132,14 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       setStudio(item.game.studio || "");
       setReleaseDate(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
       setGenres(item.game.genres ? JSON.parse(item.game.genres) : []);
-      setPlatforms(item.game.platforms ? JSON.parse(item.game.platforms) : []);
+
+      if (Array.isArray(item.game.platforms)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setPlatforms(item.game.platforms.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean));
+      } else {
+          setPlatforms([]);
+      }
+
       setMetacritic(item.game.metacritic?.toString() || "");
       setOpencritic(item.game.opencritic?.toString() || "");
 
@@ -204,7 +221,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       const currentGenres = item.game.genres ? JSON.parse(item.game.genres) : [];
       if (JSON.stringify([...genres].sort()) !== JSON.stringify([...currentGenres].sort())) metaData.genres = genres;
 
-      const currentPlatforms = item.game.platforms ? JSON.parse(item.game.platforms) : [];
+      const currentPlatformsRaw = item.game.platforms;
+      const currentPlatforms = Array.isArray(currentPlatformsRaw)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? currentPlatformsRaw.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean)
+        : [];
       if (JSON.stringify([...platforms].sort()) !== JSON.stringify([...currentPlatforms].sort())) metaData.platforms = platforms;
 
       // Handle Scores (allow clearing)

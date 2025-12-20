@@ -38,7 +38,8 @@ export async function updateGameMetadata(gameId: string, data: {
   if (data.title !== undefined) updateData.title = data.title;
   if (data.studio !== undefined) updateData.studio = data.studio;
   if (data.genres !== undefined) updateData.genres = JSON.stringify(data.genres);
-  if (data.platforms !== undefined) updateData.platforms = JSON.stringify(data.platforms);
+  // platforms is now Json type in schema (array of objects or strings), passing array directly
+  if (data.platforms !== undefined) updateData.platforms = data.platforms;
   if (data.metacritic !== undefined) updateData.metacritic = data.metacritic;
   if (data.opencritic !== undefined) updateData.opencritic = data.opencritic;
   if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate;
