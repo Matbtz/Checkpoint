@@ -21,15 +21,23 @@ export async function extractDominantColors(imageUrl: string | null): Promise<Ex
     });
 
     const buffer = Buffer.from(response.data);
-    const contentType = response.headers['content-type'] || 'image/jpeg';
+    let contentType = response.headers['content-type'] || 'image/jpeg';
+
+    // Fallback: Infer from URL if content-type is generic
+    if (!contentType || contentType === 'application/octet-stream') {
+      const ext = imageUrl.split('.').pop()?.toLowerCase();
+      if (ext === 'png') contentType = 'image/png';
+      else if (ext === 'gif') contentType = 'image/gif';
+      else contentType = 'image/jpeg';
+    }
 
     const colors = await getColors(buffer, contentType);
 
     if (colors && colors.length > 0) {
-        return {
-            primary: colors[0].hex(),
-            secondary: colors.length > 1 ? colors[1].hex() : null
-        };
+      return {
+        primary: colors[0].hex(),
+        secondary: colors.length > 1 ? colors[1].hex() : null
+      };
     }
 
     return { primary: null, secondary: null };
