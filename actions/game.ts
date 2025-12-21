@@ -191,8 +191,43 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
         });
     }
 
+    const [validCovers, validBackgrounds] = await Promise.all([
+        filterValidUrls(Array.from(covers)),
+        filterValidUrls(Array.from(backgrounds))
+    ]);
+
     return {
-        covers: Array.from(covers),
-        backgrounds: Array.from(backgrounds)
+        covers: validCovers,
+        backgrounds: validBackgrounds
     };
+}
+
+async function filterValidUrls(urls: string[]): Promise<string[]> {
+    if (urls.length === 0) return [];
+
+    const results = await Promise.allSettled(
+        urls.map(async (url) => {
+            try {
+                // Set a timeout to avoid hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+                const res = await fetch(url, {
+                    method: 'HEAD',
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    }
+                });
+                clearTimeout(timeoutId);
+                return res.ok ? url : null;
+            } catch {
+                return null;
+            }
+        })
+    );
+
+    return results
+        .map(r => r.status === 'fulfilled' ? r.value : null)
+        .filter((url): url is string => url !== null);
 }

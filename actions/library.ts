@@ -13,7 +13,9 @@ export async function updateLibraryEntry(
         playtimeManual?: number | null,
         progressManual?: number | null,
         targetedCompletionType?: string,
-        customCoverImage?: string | null
+        customCoverImage?: string | null,
+        primaryColor?: string | null,
+        secondaryColor?: string | null
     }
 ) {
   const session = await auth();
@@ -45,6 +47,10 @@ export async function updateLibraryEntry(
       updateData.secondaryColor = null;
   }
 
+  // Explicit color override (takes precedence if provided)
+  if (data.primaryColor !== undefined) updateData.primaryColor = data.primaryColor;
+  if (data.secondaryColor !== undefined) updateData.secondaryColor = data.secondaryColor;
+
   await prisma.userLibrary.update({
     where: {
       id: userLibraryId,
@@ -54,6 +60,12 @@ export async function updateLibraryEntry(
   });
 
   revalidatePath('/dashboard');
+}
+
+export async function extractColorsAction(url: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+    return await extractDominantColors(url);
 }
 
 export async function updateGameStatus(gameId: string, status: string) {

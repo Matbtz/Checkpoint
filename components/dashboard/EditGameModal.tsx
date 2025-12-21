@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { updateLibraryEntry, fixGameMatch } from '@/actions/library';
+import { updateLibraryEntry, fixGameMatch, extractColorsAction } from '@/actions/library';
 import { updateGameMetadata, searchGameImages } from '@/actions/game';
 import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
@@ -213,9 +213,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       // Calculate the effective current cover (user custom or global default)
       const currentEffectiveCover = item.customCoverImage || item.game.coverImage || "";
       const globalCover = item.game.coverImage || "";
+      let coverChanged = false;
 
       // Only include in payload if the image actually changed from what is currently displayed/stored
       if (coverImage !== currentEffectiveCover) {
+           coverChanged = true;
            if (coverImage === globalCover) {
                // User changed back to the global default -> Reset custom field to null
                libData.customCoverImage = null;
@@ -262,7 +264,26 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
 
       // We no longer update the global game cover from here, we use customCoverImage on UserLibrary
       // if (coverImage !== item.game.coverImage) metaData.coverImage = coverImage;
-      if (backgroundImage !== item.game.backgroundImage) metaData.backgroundImage = backgroundImage;
+      if (backgroundImage !== item.game.backgroundImage) {
+          metaData.backgroundImage = backgroundImage;
+
+          // If background changed AND cover did NOT change, we want to update the colors from the new background
+          // This allows users to "fix" colors by choosing a background, without overwriting a custom cover's colors if they are also setting one.
+          // (If they set a custom cover, updateLibraryEntry handles extraction from that cover automatically).
+          if (!coverChanged && !item.customCoverImage && backgroundImage) {
+              try {
+                   const colors = await extractColorsAction(backgroundImage);
+                   if (colors.primary) {
+                       libData.primaryColor = colors.primary;
+                       libData.secondaryColor = colors.secondary;
+                   }
+              } catch (e) {
+                  console.error("Failed to extract colors from background:", e);
+              }
+          }
+      }
+
+      if (Object.keys(libData).length > 0) promises.push(updateLibraryEntry(item.id, libData));
 
       if (Object.keys(metaData).length > 0) {
           promises.push(updateGameMetadata(item.gameId, metaData));
