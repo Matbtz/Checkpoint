@@ -22,20 +22,20 @@ export async function updateLibraryEntry(
   // Prepare update data
   const updateData: any = { ...data };
 
-  // If customCoverImage is being updated (and is not null), extract colors
-  if (data.customCoverImage) {
+  // If customCoverImage is present (string)
+  if (data.customCoverImage && typeof data.customCoverImage === 'string') {
       try {
           const colors = await extractDominantColors(data.customCoverImage);
-          if (colors) {
+          if (colors.primary) {
               updateData.primaryColor = colors.primary;
               updateData.secondaryColor = colors.secondary;
           }
       } catch (e) {
           console.error("Failed to extract colors for custom cover:", e);
-          // Don't fail the update, just skip colors
       }
-  } else if (data.customCoverImage === null) {
-      // If clearing the custom cover, clear the colors too (so it falls back to game colors)
+  }
+  // If explicitly null (clearing)
+  else if (data.customCoverImage === null) {
       updateData.primaryColor = null;
       updateData.secondaryColor = null;
   }
