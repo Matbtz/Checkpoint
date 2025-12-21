@@ -52,35 +52,29 @@ export function isReleased(releaseDate: Date): boolean {
 
 // Define HLTBTimes interface to avoid 'any'
 export interface HLTBTimes {
-    main?: number;
-    extra?: number;
-    completionist?: number;
+    main?: number | null;
+    extra?: number | null;
+    completionist?: number | null;
 }
 
-export function calculateProgress(playedMinutes: number, hltbTimes: HLTBTimes | string | null | undefined, targetType: string): number {
+export function calculateProgress(playedMinutes: number, hltbTimes: HLTBTimes | null | undefined, targetType: string): number {
     if (!hltbTimes) return 0;
 
     let targetMinutes = 0;
-
-    // Parse HLTB times if string
-    const times: HLTBTimes = typeof hltbTimes === 'string' ? JSON.parse(hltbTimes) : hltbTimes;
-
-    // Convert HLTB hours to minutes. HLTB usually stores hours (e.g., 10.5).
-
     let targetHours = 0;
 
     switch (targetType) {
         case 'Main':
-            targetHours = times.main || 0;
+            targetHours = hltbTimes.main || 0;
             break;
         case 'Extra':
-            targetHours = times.extra || 0;
+            targetHours = hltbTimes.extra || 0;
             break;
         case '100%':
-            targetHours = times.completionist || 0;
+            targetHours = hltbTimes.completionist || 0;
             break;
         default:
-            targetHours = times.main || 0;
+            targetHours = hltbTimes.main || 0;
     }
 
     if (targetHours === 0) return 0;

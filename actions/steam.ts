@@ -118,7 +118,6 @@ export async function importGames(games: SteamGame[]) {
                 studio: undefined as string | undefined,
                 description: undefined as string | undefined,
                 releaseDate: undefined as Date | undefined,
-                metacritic: undefined as number | undefined,
                 platforms: JSON.stringify(["PC", "Steam Deck"]), // Default as requested
                 primaryColor,
                 secondaryColor
@@ -151,11 +150,6 @@ export async function importGames(games: SteamGame[]) {
                     // Extract Release Date
                     if (igdbGame.first_release_date) {
                         enrichedData.releaseDate = new Date(igdbGame.first_release_date * 1000);
-                    }
-
-                    // Extract Metacritic (Aggregated Rating)
-                    if (igdbGame.aggregated_rating) {
-                        enrichedData.metacritic = Math.round(igdbGame.aggregated_rating);
                     }
                 }
             } catch (error) {

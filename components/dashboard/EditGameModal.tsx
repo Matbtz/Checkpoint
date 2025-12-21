@@ -73,11 +73,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [manualProgress, setManualProgress] = useState(item.progressManual?.toString() || '0');
 
   // Fix Match (HLTB)
-  const hltbTimes = item.game.hltbTimes ? JSON.parse(item.game.hltbTimes) : {};
+  // Use flat fields
   const [showFixMatch, setShowFixMatch] = useState(false);
-  const [hltbMain, setHltbMain] = useState(hltbTimes.main || 0);
-  const [hltbExtra, setHltbExtra] = useState(hltbTimes.extra || 0);
-  const [hltbCompletionist, setHltbCompletionist] = useState(hltbTimes.completionist || 0);
+  const [hltbMain, setHltbMain] = useState(item.game.hltbMain || 0);
+  const [hltbExtra, setHltbExtra] = useState(item.game.hltbExtra || 0);
+  const [hltbCompletionist, setHltbCompletionist] = useState(item.game.hltbCompletionist || 0);
 
   // Tags
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -99,8 +99,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       return [];
   });
 
-  const [metacritic, setMetacritic] = useState(item.game.metacritic?.toString() || "");
-  const [opencritic, setOpencritic] = useState(item.game.opencritic?.toString() || "");
+  const [opencritic, setOpencritic] = useState(item.game.opencriticScore?.toString() || "");
 
   const [newGenre, setNewGenre] = useState("");
   const [newPlatform, setNewPlatform] = useState("");
@@ -140,8 +139,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           setPlatforms([]);
       }
 
-      setMetacritic(item.game.metacritic?.toString() || "");
-      setOpencritic(item.game.opencritic?.toString() || "");
+      setOpencritic(item.game.opencriticScore?.toString() || "");
 
       // Reset Media
       setCoverImage(item.customCoverImage || item.game.coverImage || "");
@@ -245,18 +243,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       if (JSON.stringify([...platforms].sort()) !== JSON.stringify([...currentPlatforms].sort())) metaData.platforms = platforms;
 
       // Handle Scores (allow clearing)
-      if (metacritic === "") {
-         if (item.game.metacritic !== null) metaData.metacritic = null;
-      } else {
-         const metaVal = parseInt(metacritic);
-         if (!isNaN(metaVal) && metaVal !== item.game.metacritic) metaData.metacritic = metaVal;
-      }
-
       if (opencritic === "") {
-          if (item.game.opencritic !== null) metaData.opencritic = null;
+          if (item.game.opencriticScore !== null) metaData.opencriticScore = null;
       } else {
           const openVal = parseInt(opencritic);
-          if (!isNaN(openVal) && openVal !== item.game.opencritic) metaData.opencritic = openVal;
+          if (!isNaN(openVal) && openVal !== item.game.opencriticScore) metaData.opencriticScore = openVal;
       }
 
       // Handle Release Date (allow clearing)
@@ -483,10 +474,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-2">
-                            <Label>Metacritic Score</Label>
-                            <Input type="number" value={metacritic} onChange={(e) => setMetacritic(e.target.value)} />
-                         </div>
                          <div className="space-y-2">
                             <Label>OpenCritic Score</Label>
                             <Input type="number" value={opencritic} onChange={(e) => setOpencritic(e.target.value)} />

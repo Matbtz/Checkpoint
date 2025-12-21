@@ -47,7 +47,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
   // Scores
   const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
-  const [selectedScoreSource, setSelectedScoreSource] = useState<'metacritic' | 'opencritic'>('metacritic');
 
   // Status & Goal
   const [status, setStatus] = useState<string>('BACKLOG');
@@ -140,7 +139,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     try {
         // Fetch OpenCritic if not present
         // We do this BEFORE switching view
-        let score = game.opencritic;
+        let score = game.opencriticScore;
 
         if (!score && game.source !== 'manual') {
             try {
@@ -176,12 +175,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         // Set fetched score
         if (score) {
             setFetchedOpenCritic(score);
-            setSelectedScoreSource('opencritic');
         } else {
             setFetchedOpenCritic(null);
-            if (game.metacritic) {
-                setSelectedScoreSource('metacritic');
-            }
         }
 
         setStep('customize');
@@ -202,12 +197,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     const coverImage = customCoverUrl || (selectedGame.availableCovers.length > 0 ? selectedGame.availableCovers[selectedCoverIndex] : '') || '';
     const backgroundImage = customBackgroundUrl || (selectedGame.availableBackgrounds.length > 0 ? selectedGame.availableBackgrounds[selectedBackgroundIndex] : '') || undefined;
 
-    let finalMetacritic = selectedGame.metacritic;
-
-    if (selectedScoreSource === 'opencritic') {
-        finalMetacritic = fetchedOpenCritic || selectedGame.opencritic || null;
-    }
-
     const finalData = {
         id: selectedGame.id,
         title,
@@ -215,8 +204,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         backgroundImage,
         releaseDate: selectedGame.releaseDate,
         studio,
-        metacritic: finalMetacritic || undefined,
-        opencritic: fetchedOpenCritic || selectedGame.opencritic || null,
+            opencriticScore: fetchedOpenCritic || selectedGame.opencriticScore || null,
         source: selectedGame.source,
         genres: JSON.stringify(genres),
         platforms: platforms, // Json type, pass array directly
@@ -568,31 +556,14 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
                                 {/* Compact Scores - Always Row */}
                                 <div className="space-y-3 pt-4 border-t">
-                                    <Label className="text-base font-semibold">Display Score</Label>
-                                    <RadioGroup
-                                        value={selectedScoreSource}
-                                        onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')}
-                                        className="flex flex-row gap-6"
-                                    >
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="metacritic" id="score-meta" />
-                                            <Label htmlFor="score-meta" className="cursor-pointer flex items-center gap-2 font-normal">
-                                                <span className="font-bold text-sm">Metacritic:</span>
-                                                <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(selectedGame?.metacritic))}>
-                                                    {selectedGame?.metacritic || 'N/A'}
-                                                </Badge>
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="opencritic" id="score-open" />
-                                            <Label htmlFor="score-open" className="cursor-pointer flex items-center gap-2 font-normal">
-                                                <span className="font-bold text-sm">OpenCritic:</span>
-                                                <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
-                                                    {fetchedOpenCritic || selectedGame?.opencritic || 'N/A'}
-                                                </Badge>
-                                            </Label>
-                                        </div>
-                                    </RadioGroup>
+                                    <div className="flex items-center space-x-2">
+                                        <Label className="cursor-pointer flex items-center gap-2 font-normal">
+                                            <span className="font-bold text-sm">OpenCritic:</span>
+                                            <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(fetchedOpenCritic || selectedGame?.opencriticScore))}>
+                                                {fetchedOpenCritic || selectedGame?.opencriticScore || 'N/A'}
+                                            </Badge>
+                                        </Label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -13,8 +13,7 @@ export async function updateGameMetadata(gameId: string, data: {
   studio?: string;
   genres?: string[]; // Expecting array, will JSON.stringify
   platforms?: string[]; // Expecting array, will JSON.stringify
-  metacritic?: number | null;
-  opencritic?: number | null;
+  opencriticScore?: number | null;
   releaseDate?: Date | null;
   coverImage?: string;
   backgroundImage?: string;
@@ -40,8 +39,7 @@ export async function updateGameMetadata(gameId: string, data: {
   if (data.genres !== undefined) updateData.genres = JSON.stringify(data.genres);
   // platforms is now Json type in schema (array of objects or strings), passing array directly
   if (data.platforms !== undefined) updateData.platforms = data.platforms;
-  if (data.metacritic !== undefined) updateData.metacritic = data.metacritic;
-  if (data.opencritic !== undefined) updateData.opencritic = data.opencritic;
+  if (data.opencriticScore !== undefined) updateData.opencriticScore = data.opencriticScore;
   if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate;
   if (data.coverImage !== undefined) updateData.coverImage = data.coverImage;
   if (data.backgroundImage !== undefined) updateData.backgroundImage = data.backgroundImage;

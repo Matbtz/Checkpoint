@@ -21,7 +21,7 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
   }
 
   const dataToUpdate: any = {
-    lastSync: new Date(),
+    updatedAt: new Date(),
     dataFetched: true,
     dataMissing: false
   };
@@ -69,16 +69,6 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
         // description: rawgData.description_raw (si dispo)
         if (rawgDetails.description_raw || rawgDetails.description) {
             dataToUpdate.description = rawgDetails.description_raw || rawgDetails.description;
-        }
-
-        // rawgRating: rawgData.rating
-        if (rawgDetails.rating) {
-            dataToUpdate.rawgRating = rawgDetails.rating;
-        }
-
-        // metacritic: rawgData.metacritic
-        if (rawgDetails.metacritic) {
-            dataToUpdate.metacritic = rawgDetails.metacritic;
         }
 
         // Genres
@@ -129,25 +119,9 @@ export async function enrichGameData(gameId: string, gameTitle: string): Promise
             const extraHours = Math.round((hltbResult.extra / 60) * 10) / 10;
             const completionistHours = Math.round((hltbResult.completionist / 60) * 10) / 10;
 
-            // Update specific fields (assuming Int in schema, but we rounded to 1 decimal.
-            // If Schema is Int, it will truncate or round.
-            // Schema says `Int?`. So 10.5 becomes 10 or 11.
-            // Wait, calculateProgress expects hours, but if schema stores Int, we lose precision.
-            // Let's check schema again. `hltbMain Int?`.
-            // If I store 10.5, Prisma might error or round.
-            // However, `hltbTimes` stores JSON string.
-            // We should store the float values in `hltbTimes` JSON, and maybe rounded Ints in the columns.
-
             dataToUpdate.hltbMain = Math.round(mainHours);
             dataToUpdate.hltbExtra = Math.round(extraHours);
             dataToUpdate.hltbCompletionist = Math.round(completionistHours);
-
-            // Store full precision (well, 1 decimal) in JSON for the UI to use if it prefers
-            dataToUpdate.hltbTimes = JSON.stringify({
-                main: mainHours,
-                extra: extraHours,
-                completionist: completionistHours
-            });
         }
     } catch (error) {
         console.error("HLTB Error:", error);

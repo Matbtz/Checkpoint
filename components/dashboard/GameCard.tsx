@@ -37,24 +37,16 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
     }
   }, [game.genres]);
 
-  const scores = useMemo(() => {
-      try {
-          const parsed = game.scores ? JSON.parse(game.scores) : {};
-          if (game.metacritic) parsed.metacritic = game.metacritic;
-          return parsed;
-      } catch {
-          return { metacritic: game.metacritic };
-      }
-  }, [game.scores, game.metacritic]);
-
   const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
 
   const adjustedHltbTimes = useMemo(() => {
-      const times = game.hltbTimes ? JSON.parse(game.hltbTimes as string) : {};
-      if (game.hltbMain) times.main = game.hltbMain;
-      if (game.hltbExtra) times.extra = game.hltbExtra;
-      if (game.hltbCompletionist) times.completionist = game.hltbCompletionist;
+      // Use flat fields directly
+      const times = {
+          main: game.hltbMain || 0,
+          extra: game.hltbExtra || 0,
+          completionist: game.hltbCompletionist || 0
+      };
 
       if (times.main) times.main *= paceFactor;
       if (times.extra) times.extra *= paceFactor;
@@ -85,11 +77,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
     setCurrentCoverImage(item.customCoverImage || game.coverImage || game.backgroundImage || '');
   }, [item.customCoverImage, game.coverImage, game.backgroundImage]);
 
-  const getScoreColor = (score: number) => {
-    if (score >= 75) return 'border-green-500 text-green-500 shadow-[0_0_15px_-3px_rgba(34,197,94,0.4)]';
-    if (score >= 50) return 'border-yellow-500 text-yellow-500 shadow-[0_0_15px_-3px_rgba(234,179,8,0.4)]';
-    return 'border-red-500 text-red-500';
-  };
 
   return (
     <motion.div
@@ -229,19 +216,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
             </div>
         </div>
 
-        {/* Absolute Score Overlay */}
-        {scores.metacritic && (
-            <div className="absolute top-3 right-3 z-30 pointer-events-none">
-                <div className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full border-2 bg-black/60 backdrop-blur-md shadow-xl",
-                    getScoreColor(scores.metacritic)
-                )}>
-                    <span className="text-sm font-black font-mono tracking-tighter">
-                        {scores.metacritic}
-                    </span>
-                </div>
-            </div>
-        )}
 
       </div>
     </motion.div>

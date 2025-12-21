@@ -61,7 +61,7 @@ export function AddGameModal({ isOpen, onClose }: AddGameModalProps) {
           backgroundImage: game.availableBackgrounds[0] || undefined,
           releaseDate: game.releaseDate,
           studio: game.studio || undefined,
-          metacritic: game.metacritic || undefined,
+          opencriticScore: game.opencriticScore || undefined,
           source: game.source
         });
         onClose();

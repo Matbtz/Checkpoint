@@ -202,7 +202,9 @@ export async function fixGameMatch(gameId: string, hltbData: { main: number, ext
     await prisma.game.update({
         where: { id: gameId },
         data: {
-            hltbTimes: JSON.stringify(hltbData),
+            hltbMain: Math.round(hltbData.main),
+            hltbExtra: Math.round(hltbData.extra),
+            hltbCompletionist: Math.round(hltbData.completionist),
             dataMissing: false // Assume fixed
         }
     });

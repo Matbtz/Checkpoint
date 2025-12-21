@@ -4,9 +4,9 @@ export interface IncomingSteamData {
 }
 
 export interface TimeToBeat {
-  main: number;
-  extra: number;
-  completionist: number;
+  main: number | null;
+  extra: number | null;
+  completionist: number | null;
 }
 
 export interface GameMetadata {
