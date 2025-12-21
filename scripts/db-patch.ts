@@ -2,7 +2,7 @@
 import { PrismaClient } from '@prisma/client';
 
 // Use the direct connection string (non-pooling) if available to ensure we have permissions for DDL operations
-const connectionString = process.env.DATABASE_POSTGRES_URL_NON_POOLING || process.env.DATABASE_POSTGRES_PRISMA_URL;
+const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL || process.env.DATABASE_POSTGRES_URL_NON_POOLING || process.env.DATABASE_POSTGRES_PRISMA_URL;
 
 const prisma = new PrismaClient({
   datasources: {

@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL") // Nom exact Vercel/Supabase
-  directUrl = env("DIRECT_URL") // Nom exact Vercel/Supabase
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Account {
