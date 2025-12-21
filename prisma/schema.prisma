@@ -129,6 +129,9 @@ model Game {
   hltbExtra         Int?
   hltbCompletionist Int?
 
+  primaryColor   String?
+  secondaryColor String?
+
   updatedAt    DateTime      @updatedAt
   users        UserLibrary[]
   activityLogs ActivityLog[]
@@ -143,6 +146,11 @@ model UserLibrary {
   playtimeManual         Int? // Override
   progressManual         Int? // Percentage 0-100 manual override
   targetedCompletionType String   @default("MAIN")
+
+  customCoverImage String?
+  primaryColor     String?
+  secondaryColor   String?
+
   createdAt              DateTime @default(now())
   user                   User     @relation(fields: [userId], references: [id])
   game                   Game     @relation(fields: [gameId], references: [id])
