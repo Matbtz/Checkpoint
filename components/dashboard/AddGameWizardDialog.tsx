@@ -11,6 +11,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
 import { addGameExtended, searchLocalGamesAction, searchOnlineGamesAction, fetchOpenCriticAction } from '@/actions/add-game';
+import { searchGameImages } from '@/actions/game';
 import { EnrichedGameData } from '@/lib/enrichment';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -137,50 +138,91 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     setLoadingGameId(game.id);
 
     try {
-        // Fetch OpenCritic if not present
-        // We do this BEFORE switching view
+        // 1. Fetch OpenCritic if not present
         let score = game.opencriticScore;
-
         if (!score && game.source !== 'manual') {
             try {
                 const fetchedScore = await fetchOpenCriticAction(game.title);
-                if (fetchedScore) {
-                    score = fetchedScore;
-                }
+                if (fetchedScore) score = fetchedScore;
             } catch (e) {
                 console.error("Failed to fetch OpenCritic score:", e);
             }
         }
 
-        // Now update state and switch view
-        setSelectedGame(game);
+        // 2. Fetch Comprehensive Art (Steam, IGDB, RAWG)
+        // We do this to ensure we have the best options, specifically Steam Library assets
+        let mergedCovers = [...(game.availableCovers || [])];
+        let mergedBackgrounds = [...(game.availableBackgrounds || [])];
+
+        if (game.source !== 'manual') {
+            try {
+                const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : undefined;
+                const images = await searchGameImages(game.title, {
+                    igdbId: game.source === 'igdb' ? game.id : undefined,
+                    releaseYear
+                });
+
+                // Merge unique images
+                const existingCoverSet = new Set(mergedCovers);
+                images.covers.forEach(c => {
+                    if (!existingCoverSet.has(c)) {
+                        mergedCovers.push(c);
+                        existingCoverSet.add(c);
+                    }
+                });
+
+                const existingBgSet = new Set(mergedBackgrounds);
+                images.backgrounds.forEach(b => {
+                    if (!existingBgSet.has(b)) {
+                        mergedBackgrounds.push(b);
+                        existingBgSet.add(b);
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to fetch extra game images:", e);
+            }
+        }
+
+        // 3. Determine Default Selections (Priority: Steam Library)
+        let defaultCoverIndex = 0;
+        let defaultBgIndex = 0;
+
+        // Find Steam Library Cover (library_600x900)
+        const steamCoverIdx = mergedCovers.findIndex(c => c.includes('library_600x900'));
+        if (steamCoverIdx !== -1) defaultCoverIndex = steamCoverIdx;
+
+        // Find Steam Library Hero (library_hero)
+        const steamBgIdx = mergedBackgrounds.findIndex(b => b.includes('library_hero'));
+        if (steamBgIdx !== -1) defaultBgIndex = steamBgIdx;
+
+
+        // 4. Update State
+        setSelectedGame({
+            ...game,
+            availableCovers: mergedCovers,
+            availableBackgrounds: mergedBackgrounds
+        });
+
         setTitle(game.title);
         setStudio(game.studio || '');
         setGenres(game.genres || []);
 
-        // Handle Platforms
         const initialPlatforms = game.platforms || [];
-        setPlatforms(initialPlatforms); // Initially select all
-        setAvailablePlatforms(initialPlatforms); // Store available list
+        setPlatforms(initialPlatforms);
+        setAvailablePlatforms(initialPlatforms);
 
-        setSelectedCoverIndex(0);
-        setSelectedBackgroundIndex(0);
+        setSelectedCoverIndex(defaultCoverIndex);
+        setSelectedBackgroundIndex(defaultBgIndex);
         setCustomCoverUrl('');
         setCustomBackgroundUrl('');
 
-        // Reset Status/Goal defaults
         setStatus('BACKLOG');
         setCompletionTarget('MAIN');
 
-        // Set fetched score
-        if (score) {
-            setFetchedOpenCritic(score);
-        } else {
-            setFetchedOpenCritic(null);
-        }
+        setFetchedOpenCritic(score || null);
 
         setStep('customize');
-        setMobileTab('art'); // Reset to art tab
+        setMobileTab('art');
     } finally {
         setLoadingGameId(null);
     }
