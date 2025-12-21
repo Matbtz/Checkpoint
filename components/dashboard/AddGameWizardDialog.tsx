@@ -14,7 +14,6 @@ import { addGameExtended, searchLocalGamesAction, searchOnlineGamesAction, fetch
 import { searchGameImages } from '@/actions/game';
 import { EnrichedGameData } from '@/lib/enrichment';
 import { Badge } from '@/components/ui/badge';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AddGameWizardDialogProps {
@@ -151,8 +150,8 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
         // 2. Fetch Comprehensive Art (Steam, IGDB, RAWG)
         // We do this to ensure we have the best options, specifically Steam Library assets
-        let mergedCovers = [...(game.availableCovers || [])];
-        let mergedBackgrounds = [...(game.availableBackgrounds || [])];
+        const mergedCovers = [...(game.availableCovers || [])];
+        const mergedBackgrounds = [...(game.availableBackgrounds || [])];
 
         if (game.source !== 'manual') {
             try {
