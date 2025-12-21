@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { getOwnedGames, SteamGame } from '@/lib/steam';
 import { prisma } from '@/lib/db';
 import { searchIgdbGames } from '@/lib/igdb';
+import { extractDominantColors } from '@/lib/color-utils';
 
 export async function fetchSteamGames() {
   const session = await auth();
@@ -97,6 +98,20 @@ export async function importGames(games: SteamGame[]) {
             const gameId = game.appid.toString();
             const steamCover = `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`;
 
+            let primaryColor = null;
+            let secondaryColor = null;
+
+            // Extract colors from Steam Cover
+            try {
+                const colors = await extractDominantColors(steamCover);
+                if (colors) {
+                    primaryColor = colors.primary;
+                    secondaryColor = colors.secondary;
+                }
+            } catch (e) {
+                 // Ignore color extraction errors
+            }
+
             // Enrich with IGDB
             let enrichedData = {
                 genres: undefined as string | undefined,
@@ -104,7 +119,9 @@ export async function importGames(games: SteamGame[]) {
                 description: undefined as string | undefined,
                 releaseDate: undefined as Date | undefined,
                 metacritic: undefined as number | undefined,
-                platforms: JSON.stringify(["PC", "Steam Deck"]) // Default as requested
+                platforms: JSON.stringify(["PC", "Steam Deck"]), // Default as requested
+                primaryColor,
+                secondaryColor
             };
 
             try {

@@ -106,7 +106,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
   const [newPlatform, setNewPlatform] = useState("");
 
   // --- MEDIA TAB STATE ---
-  const [coverImage, setCoverImage] = useState(item.game.coverImage || "");
+  const [coverImage, setCoverImage] = useState(item.customCoverImage || item.game.coverImage || "");
   const [backgroundImage, setBackgroundImage] = useState(item.game.backgroundImage || "");
   const [mediaQuery, setMediaQuery] = useState("");
   const [searchedCovers, setSearchedCovers] = useState<string[]>([]);
@@ -144,7 +144,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       setOpencritic(item.game.opencritic?.toString() || "");
 
       // Reset Media
-      setCoverImage(item.game.coverImage || "");
+      setCoverImage(item.customCoverImage || item.game.coverImage || "");
       setBackgroundImage(item.game.backgroundImage || "");
       setSearchedCovers([]);
       setSearchedBackgrounds([]);
@@ -211,6 +211,22 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           }));
       }
 
+      // Update Custom Cover Image on Library Entry
+      // If the cover image is different from the global game cover, or if it was already custom
+      const globalCover = item.game.coverImage || "";
+      if (coverImage !== globalCover || item.customCoverImage) {
+           // If user reset to the global cover, set custom to null (unless global is empty, then whatever)
+           if (coverImage === globalCover && coverImage !== "") {
+                if (item.customCoverImage) {
+                    // Resetting to global
+                    libData.customCoverImage = null;
+                }
+           } else {
+                // Setting a custom cover
+                libData.customCoverImage = coverImage;
+           }
+      }
+
       // 2. Update Game Metadata (Metadata & Media Tabs)
       const metaData: Parameters<typeof updateGameMetadata>[1] = {};
       if (title !== item.game.title) metaData.title = title;
@@ -253,7 +269,8 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
           }
       }
 
-      if (coverImage !== item.game.coverImage) metaData.coverImage = coverImage;
+      // We no longer update the global game cover from here, we use customCoverImage on UserLibrary
+      // if (coverImage !== item.game.coverImage) metaData.coverImage = coverImage;
       if (backgroundImage !== item.game.backgroundImage) metaData.backgroundImage = backgroundImage;
 
       if (Object.keys(metaData).length > 0) {

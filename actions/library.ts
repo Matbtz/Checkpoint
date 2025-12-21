@@ -4,17 +4,48 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { searchRawgGame, getRawgGameDetails } from '@/lib/rawg';
+import { extractDominantColors } from '@/lib/color-utils';
 
-export async function updateLibraryEntry(userLibraryId: string, data: { status?: string, playtimeManual?: number | null, progressManual?: number | null, targetedCompletionType?: string }) {
+export async function updateLibraryEntry(
+    userLibraryId: string,
+    data: {
+        status?: string,
+        playtimeManual?: number | null,
+        progressManual?: number | null,
+        targetedCompletionType?: string,
+        customCoverImage?: string | null
+    }
+) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
+
+  // Prepare update data
+  const updateData: any = { ...data };
+
+  // If customCoverImage is being updated (and is not null), extract colors
+  if (data.customCoverImage) {
+      try {
+          const colors = await extractDominantColors(data.customCoverImage);
+          if (colors) {
+              updateData.primaryColor = colors.primary;
+              updateData.secondaryColor = colors.secondary;
+          }
+      } catch (e) {
+          console.error("Failed to extract colors for custom cover:", e);
+          // Don't fail the update, just skip colors
+      }
+  } else if (data.customCoverImage === null) {
+      // If clearing the custom cover, clear the colors too (so it falls back to game colors)
+      updateData.primaryColor = null;
+      updateData.secondaryColor = null;
+  }
 
   await prisma.userLibrary.update({
     where: {
       id: userLibraryId,
       userId: session.user.id
     },
-    data: data,
+    data: updateData,
   });
 
   revalidatePath('/dashboard');
