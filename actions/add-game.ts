@@ -5,6 +5,7 @@ import { getOpenCriticScore } from '@/lib/opencritic';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { extractDominantColors } from '@/lib/color-utils';
 
 // --- UTILITAIRE : FETCH OPENCRITIC ON DEMAND ---
 export async function fetchOpenCriticAction(title: string) {
@@ -127,6 +128,21 @@ export async function addGameExtended(payload: any) {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");
 
+    let primaryColor = null;
+    let secondaryColor = null;
+
+    if (payload.coverImage) {
+        try {
+            const colors = await extractDominantColors(payload.coverImage);
+            if (colors) {
+                primaryColor = colors.primary;
+                secondaryColor = colors.secondary;
+            }
+        } catch (e) {
+            console.error("Color extraction failed:", e);
+        }
+    }
+
     let game = await prisma.game.findUnique({ where: { id: payload.id } });
 
     // Si le jeu n'existe pas, on le crée
@@ -156,6 +172,8 @@ export async function addGameExtended(payload: any) {
                 genres: payload.genres, // Stringified JSON
                 platforms: payload.platforms, // Array/Json
                 description: payload.description,
+                primaryColor,
+                secondaryColor,
                 // source: payload.source, // Pas de colonne source dans le schéma Game
                 dataFetched: true,
                 lastSync: new Date()
@@ -177,6 +195,8 @@ export async function addGameExtended(payload: any) {
                 genres: payload.genres,
                 platforms: payload.platforms, // Array/Json
                 description: payload.description,
+                primaryColor,
+                secondaryColor,
                 updatedAt: new Date()
             }
         });
