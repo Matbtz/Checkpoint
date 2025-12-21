@@ -23,7 +23,6 @@ export async function extractDominantColors(imageUrl: string | null): Promise<Ex
     const buffer = Buffer.from(response.data);
     const contentType = response.headers['content-type'] || 'image/jpeg';
 
-    // @ts-ignore - get-image-colors types might be slightly off regarding the options object vs string
     const colors = await getColors(buffer, contentType);
 
     if (colors && colors.length > 0) {
@@ -34,7 +33,7 @@ export async function extractDominantColors(imageUrl: string | null): Promise<Ex
     }
 
     return { primary: null, secondary: null };
-  } catch (error) {
+  } catch {
     // Silent error handling
     return { primary: null, secondary: null };
   }
