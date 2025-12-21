@@ -11,9 +11,9 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 // CORRECTION ICI : Utilisation des bons noms de fonctions
 import { addGameExtended, searchLocalGamesAction, searchOnlineGamesAction, fetchOpenCriticAction } from '@/actions/add-game';
+import { searchGameImages } from '@/actions/game';
 import { EnrichedGameData } from '@/lib/enrichment';
 import { Badge } from '@/components/ui/badge';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AddGameWizardDialogProps {
@@ -47,7 +47,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
   // Scores
   const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
-  const [selectedScoreSource, setSelectedScoreSource] = useState<'metacritic' | 'opencritic'>('metacritic');
 
   // Status & Goal
   const [status, setStatus] = useState<string>('BACKLOG');
@@ -138,54 +137,91 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     setLoadingGameId(game.id);
 
     try {
-        // Fetch OpenCritic if not present
-        // We do this BEFORE switching view
-        let score = game.opencritic;
-
+        // 1. Fetch OpenCritic if not present
+        let score = game.opencriticScore;
         if (!score && game.source !== 'manual') {
             try {
                 const fetchedScore = await fetchOpenCriticAction(game.title);
-                if (fetchedScore) {
-                    score = fetchedScore;
-                }
+                if (fetchedScore) score = fetchedScore;
             } catch (e) {
                 console.error("Failed to fetch OpenCritic score:", e);
             }
         }
 
-        // Now update state and switch view
-        setSelectedGame(game);
+        // 2. Fetch Comprehensive Art (Steam, IGDB, RAWG)
+        // We do this to ensure we have the best options, specifically Steam Library assets
+        const mergedCovers = [...(game.availableCovers || [])];
+        const mergedBackgrounds = [...(game.availableBackgrounds || [])];
+
+        if (game.source !== 'manual') {
+            try {
+                const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : undefined;
+                const images = await searchGameImages(game.title, {
+                    igdbId: game.source === 'igdb' ? game.id : undefined,
+                    releaseYear
+                });
+
+                // Merge unique images
+                const existingCoverSet = new Set(mergedCovers);
+                images.covers.forEach(c => {
+                    if (!existingCoverSet.has(c)) {
+                        mergedCovers.push(c);
+                        existingCoverSet.add(c);
+                    }
+                });
+
+                const existingBgSet = new Set(mergedBackgrounds);
+                images.backgrounds.forEach(b => {
+                    if (!existingBgSet.has(b)) {
+                        mergedBackgrounds.push(b);
+                        existingBgSet.add(b);
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to fetch extra game images:", e);
+            }
+        }
+
+        // 3. Determine Default Selections (Priority: Steam Library)
+        let defaultCoverIndex = 0;
+        let defaultBgIndex = 0;
+
+        // Find Steam Library Cover (library_600x900)
+        const steamCoverIdx = mergedCovers.findIndex(c => c.includes('library_600x900'));
+        if (steamCoverIdx !== -1) defaultCoverIndex = steamCoverIdx;
+
+        // Find Steam Library Hero (library_hero)
+        const steamBgIdx = mergedBackgrounds.findIndex(b => b.includes('library_hero'));
+        if (steamBgIdx !== -1) defaultBgIndex = steamBgIdx;
+
+
+        // 4. Update State
+        setSelectedGame({
+            ...game,
+            availableCovers: mergedCovers,
+            availableBackgrounds: mergedBackgrounds
+        });
+
         setTitle(game.title);
         setStudio(game.studio || '');
         setGenres(game.genres || []);
 
-        // Handle Platforms
         const initialPlatforms = game.platforms || [];
-        setPlatforms(initialPlatforms); // Initially select all
-        setAvailablePlatforms(initialPlatforms); // Store available list
+        setPlatforms(initialPlatforms);
+        setAvailablePlatforms(initialPlatforms);
 
-        setSelectedCoverIndex(0);
-        setSelectedBackgroundIndex(0);
+        setSelectedCoverIndex(defaultCoverIndex);
+        setSelectedBackgroundIndex(defaultBgIndex);
         setCustomCoverUrl('');
         setCustomBackgroundUrl('');
 
-        // Reset Status/Goal defaults
         setStatus('BACKLOG');
         setCompletionTarget('MAIN');
 
-        // Set fetched score
-        if (score) {
-            setFetchedOpenCritic(score);
-            setSelectedScoreSource('opencritic');
-        } else {
-            setFetchedOpenCritic(null);
-            if (game.metacritic) {
-                setSelectedScoreSource('metacritic');
-            }
-        }
+        setFetchedOpenCritic(score || null);
 
         setStep('customize');
-        setMobileTab('art'); // Reset to art tab
+        setMobileTab('art');
     } finally {
         setLoadingGameId(null);
     }
@@ -202,12 +238,6 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     const coverImage = customCoverUrl || (selectedGame.availableCovers.length > 0 ? selectedGame.availableCovers[selectedCoverIndex] : '') || '';
     const backgroundImage = customBackgroundUrl || (selectedGame.availableBackgrounds.length > 0 ? selectedGame.availableBackgrounds[selectedBackgroundIndex] : '') || undefined;
 
-    let finalMetacritic = selectedGame.metacritic;
-
-    if (selectedScoreSource === 'opencritic') {
-        finalMetacritic = fetchedOpenCritic || selectedGame.opencritic || null;
-    }
-
     const finalData = {
         id: selectedGame.id,
         title,
@@ -215,8 +245,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         backgroundImage,
         releaseDate: selectedGame.releaseDate,
         studio,
-        metacritic: finalMetacritic || undefined,
-        opencritic: fetchedOpenCritic || selectedGame.opencritic || null,
+            opencriticScore: fetchedOpenCritic || selectedGame.opencriticScore || null,
         source: selectedGame.source,
         genres: JSON.stringify(genres),
         platforms: platforms, // Json type, pass array directly
@@ -568,31 +597,14 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
                                 {/* Compact Scores - Always Row */}
                                 <div className="space-y-3 pt-4 border-t">
-                                    <Label className="text-base font-semibold">Display Score</Label>
-                                    <RadioGroup
-                                        value={selectedScoreSource}
-                                        onValueChange={(v) => setSelectedScoreSource(v as 'metacritic' | 'opencritic')}
-                                        className="flex flex-row gap-6"
-                                    >
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="metacritic" id="score-meta" />
-                                            <Label htmlFor="score-meta" className="cursor-pointer flex items-center gap-2 font-normal">
-                                                <span className="font-bold text-sm">Metacritic:</span>
-                                                <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(selectedGame?.metacritic))}>
-                                                    {selectedGame?.metacritic || 'N/A'}
-                                                </Badge>
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="opencritic" id="score-open" />
-                                            <Label htmlFor="score-open" className="cursor-pointer flex items-center gap-2 font-normal">
-                                                <span className="font-bold text-sm">OpenCritic:</span>
-                                                <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(fetchedOpenCritic || selectedGame?.opencritic))}>
-                                                    {fetchedOpenCritic || selectedGame?.opencritic || 'N/A'}
-                                                </Badge>
-                                            </Label>
-                                        </div>
-                                    </RadioGroup>
+                                    <div className="flex items-center space-x-2">
+                                        <Label className="cursor-pointer flex items-center gap-2 font-normal">
+                                            <span className="font-bold text-sm">OpenCritic:</span>
+                                            <Badge className={cn("text-[10px] h-5 px-1.5", getScoreColor(fetchedOpenCritic || selectedGame?.opencriticScore))}>
+                                                {fetchedOpenCritic || selectedGame?.opencriticScore || 'N/A'}
+                                            </Badge>
+                                        </Label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

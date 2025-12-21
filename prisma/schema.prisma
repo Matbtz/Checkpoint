@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_POSTGRES_PRISMA_URL") // Nom exact Vercel/Supabase
-  directUrl = env("DATABASE_POSTGRES_URL_NON_POOLING") // Nom exact Vercel/Supabase
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -93,11 +93,6 @@ model Game {
   hltbUrl       String?
 
   // Scores
-  rawgRating Float? // Note des joueurs (sur 5 ou 10)
-  metacritic Int? // Score critique (souvent via RAWG) - Keeping for legacy
-  opencritic Int? // Score OpenCritic (RapidAPI) - Keeping for legacy
-
-  metacriticScore Int?
   opencriticScore Int?
   igdbScore       Int?
 
@@ -114,16 +109,10 @@ model Game {
   platforms Json? // Structure: [{ name: "Switch", date: "2017-10-27" }]
 
   // Playtime Data
-  timeToBeat     Json? // { main, extra, completionist }
   igdbTime       Json? // { storyline, completionist }
-  customPlaytime Int? // Computed field (in minutes)
-
-  hltbTimes String? // JSON string for HLTB times
-  scores    String? // JSON string for scores (metacritic, user rating)
 
   dataMissing Boolean   @default(false)
   dataFetched Boolean   @default(false)
-  lastSync    DateTime? // Pour savoir quand on a mis à jour pour la dernière fois
 
   hltbMain          Int? // En minutes
   hltbExtra         Int?

@@ -1,6 +1,7 @@
 
 import { searchIgdbGames, getIgdbImageUrl, IgdbGame } from './igdb';
 import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
+import { searchSteamStore } from './steam-store';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -8,7 +9,7 @@ export interface EnrichedGameData {
     releaseDate: string | null;
     studio: string | null;
     metacritic: number | null;
-    opencritic?: number | null;
+    opencriticScore?: number | null;
     genres: string[];
     platforms?: string[];
     availableCovers: string[];
@@ -103,4 +104,115 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
     // Given IGDB is usually cleaner for metadata, we put it first.
 
     return [...enrichedIgdb, ...enrichedRawg];
+}
+
+/**
+ * Normalizes a title for loose comparison.
+ * Removes special characters, extra spaces, and converts to lowercase.
+ */
+function normalizeTitle(title: string): string {
+    return title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric chars
+        .replace(/\s+/g, ' ') // Collapse spaces
+        .trim();
+}
+
+/**
+ * Checks if release year matches with a tolerance of +/- 1 year.
+ */
+function isYearMatch(targetYear: number, candidateYear?: number | null): boolean {
+    if (!candidateYear) return false;
+    return Math.abs(targetYear - candidateYear) <= 1;
+}
+
+export interface BestArtResult {
+    cover: string | null;
+    background: string | null;
+    source: 'steam' | 'igdb' | 'rawg';
+}
+
+/**
+ * Intelligent Cascade for finding the best game art.
+ * Priority: Steam Library > IGDB > RAWG
+ */
+export async function findBestGameArt(title: string, releaseYear?: number | null): Promise<BestArtResult | null> {
+    const normTitle = normalizeTitle(title);
+
+    // 1. Steam Store (Priority for Library Assets)
+    try {
+        const steamResults = await searchSteamStore(title);
+        const steamMatch = steamResults.find(g => {
+            const titleMatch = normalizeTitle(g.name) === normTitle;
+            const yearMatch = releaseYear ? isYearMatch(releaseYear, g.releaseYear) : true;
+            return titleMatch && yearMatch;
+        });
+
+        if (steamMatch) {
+            return {
+                cover: steamMatch.library_cover,
+                background: steamMatch.library_hero,
+                source: 'steam'
+            };
+        }
+    } catch (e) {
+        console.error("Error finding art on Steam:", e);
+    }
+
+    // 2. IGDB (High quality covers & art)
+    try {
+        const igdbResults = await searchIgdbGames(title, 5);
+        const igdbMatch = igdbResults.find(g => {
+            const titleMatch = normalizeTitle(g.name) === normTitle;
+            const gameYear = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null;
+            const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
+            return titleMatch && yearMatch;
+        });
+
+        if (igdbMatch) {
+            let cover = null;
+            if (igdbMatch.cover) {
+                cover = getIgdbImageUrl(igdbMatch.cover.image_id, 'cover_big');
+            }
+
+            let background = null;
+            // Prioritize artworks, then screenshots
+            if (igdbMatch.artworks && igdbMatch.artworks.length > 0) {
+                background = getIgdbImageUrl(igdbMatch.artworks[0].image_id, '1080p');
+            } else if (igdbMatch.screenshots && igdbMatch.screenshots.length > 0) {
+                background = getIgdbImageUrl(igdbMatch.screenshots[0].image_id, '1080p');
+            }
+
+            return {
+                cover,
+                background,
+                source: 'igdb'
+            };
+        }
+    } catch (e) {
+        console.error("Error finding art on IGDB:", e);
+    }
+
+    // 3. RAWG (Fallback)
+    try {
+        const rawgResults = await searchRawgGames(title, 5);
+        const rawgMatch = rawgResults.find(g => {
+            const titleMatch = normalizeTitle(g.name) === normTitle;
+            const gameYear = g.released ? new Date(g.released).getFullYear() : null;
+            const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
+            return titleMatch && yearMatch;
+        });
+
+        if (rawgMatch) {
+            return {
+                cover: rawgMatch.background_image || null,
+                background: rawgMatch.background_image || null, // RAWG often shares same image
+                source: 'rawg'
+            };
+        }
+    } catch (e) {
+        console.error("Error finding art on RAWG:", e);
+    }
+
+    return null;
 }

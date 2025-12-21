@@ -13,8 +13,7 @@ export async function updateGameMetadata(gameId: string, data: {
   studio?: string;
   genres?: string[]; // Expecting array, will JSON.stringify
   platforms?: string[]; // Expecting array, will JSON.stringify
-  metacritic?: number | null;
-  opencritic?: number | null;
+  opencriticScore?: number | null;
   releaseDate?: Date | null;
   coverImage?: string;
   backgroundImage?: string;
@@ -40,8 +39,7 @@ export async function updateGameMetadata(gameId: string, data: {
   if (data.genres !== undefined) updateData.genres = JSON.stringify(data.genres);
   // platforms is now Json type in schema (array of objects or strings), passing array directly
   if (data.platforms !== undefined) updateData.platforms = data.platforms;
-  if (data.metacritic !== undefined) updateData.metacritic = data.metacritic;
-  if (data.opencritic !== undefined) updateData.opencritic = data.opencritic;
+  if (data.opencriticScore !== undefined) updateData.opencriticScore = data.opencriticScore;
   if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate;
   if (data.coverImage !== undefined) updateData.coverImage = data.coverImage;
   if (data.backgroundImage !== undefined) updateData.backgroundImage = data.backgroundImage;
@@ -158,8 +156,8 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
 
     // Helper to add images
     const addImages = (c: string[], b: string[]) => {
-        c.forEach(img => covers.add(img));
-        b.forEach(img => backgrounds.add(img));
+        c.forEach(img => { if(img) covers.add(img); });
+        b.forEach(img => { if(img) backgrounds.add(img); });
     };
 
     // Process IGDB
@@ -187,8 +185,8 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
     // Process Steam
     if (steamRes.status === 'fulfilled') {
         steamRes.value.forEach(game => {
-            const libraryUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${game.id}/library_600x900.jpg`;
-            covers.add(libraryUrl);
+            if (game.library_cover) covers.add(game.library_cover);
+            if (game.library_hero) backgrounds.add(game.library_hero);
             if (game.header_image) backgrounds.add(game.header_image);
         });
     }

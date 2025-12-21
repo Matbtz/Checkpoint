@@ -5,6 +5,8 @@ export interface SteamStoreGame {
     id: number;
     name: string;
     header_image: string;
+    library_cover: string;
+    library_hero: string;
     screenshots: string[];
     releaseYear: number | null;
 }
@@ -49,6 +51,8 @@ export async function searchSteamStore(query: string): Promise<SteamStoreGame[]>
                 id,
                 name,
                 header_image: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/header.jpg`,
+                library_cover: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/library_600x900.jpg`,
+                library_hero: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/library_hero.jpg`,
                 screenshots: [], // Search results don't give screenshots easily without extra requests
                 releaseYear
             });

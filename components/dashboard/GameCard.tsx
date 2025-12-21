@@ -1,13 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Gamepad2, Monitor, Check } from 'lucide-react';
-import { useImageColor } from '@/hooks/use-image-color';
 
 type ExtendedGame = Game & {
   studio?: string | null;
@@ -26,7 +25,7 @@ interface GameCardProps {
   onToggleSelect?: () => void;
 }
 
-export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, secondaryColor, isDeleteMode, isSelected, onToggleSelect }: GameCardProps) {
+export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSelected, onToggleSelect }: GameCardProps) {
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
@@ -38,24 +37,16 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
     }
   }, [game.genres]);
 
-  const scores = useMemo(() => {
-      try {
-          const parsed = game.scores ? JSON.parse(game.scores) : {};
-          if (game.metacritic) parsed.metacritic = game.metacritic;
-          return parsed;
-      } catch {
-          return { metacritic: game.metacritic };
-      }
-  }, [game.scores, game.metacritic]);
-
   const playedMinutes = item.playtimeManual ?? item.playtimeSteam ?? 0;
   const targetType = item.targetedCompletionType || 'Main';
 
   const adjustedHltbTimes = useMemo(() => {
-      const times = game.hltbTimes ? JSON.parse(game.hltbTimes as string) : {};
-      if (game.hltbMain) times.main = game.hltbMain;
-      if (game.hltbExtra) times.extra = game.hltbExtra;
-      if (game.hltbCompletionist) times.completionist = game.hltbCompletionist;
+      // Use flat fields directly
+      const times = {
+          main: game.hltbMain || 0,
+          extra: game.hltbExtra || 0,
+          completionist: game.hltbCompletionist || 0
+      };
 
       if (times.main) times.main *= paceFactor;
       if (times.extra) times.extra *= paceFactor;
@@ -72,37 +63,35 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
   const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
   const isCompleted = progress >= 100;
 
+  const defaultPrimaryColor = '#27272a'; // Zinc-800
+  const defaultSecondaryColor = '#09090b'; // Zinc-950
+
+  const activePrimaryColor = item.primaryColor || game.primaryColor || defaultPrimaryColor;
+  const activeSecondaryColor = item.secondaryColor || game.secondaryColor || defaultSecondaryColor;
+  const glowColor = activePrimaryColor;
+
   // Manage image state locally to handle fallbacks
-  const [currentCoverImage, setCurrentCoverImage] = useState(game.coverImage || game.backgroundImage || '');
+  const [currentCoverImage, setCurrentCoverImage] = useState(item.customCoverImage || game.coverImage || game.backgroundImage || '');
 
-  const getScoreColor = (score: number) => {
-    if (score >= 75) return 'border-green-500 text-green-500 shadow-[0_0_15px_-3px_rgba(34,197,94,0.4)]';
-    if (score >= 50) return 'border-yellow-500 text-yellow-500 shadow-[0_0_15px_-3px_rgba(234,179,8,0.4)]';
-    return 'border-red-500 text-red-500';
-  };
+  useEffect(() => {
+    setCurrentCoverImage(item.customCoverImage || game.coverImage || game.backgroundImage || '');
+  }, [item.customCoverImage, game.coverImage, game.backgroundImage]);
 
-  const { colors: extractedColors } = useImageColor(currentCoverImage);
-  const activePrimaryColor = primaryColor || extractedColors?.primary;
-  const activeSecondaryColor = secondaryColor || extractedColors?.secondary;
-  const hasCustomColors = !!activePrimaryColor && !!activeSecondaryColor;
-  const glowColor = activePrimaryColor || '#ffffff';
 
   return (
     <motion.div
         layoutId={game.id}
         whileHover={{ scale: 1.02 }}
         initial={{ opacity: 0, y: 10 }}
-        animate={
-            hasCustomColors ? {
-                opacity: 1,
-                y: 0,
-                boxShadow: [
-                    `0 0 0px 0px ${glowColor}00`,
-                    `0 0 30px -5px ${glowColor}50`,
-                    `0 0 0px 0px ${glowColor}00`
-                ]
-            } : { opacity: 1, y: 0 }
-        }
+        animate={{
+            opacity: 1,
+            y: 0,
+            boxShadow: [
+                `0 0 0px 0px ${glowColor}00`,
+                `0 0 30px -5px ${glowColor}50`,
+                `0 0 0px 0px ${glowColor}00`
+            ]
+        }}
         transition={{
             boxShadow: {
                 duration: 4,
@@ -113,15 +102,14 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             default: { duration: 0.3 }
         }}
         className={cn(
-            "group relative w-full min-h-[150px] overflow-hidden rounded-2xl bg-zinc-950 cursor-pointer transition-all mb-4",
-            !hasCustomColors && "border border-white/10 shadow-lg"
+            "group relative w-full min-h-[150px] overflow-hidden rounded-2xl bg-zinc-950 cursor-pointer transition-all mb-4"
         )}
-        style={hasCustomColors ? {
+        style={{
             backgroundImage: `linear-gradient(#09090b, #09090b), linear-gradient(to bottom right, ${activePrimaryColor}, ${activeSecondaryColor})`,
             backgroundOrigin: 'border-box',
             backgroundClip: 'padding-box, border-box',
             border: '2px solid transparent',
-        } : undefined}
+        }}
         onClick={isDeleteMode ? onToggleSelect : onClick}
     >
       {isDeleteMode && (
@@ -228,19 +216,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, primaryColor, second
             </div>
         </div>
 
-        {/* Absolute Score Overlay */}
-        {scores.metacritic && (
-            <div className="absolute top-3 right-3 z-30 pointer-events-none">
-                <div className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full border-2 bg-black/60 backdrop-blur-md shadow-xl",
-                    getScoreColor(scores.metacritic)
-                )}>
-                    <span className="text-sm font-black font-mono tracking-tighter">
-                        {scores.metacritic}
-                    </span>
-                </div>
-            </div>
-        )}
 
       </div>
     </motion.div>

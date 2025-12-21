@@ -71,8 +71,8 @@ export async function searchLocalGamesAction(query: string) {
             coverImage: g.coverImage,
             releaseDate: g.releaseDate?.toISOString() ?? null,
             studio: g.studio,
-            metacritic: g.metacritic,
-            opencritic: g.opencritic,
+            metacritic: null,
+            opencritic: g.opencriticScore,
             source: 'local' as const,
             availableCovers: g.coverImage ? [g.coverImage] : [],
             availableBackgrounds: g.backgroundImage ? [g.backgroundImage] : [],
@@ -96,7 +96,7 @@ export async function searchOnlineGamesAction(query: string) {
     const igdbIds = igdbResults.map(g => String(g.id));
     const existingGames = await prisma.game.findMany({
         where: { id: { in: igdbIds } },
-        select: { id: true, opencritic: true }
+        select: { id: true, opencriticScore: true }
     });
 
     return igdbResults.map(game => {
@@ -110,8 +110,8 @@ export async function searchOnlineGamesAction(query: string) {
             title: game.name,
             releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : null,
             studio: game.involved_companies?.find(c => c.developer)?.company.name || null,
-            metacritic: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
-            opencritic: existing?.opencritic || null,
+            metacritic: null,
+            opencritic: existing?.opencriticScore || null,
             genres: game.genres?.map(g => g.name) || [],
             platforms: game.platforms?.map(p => p.name) || [],
             availableCovers,
@@ -149,7 +149,12 @@ export async function addGameExtended(payload: any) {
     if (!game) {
         // Priorité au score passé par le frontend (payload.opencritic)
         // Sinon, on tente de le fetcher
-        let openCriticScore = payload.opencritic;
+        let openCriticScore = payload.opencriticScore;
+
+        if (openCriticScore === undefined || openCriticScore === null) {
+            // Also check legacy prop just in case frontend sends it
+            openCriticScore = payload.opencritic;
+        }
 
         if (openCriticScore === undefined || openCriticScore === null) {
             try {
@@ -167,21 +172,20 @@ export async function addGameExtended(payload: any) {
                 backgroundImage: payload.backgroundImage,
                 releaseDate: payload.releaseDate ? new Date(payload.releaseDate) : null,
                 studio: payload.studio,
-                metacritic: payload.metacritic, // Score affiché (choisi par l'utilisateur)
-                opencritic: openCriticScore, // Score réel OpenCritic
+                opencriticScore: openCriticScore,
                 genres: payload.genres, // Stringified JSON
                 platforms: payload.platforms, // Array/Json
                 description: payload.description,
                 primaryColor,
                 secondaryColor,
-                // source: payload.source, // Pas de colonne source dans le schéma Game
-                dataFetched: true,
-                lastSync: new Date()
+                dataFetched: true
             }
         });
     } else {
         // UPDATE EXISTING GAME if platforms/genres/etc are missing or explicit update requested
         // Since the user just customized it in the wizard, we should trust this new data.
+        const openCriticScore = payload.opencriticScore !== undefined ? payload.opencriticScore : payload.opencritic;
+
         await prisma.game.update({
             where: { id: payload.id },
             data: {
@@ -189,9 +193,8 @@ export async function addGameExtended(payload: any) {
                 coverImage: payload.coverImage,
                 backgroundImage: payload.backgroundImage,
                 studio: payload.studio,
-                metacritic: payload.metacritic,
                 // Only update opencritic if payload has it (it might be null if not fetched)
-                ...(payload.opencritic !== undefined && { opencritic: payload.opencritic }),
+                ...(openCriticScore !== undefined && { opencriticScore: openCriticScore }),
                 genres: payload.genres,
                 platforms: payload.platforms, // Array/Json
                 description: payload.description,

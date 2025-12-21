@@ -4,6 +4,8 @@ import { auth } from '@/auth';
 import { getOwnedGames, SteamGame } from '@/lib/steam';
 import { prisma } from '@/lib/db';
 import { searchIgdbGames } from '@/lib/igdb';
+import { extractDominantColors } from '@/lib/color-utils';
+import { findBestGameArt } from '@/lib/enrichment';
 
 export async function fetchSteamGames() {
   const session = await auth();
@@ -95,7 +97,30 @@ export async function importGames(games: SteamGame[]) {
         const results = await Promise.allSettled(batch.map(async (game) => {
             // Prepare initial game data
             const gameId = game.appid.toString();
-            const steamCover = `https://steamcdn-a.akamaihd.net/steam/apps/${game.appid}/library_600x900.jpg`;
+
+            // Use Smart Cascade to find best art
+            // Steam games typically don't give us year directly in 'getOwnedGames', so we pass null/undefined
+            // But we can try to guess or just rely on title match from Steam Store which is high quality.
+            const bestArt = await findBestGameArt(game.name);
+
+            const coverImage = bestArt?.cover || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.appid}/library_600x900.jpg`;
+            const backgroundImage = bestArt?.background || `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${game.appid}/library_hero.jpg`;
+
+            let primaryColor = null;
+            let secondaryColor = null;
+
+            // Extract colors
+            try {
+                if (coverImage) {
+                    const colors = await extractDominantColors(coverImage);
+                    if (colors) {
+                        primaryColor = colors.primary;
+                        secondaryColor = colors.secondary;
+                    }
+                }
+            } catch (e) {
+                 // Ignore color extraction errors
+            }
 
             // Enrich with IGDB
             let enrichedData = {
@@ -103,8 +128,9 @@ export async function importGames(games: SteamGame[]) {
                 studio: undefined as string | undefined,
                 description: undefined as string | undefined,
                 releaseDate: undefined as Date | undefined,
-                metacritic: undefined as number | undefined,
-                platforms: JSON.stringify(["PC", "Steam Deck"]) // Default as requested
+                platforms: JSON.stringify(["PC", "Steam Deck"]), // Default as requested
+                primaryColor,
+                secondaryColor
             };
 
             try {
@@ -135,11 +161,6 @@ export async function importGames(games: SteamGame[]) {
                     if (igdbGame.first_release_date) {
                         enrichedData.releaseDate = new Date(igdbGame.first_release_date * 1000);
                     }
-
-                    // Extract Metacritic (Aggregated Rating)
-                    if (igdbGame.aggregated_rating) {
-                        enrichedData.metacritic = Math.round(igdbGame.aggregated_rating);
-                    }
                 }
             } catch (error) {
                 console.error(`Failed to enrich game ${game.name}:`, error);
@@ -151,14 +172,16 @@ export async function importGames(games: SteamGame[]) {
                 where: { id: gameId },
                 update: {
                     title: game.name,
-                    coverImage: steamCover,
+                    coverImage,
+                    backgroundImage,
                     ...enrichedData,
                     dataMissing: !enrichedData.description
                 },
                 create: {
                     id: gameId,
                     title: game.name,
-                    coverImage: steamCover,
+                    coverImage,
+                    backgroundImage,
                     ...enrichedData,
                     dataMissing: !enrichedData.description
                 }

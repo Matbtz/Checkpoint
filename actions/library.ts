@@ -4,17 +4,53 @@ import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { searchRawgGame, getRawgGameDetails } from '@/lib/rawg';
+import { extractDominantColors } from '@/lib/color-utils';
 
-export async function updateLibraryEntry(userLibraryId: string, data: { status?: string, playtimeManual?: number | null, progressManual?: number | null, targetedCompletionType?: string }) {
+export async function updateLibraryEntry(
+    userLibraryId: string,
+    data: {
+        status?: string,
+        playtimeManual?: number | null,
+        progressManual?: number | null,
+        targetedCompletionType?: string,
+        customCoverImage?: string | null
+    }
+) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
+
+  // Prepare update data
+  const updateData: any = { ...data };
+
+  // If customCoverImage is present (string)
+  if (data.customCoverImage && typeof data.customCoverImage === 'string') {
+      // Default to null (reset) before extraction
+      updateData.primaryColor = null;
+      updateData.secondaryColor = null;
+
+      try {
+          const colors = await extractDominantColors(data.customCoverImage);
+          if (colors && colors.primary) {
+              updateData.primaryColor = colors.primary;
+              updateData.secondaryColor = colors.secondary;
+          }
+      } catch (e) {
+          console.error("Failed to extract colors for custom cover:", e);
+          // If extraction fails, we leave them as null (correct behavior)
+      }
+  }
+  // If explicitly null (clearing)
+  else if (data.customCoverImage === null) {
+      updateData.primaryColor = null;
+      updateData.secondaryColor = null;
+  }
 
   await prisma.userLibrary.update({
     where: {
       id: userLibraryId,
       userId: session.user.id
     },
-    data: data,
+    data: updateData,
   });
 
   revalidatePath('/dashboard');
@@ -166,7 +202,9 @@ export async function fixGameMatch(gameId: string, hltbData: { main: number, ext
     await prisma.game.update({
         where: { id: gameId },
         data: {
-            hltbTimes: JSON.stringify(hltbData),
+            hltbMain: Math.round(hltbData.main),
+            hltbExtra: Math.round(hltbData.extra),
+            hltbCompletionist: Math.round(hltbData.completionist),
             dataMissing: false // Assume fixed
         }
     });

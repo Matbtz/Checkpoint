@@ -125,8 +125,16 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
       case 'dateAdded':
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       case 'progress':
-        const progressA = calculateProgress(a.playtimeManual ?? a.playtimeSteam ?? 0, a.game.hltbTimes, a.targetedCompletionType || 'Main');
-        const progressB = calculateProgress(b.playtimeManual ?? b.playtimeSteam ?? 0, b.game.hltbTimes, b.targetedCompletionType || 'Main');
+        const progressA = calculateProgress(a.playtimeManual ?? a.playtimeSteam ?? 0, {
+            main: a.game.hltbMain,
+            extra: a.game.hltbExtra,
+            completionist: a.game.hltbCompletionist
+        }, a.targetedCompletionType || 'Main');
+        const progressB = calculateProgress(b.playtimeManual ?? b.playtimeSteam ?? 0, {
+            main: b.game.hltbMain,
+            extra: b.game.hltbExtra,
+            completionist: b.game.hltbCompletionist
+        }, b.targetedCompletionType || 'Main');
         return progressB - progressA;
       case 'releaseDate':
         const dateA = a.game.releaseDate ? new Date(a.game.releaseDate).getTime() : 0;
