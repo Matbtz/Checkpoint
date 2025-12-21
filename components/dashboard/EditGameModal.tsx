@@ -212,18 +212,18 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
       }
 
       // Update Custom Cover Image on Library Entry
-      // If the cover image is different from the global game cover, or if it was already custom
+      // Calculate the effective current cover (user custom or global default)
+      const currentEffectiveCover = item.customCoverImage || item.game.coverImage || "";
       const globalCover = item.game.coverImage || "";
-      if (coverImage !== globalCover || item.customCoverImage) {
-           // If user reset to the global cover, set custom to null (unless global is empty, then whatever)
-           if (coverImage === globalCover && coverImage !== "") {
-                if (item.customCoverImage) {
-                    // Resetting to global
-                    libData.customCoverImage = null;
-                }
+
+      // Only include in payload if the image actually changed from what is currently displayed/stored
+      if (coverImage !== currentEffectiveCover) {
+           if (coverImage === globalCover) {
+               // User changed back to the global default -> Reset custom field to null
+               libData.customCoverImage = null;
            } else {
-                // Setting a custom cover
-                libData.customCoverImage = coverImage;
+               // User selected a new custom image
+               libData.customCoverImage = coverImage;
            }
       }
 
