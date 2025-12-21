@@ -156,8 +156,8 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
 
     // Helper to add images
     const addImages = (c: string[], b: string[]) => {
-        c.forEach(img => covers.add(img));
-        b.forEach(img => backgrounds.add(img));
+        c.forEach(img => { if(img) covers.add(img); });
+        b.forEach(img => { if(img) backgrounds.add(img); });
     };
 
     // Process IGDB
@@ -185,8 +185,8 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
     // Process Steam
     if (steamRes.status === 'fulfilled') {
         steamRes.value.forEach(game => {
-            const libraryUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${game.id}/library_600x900.jpg`;
-            covers.add(libraryUrl);
+            if (game.library_cover) covers.add(game.library_cover);
+            if (game.library_hero) backgrounds.add(game.library_hero);
             if (game.header_image) backgrounds.add(game.header_image);
         });
     }
