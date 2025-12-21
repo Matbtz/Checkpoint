@@ -24,14 +24,19 @@ export async function updateLibraryEntry(
 
   // If customCoverImage is present (string)
   if (data.customCoverImage && typeof data.customCoverImage === 'string') {
+      // Default to null (reset) before extraction
+      updateData.primaryColor = null;
+      updateData.secondaryColor = null;
+
       try {
           const colors = await extractDominantColors(data.customCoverImage);
-          if (colors.primary) {
+          if (colors && colors.primary) {
               updateData.primaryColor = colors.primary;
               updateData.secondaryColor = colors.secondary;
           }
       } catch (e) {
           console.error("Failed to extract colors for custom cover:", e);
+          // If extraction fails, we leave them as null (correct behavior)
       }
   }
   // If explicitly null (clearing)
