@@ -80,9 +80,9 @@ export default async function Home() {
 
                         <div className="flex gap-4 pt-4">
                             {session ? (
-                                <Link href="/dashboard">
+                                <Link href="/library">
                                     <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
-                                        Go to Dashboard
+                                        Go to Library
                                     </Button>
                                 </Link>
                             ) : (
@@ -110,8 +110,8 @@ export default async function Home() {
                     <p>Start importing games to see them here.</p>
                      <div className="mt-8 flex justify-center gap-4">
                         {session ? (
-                             <Link href="/dashboard">
-                                <Button>Go to Dashboard</Button>
+                             <Link href="/library">
+                                <Button>Go to Library</Button>
                              </Link>
                         ) : (
                              <Link href="/login">
