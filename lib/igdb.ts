@@ -259,3 +259,19 @@ export async function getIgdbTimeToBeat(gameId: number): Promise<IgdbTimeToBeat 
     const results = await fetchIgdb<IgdbTimeToBeat>('time_to_beat', body);
     return results.length > 0 ? results[0] : null;
 }
+
+/**
+ * Fetches "Hyped" games (future releases with high interest) from IGDB.
+ */
+export async function getHypedGames(limit: number = 10): Promise<EnrichedIgdbGame[]> {
+    const now = Math.floor(Date.now() / 1000);
+    const fields = `fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+                    involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
+                    screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name, hypes;`;
+
+    // Query: Released in future, has hype, has cover
+    const body = `${fields} where first_release_date > ${now} & hypes > 0 & cover != null; sort hypes desc; limit ${limit};`;
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
+}

@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db';
 import { unstable_cache } from 'next/cache';
 import { Game } from '@prisma/client';
+import { getHypedGames, EnrichedIgdbGame } from '@/lib/igdb';
 
 /**
  * Cached Data Fetcher for Discovery Sections
@@ -98,18 +99,26 @@ export const getCachedDiscoveryGames = unstable_cache(
  */
 export async function getMostAnticipatedGames() {
   try {
-      // 1. Aggregation on UserLibrary (Local Interest)
+      const now = new Date();
+
+      // 1. Aggregation on UserLibrary (Local Interest, Future Releases only)
       const mostAnticipated = await prisma.userLibrary.groupBy({
         by: ['gameId'],
         where: {
             status: 'WISHLIST',
+            game: {
+                releaseDate: {
+                    gt: now
+                }
+            }
         },
         _count: { gameId: true },
         orderBy: { _count: { gameId: 'desc' } },
         take: 10,
       });
 
-      if (mostAnticipated.length > 0) {
+      // If we have enough local data (arbitrary threshold of 5), use it
+      if (mostAnticipated.length >= 5) {
         const gameIds = mostAnticipated.map((item) => item.gameId);
         const games = await prisma.game.findMany({
           where: {
@@ -127,43 +136,54 @@ export async function getMostAnticipatedGames() {
         });
       }
 
-      // 2. Fallback: Local games with high rating released in the future (or simply high rated if none)
-      // Since we might not have upcoming games with ratings yet, we fallback to just high rated recent games
-      // or games with release date in future (if any).
+      // 2. Fallback: IGDB Hype System (External)
+      // Fetches games with high hype from IGDB that are releasing in the future
+      console.log("[Discovery] Not enough local anticipated data. Falling back to IGDB Hype...");
+      const hypedGames = await getHypedGames(10);
 
-      const futureGames = await prisma.game.findMany({
-          where: {
-              releaseDate: {
-                  gt: new Date()
-              }
-          },
-          orderBy: {
-             // If we had a hype score, we'd use it. releaseDate asc is reasonable for "anticipated" if no other metric.
-             releaseDate: 'asc'
-          },
-          take: 10
-      });
-
-      if (futureGames.length > 0) return futureGames;
-
-      // Final Fallback: just top rated games generally
-      // If opencriticScore is missing for all games (unlikely), we fallback to releaseDate desc
-      return await prisma.game.findMany({
-           where: {
-               OR: [
-                   { opencriticScore: { not: null } },
-                   { releaseDate: { not: null } }
-               ]
-           },
-           orderBy: [
-               { opencriticScore: 'desc' },
-               { releaseDate: 'desc' }
-           ],
-           take: 10
-      });
+      return hypedGames.map(mapIgdbToPrismaGame);
 
   } catch (error) {
       console.error("[Discovery] Error fetching anticipated games:", error);
       return [];
   }
+}
+
+/**
+ * Mapper helper to transform IGDB data to Transient Prisma Game Object
+ */
+function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
+    return {
+        id: `igdb-${igdbGame.id}`, // Temporary ID
+        igdbId: igdbGame.id,
+        title: igdbGame.name,
+        slug: igdbGame.slug || '',
+        coverImage: igdbGame.possibleCovers?.[0] || null,
+        backgroundImage: igdbGame.possibleBackgrounds?.[0] || null,
+        releaseDate: igdbGame.first_release_date ? new Date(igdbGame.first_release_date * 1000) : null,
+        description: igdbGame.summary || '',
+        igdbScore: Math.round(igdbGame.aggregated_rating || igdbGame.total_rating || 0),
+        opencriticScore: null,
+        // Default empty/null for required fields
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        steamAppId: null,
+        steamReviewScore: null,
+        steamReviewCount: null,
+        steamReviewPercent: null,
+        isDlc: false,
+        studio: igdbGame.involved_companies?.[0]?.company?.name || null,
+        platforms: igdbGame.platforms ? JSON.stringify(igdbGame.platforms.map(p => p.name)) : null,
+        genres: igdbGame.genres ? JSON.stringify(igdbGame.genres.map(g => g.name)) : null,
+        steamUrl: null,
+        opencriticUrl: null,
+        igdbUrl: igdbGame.url || null,
+        hltbUrl: null,
+        hltbMain: null,
+        hltbExtra: null,
+        hltbCompletionist: null,
+        primaryColor: null,
+        secondaryColor: null,
+        customCoverImage: null
+    };
 }
