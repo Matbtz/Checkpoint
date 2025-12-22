@@ -90,6 +90,7 @@ export interface IgdbGame {
     videos?: IgdbVideo[];
     genres?: { id: number; name: string }[];
     platforms?: { id: number; name: string }[];
+    category?: number;
 }
 
 export interface EnrichedIgdbGame extends IgdbGame {
@@ -161,7 +162,7 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
         search "${query}";
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name, category;
         limit ${limit};
     `;
 
@@ -205,7 +206,7 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
     const body = `
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name, category;
         where id = ${gameId};
     `;
 
