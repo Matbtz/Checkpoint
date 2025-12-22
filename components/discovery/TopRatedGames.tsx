@@ -58,9 +58,9 @@ export function TopRatedGames({ games }: TopRatedGamesProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold tracking-tight">Top Rated Games of {new Date().getFullYear()}</h2>
         <Tabs value={selectedPlatform} onValueChange={setSelectedPlatform} className="w-full sm:w-auto">
-          <TabsList className="w-full sm:w-auto grid grid-cols-2 sm:flex bg-zinc-100 dark:bg-zinc-800">
+          <TabsList className="w-full flex justify-start overflow-x-auto sm:w-auto sm:overflow-visible bg-zinc-100 dark:bg-zinc-800 no-scrollbar pb-1 sm:pb-0">
              {PLATFORMS.map((platform) => (
-                <TabsTrigger key={platform.id} value={platform.id} className="text-xs sm:text-sm">
+                <TabsTrigger key={platform.id} value={platform.id} className="text-xs sm:text-sm flex-shrink-0">
                     {platform.label}
                 </TabsTrigger>
              ))}
