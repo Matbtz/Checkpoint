@@ -1,7 +1,7 @@
 
-import { searchIgdbGames, getIgdbImageUrl, IgdbGame } from './igdb';
+import { searchIgdbGames, getIgdbImageUrl, IgdbGame, EnrichedIgdbGame } from './igdb';
 import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
-import { searchSteamStore } from './steam-store';
+import { searchSteamStore, SteamStoreGame } from './steam-store';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -130,6 +130,7 @@ export interface BestArtResult {
     cover: string | null;
     background: string | null;
     source: 'steam' | 'igdb' | 'rawg';
+    originalData?: EnrichedIgdbGame | RawgGame | SteamStoreGame;
 }
 
 /**
@@ -152,7 +153,8 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
             return {
                 cover: steamMatch.library_cover,
                 background: steamMatch.library_hero,
-                source: 'steam'
+                source: 'steam',
+                originalData: steamMatch
             };
         }
     } catch (e) {
@@ -186,7 +188,8 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
             return {
                 cover,
                 background,
-                source: 'igdb'
+                source: 'igdb',
+                originalData: igdbMatch
             };
         }
     } catch (e) {
@@ -207,7 +210,8 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
             return {
                 cover: rawgMatch.background_image || null,
                 background: rawgMatch.background_image || null, // RAWG often shares same image
-                source: 'rawg'
+                source: 'rawg',
+                originalData: rawgMatch
             };
         }
     } catch (e) {

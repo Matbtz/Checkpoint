@@ -1,5 +1,6 @@
 const IGDB_CLIENT_ID = process.env.IGDB_CLIENT_ID;
 const IGDB_SECRET = process.env.IGDB_SECRET;
+const IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
 
 const BASE_URL = 'https://api.igdb.com/v4';
 
@@ -12,6 +13,11 @@ let tokenExpiry: number | null = null;
  * Le token est mis en cache et régénéré automatiquement avant expiration.
  */
 async function getValidToken(): Promise<string | null> {
+    // 0. Priorité au token statique s'il est fourni (cas sans Secret)
+    if (IGDB_ACCESS_TOKEN) {
+        return IGDB_ACCESS_TOKEN;
+    }
+
     // 1. Vérification du cache
     if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
         return cachedToken;
@@ -62,16 +68,26 @@ export interface IgdbCompany {
     };
 }
 
+export interface IgdbVideo {
+    id: number;
+    video_id: string;
+    name: string;
+}
+
 export interface IgdbGame {
     id: number;
     name: string;
+    slug?: string;
+    url?: string;
     cover?: IgdbImageObject;
     first_release_date?: number;
     summary?: string;
     aggregated_rating?: number; // Critic Score
+    total_rating?: number; // Average of critic and user
     involved_companies?: IgdbCompany[];
     screenshots?: IgdbImageObject[];
     artworks?: IgdbImageObject[];
+    videos?: IgdbVideo[];
     genres?: { id: number; name: string }[];
     platforms?: { id: number; name: string }[];
 }
@@ -79,6 +95,14 @@ export interface IgdbGame {
 export interface EnrichedIgdbGame extends IgdbGame {
     possibleCovers: string[];
     possibleBackgrounds: string[];
+}
+
+export interface IgdbTimeToBeat {
+    id: number;
+    game_id: number;
+    hastly: number; // Seconds
+    normally: number; // Seconds
+    completely: number; // Seconds
 }
 
 /**
@@ -135,9 +159,9 @@ async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): 
 export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
     const body = `
         search "${query}";
-        fields name, cover.image_id, first_release_date, summary, aggregated_rating,
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, genres.name, platforms.name;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
         limit ${limit};
     `;
 
@@ -179,9 +203,9 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
  */
 export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGame | null> {
     const body = `
-        fields name, cover.image_id, first_release_date, summary, aggregated_rating,
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, genres.name, platforms.name;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
         where id = ${gameId};
     `;
 
@@ -214,4 +238,16 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
         possibleCovers: Array.from(new Set(covers)),
         possibleBackgrounds: Array.from(new Set(backgrounds))
     };
+}
+
+/**
+ * Récupère les données Time To Beat pour un jeu
+ */
+export async function getIgdbTimeToBeat(gameId: number): Promise<IgdbTimeToBeat | null> {
+    const body = `
+        fields *;
+        where game_id = ${gameId};
+    `;
+    const results = await fetchIgdb<IgdbTimeToBeat>('time_to_beat', body);
+    return results.length > 0 ? results[0] : null;
 }
