@@ -105,8 +105,9 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn }: ActionBarProps) {
   // We need to implement `updateStatusAction` that handles both create and update.
 
   return (
-    <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/20">
+    <div className="flex items-center justify-center gap-4 bg-white/10 backdrop-blur-md p-2 rounded-lg border border-white/20">
       <div className="flex items-center gap-2">
+        <Label className="text-white text-xs font-medium">Status</Label>
         <Select value={status} onValueChange={handleStatusChange} disabled={loading}>
             <SelectTrigger className="w-[140px] bg-transparent border-white/20 text-white focus:ring-offset-0 focus:ring-white/20">
                 <SelectValue placeholder="Add to..." />
