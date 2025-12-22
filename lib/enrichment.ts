@@ -28,7 +28,7 @@ function getSimilarity(s1: string, s2: string): number {
   if (longerLength === 0) return 1.0;
 
   // Levenshtein Logic
-  const costs = new Array();
+  const costs: number[] = [];
   for (let i = 0; i <= shorter.length; i++) {
     let lastValue = i;
     for (let j = 0; j <= longer.length; j++) {
@@ -195,8 +195,6 @@ export interface BestArtResult {
  * Priority: Steam Library > IGDB > RAWG
  */
 export async function findBestGameArt(title: string, releaseYear?: number | null): Promise<BestArtResult | null> {
-    const normTitle = normalizeTitle(title);
-
     // 1. Steam Store (Priority for Library Assets)
     try {
         const steamResults = await searchSteamStore(title);
