@@ -155,7 +155,7 @@ export async function getMostAnticipatedGames() {
 function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
     return {
         id: `igdb-${igdbGame.id}`, // Temporary ID
-        igdbId: igdbGame.id,
+        igdbId: igdbGame.id.toString(),
         title: igdbGame.name,
         slug: igdbGame.slug || '',
         coverImage: igdbGame.possibleCovers?.[0] || null,
