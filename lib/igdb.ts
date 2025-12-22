@@ -97,6 +97,8 @@ export interface EnrichedIgdbGame extends IgdbGame {
     possibleBackgrounds: string[];
 }
 
+export type DiscoveryType = 'UPCOMING' | 'POPULAR' | 'ANTICIPATED' | 'RECENT';
+
 export interface IgdbTimeToBeat {
     id: number;
     game_id: number;
@@ -206,6 +208,52 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
 /**
  * Discovery Queries for Homepage
  */
+export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number = 10): Promise<EnrichedIgdbGame[]> {
+    const now = Math.floor(Date.now() / 1000);
+    const oneMonthAgo = now - (30 * 24 * 60 * 60);
+
+    let whereClause = '';
+    let sortClause = '';
+
+    switch (type) {
+        case 'UPCOMING':
+            // Jeux qui sortent dans le futur
+            // category = (0, 8, 9) filtre pour avoir jeux principaux, remakes et remasters (exclut DLCs)
+            whereClause = `where first_release_date > ${now} & category = (0, 8, 9)`;
+            sortClause = 'sort first_release_date asc';
+            break;
+
+        case 'RECENT':
+            // Sortis dans les 30 derniers jours
+            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0, 8, 9)`;
+            sortClause = 'sort first_release_date desc';
+            break;
+
+        case 'POPULAR':
+            // Basé sur le nombre de votes (activité) et une note décente
+            whereClause = `where total_rating_count > 50 & total_rating > 70 & category = (0, 8, 9)`;
+            sortClause = 'sort total_rating_count desc';
+            break;
+
+        case 'ANTICIPATED':
+            // Basé sur la "hype" (feature spécifique IGDB) pour les jeux futurs
+            whereClause = `where first_release_date > ${now} & hypes > 0 & category = (0, 8, 9)`;
+            sortClause = 'sort hypes desc';
+            break;
+    }
+
+    const body = `
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, hypes,
+               involved_companies.company.name, genres.name, platforms.name, screenshots.image_id;
+        ${whereClause};
+        ${sortClause};
+        limit ${limit};
+    `;
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
+}
+
 /**
  * Récupère les détails d'un jeu spécifique par ID
  */

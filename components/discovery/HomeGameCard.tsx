@@ -10,7 +10,12 @@ interface HomeGameCardProps {
 }
 
 export function HomeGameCard({ game, rank }: HomeGameCardProps) {
-  const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
+  const releaseDate = game.releaseDate ? new Date(game.releaseDate) : null;
+  const isUpcoming = releaseDate && releaseDate > new Date();
+
+  const displayDate = isUpcoming
+    ? releaseDate?.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : releaseDate?.getFullYear();
 
   return (
     <div
@@ -56,7 +61,7 @@ export function HomeGameCard({ game, rank }: HomeGameCardProps) {
                   {game.title}
               </h3>
                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                  {releaseYear && <span>{releaseYear}</span>}
+                  {displayDate && <span>{displayDate}</span>}
                   {game.studio && (
                       <>
                           <span>•</span>

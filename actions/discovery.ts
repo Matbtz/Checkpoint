@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/db';
 import { unstable_cache } from 'next/cache';
 import { Game } from '@prisma/client';
-import { getHypedGames, EnrichedIgdbGame } from '@/lib/igdb';
+import { getDiscoveryGamesIgdb, EnrichedIgdbGame } from '@/lib/igdb';
 
 /**
  * Cached Data Fetcher for Discovery Sections
@@ -20,13 +20,14 @@ export const getCachedDiscoveryGames = unstable_cache(
     const sixtyDaysFuture = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
 
     try {
+        let localGames: Game[] = [];
+
         switch (type) {
             case 'UPCOMING':
-                return await prisma.game.findMany({
+                localGames = await prisma.game.findMany({
                     where: {
                         releaseDate: {
                             gt: now,
-                            // extend to 6 months if 60 days is too strict, but strictly requested 60 days
                             lte: sixtyDaysFuture
                         }
                     },
@@ -35,9 +36,14 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 10
                 });
+                if (localGames.length < 5) {
+                    const igdbGames = await getDiscoveryGamesIgdb('UPCOMING', 10);
+                    return igdbGames.map(mapIgdbToPrismaGame);
+                }
+                return localGames;
 
             case 'RECENT':
-                return await prisma.game.findMany({
+                localGames = await prisma.game.findMany({
                     where: {
                         releaseDate: {
                             gte: thirtyDaysAgo,
@@ -49,9 +55,14 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 10
                 });
+                if (localGames.length < 5) {
+                    const igdbGames = await getDiscoveryGamesIgdb('RECENT', 10);
+                    return igdbGames.map(mapIgdbToPrismaGame);
+                }
+                return localGames;
 
             case 'TOP_RATED':
-                return await prisma.game.findMany({
+                localGames = await prisma.game.findMany({
                     where: {
                         releaseDate: {
                             gte: startOfYear,
@@ -66,11 +77,18 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 50
                 });
+                 // Note: TOP_RATED logic is specific to local opencritic scores.
+                 // If local is empty, we fallback to IGDB 'POPULAR' (high activity/rating) but strictly it's not "Top Rated by OpenCritic".
+                 // However, for discovery purposes, showing popular games is better than empty.
+                if (localGames.length < 5) {
+                     const igdbGames = await getDiscoveryGamesIgdb('POPULAR', 10);
+                     return igdbGames.map(mapIgdbToPrismaGame);
+                }
+                return localGames;
 
             case 'POPULAR':
             default:
-                 // Fallback to generic highly rated games (all time)
-                 return await prisma.game.findMany({
+                 localGames = await prisma.game.findMany({
                     where: {
                          opencriticScore: {
                              gt: 80
@@ -81,6 +99,11 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 10
                  });
+                 if (localGames.length < 5) {
+                     const igdbGames = await getDiscoveryGamesIgdb('POPULAR', 10);
+                     return igdbGames.map(mapIgdbToPrismaGame);
+                 }
+                 return localGames;
         }
     } catch (error) {
         console.error(`[Discovery] Error fetching ${type}:`, error);
@@ -101,45 +124,48 @@ export async function getMostAnticipatedGames() {
   try {
       const now = new Date();
 
-      // 1. Aggregation on UserLibrary (Local Interest, Future Releases only)
+      // 1. Aggregation on UserLibrary (Local Interest)
+      // Prisma doesn't allow relation filters in groupBy, so we fetch all wishlisted games first
       const mostAnticipated = await prisma.userLibrary.groupBy({
         by: ['gameId'],
         where: {
             status: 'WISHLIST',
-            game: {
-                releaseDate: {
-                    gt: now
-                }
-            }
         },
         _count: { gameId: true },
         orderBy: { _count: { gameId: 'desc' } },
-        take: 10,
+        take: 20, // Take more to account for date filtering
       });
 
-      // If we have enough local data (arbitrary threshold of 5), use it
-      if (mostAnticipated.length >= 5) {
+      if (mostAnticipated.length > 0) {
         const gameIds = mostAnticipated.map((item) => item.gameId);
+
+        // Filter by Future Release Date
         const games = await prisma.game.findMany({
           where: {
             id: {
               in: gameIds,
             },
+            releaseDate: {
+                gt: now
+            }
           },
         });
 
-        // Sort games based on the aggregation order
-        return games.sort((a, b) => {
-          const indexA = gameIds.indexOf(a.id);
-          const indexB = gameIds.indexOf(b.id);
-          return indexA - indexB;
-        });
+        // If we have enough local data (arbitrary threshold of 5), use it
+        if (games.length >= 5) {
+             // Sort games based on the aggregation order
+            return games.sort((a, b) => {
+                const indexA = gameIds.indexOf(a.id);
+                const indexB = gameIds.indexOf(b.id);
+                return indexA - indexB;
+            });
+        }
       }
 
       // 2. Fallback: IGDB Hype System (External)
       // Fetches games with high hype from IGDB that are releasing in the future
       console.log("[Discovery] Not enough local anticipated data. Falling back to IGDB Hype...");
-      const hypedGames = await getHypedGames(10);
+      const hypedGames = await getDiscoveryGamesIgdb('ANTICIPATED', 10);
 
       return hypedGames.map(mapIgdbToPrismaGame);
 
@@ -171,7 +197,7 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         steamReviewPercent: null,
         isDlc: false,
         studio: igdbGame.involved_companies?.[0]?.company?.name || null,
-        platforms: igdbGame.platforms ? JSON.stringify(igdbGame.platforms.map(p => p.name)) : null,
+        platforms: igdbGame.platforms ? JSON.stringify(igdbGame.platforms.map(p => ({ name: p.name }))) : null,
         genres: igdbGame.genres ? JSON.stringify(igdbGame.genres.map(g => g.name)) : null,
         steamUrl: null,
         opencriticUrl: null,
