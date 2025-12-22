@@ -20,68 +20,12 @@ export interface EnrichedGameData {
     description?: string;
 }
 
-// UTILS
-function getSimilarity(s1: string, s2: string): number {
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-  const longerLength = longer.length;
-  if (longerLength === 0) return 1.0;
-
-  // Levenshtein Logic
-  const costs: number[] = [];
-  for (let i = 0; i <= shorter.length; i++) {
-    let lastValue = i;
-    for (let j = 0; j <= longer.length; j++) {
-      if (i === 0) costs[j] = j;
-      else {
-        if (j > 0) {
-          let newValue = costs[j - 1];
-          if (shorter.charAt(i - 1) !== longer.charAt(j - 1))
-            newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-          costs[j - 1] = lastValue;
-          lastValue = newValue;
-        }
-      }
-    }
-    if (i > 0) costs[longer.length] = lastValue;
-  }
-  return (longerLength - costs[longer.length]) / longerLength;
-}
-
-function containsForbiddenTerms(query: string, candidate: string): boolean {
-  const forbidden = ['soundtrack', 'artbook', 'dlc', 'season pass', 'bundle'];
-  const q = query.toLowerCase();
-  const c = candidate.toLowerCase();
-  // Return true if candidate has a forbidden term that the query DOES NOT have
-  return forbidden.some(term => c.includes(term) && !q.includes(term));
-}
-
-// MAIN MATCHING FUNCTION
-export function checkTitleMatch(query: string, candidate: string): number {
-    const q = normalizeTitle(query);
-    const c = normalizeTitle(candidate);
-
-    if (containsForbiddenTerms(q, c)) return 0; // Immediate reject
-    if (q === c) return 100; // Exact match
-
-    const similarity = getSimilarity(q, c);
-    return similarity * 100; // Return score 0-100
-}
-
 export async function searchGamesEnriched(query: string, provider: 'igdb' | 'rawg' | 'all' = 'all'): Promise<EnrichedGameData[]> {
     let igdbResults: IgdbGame[] = [];
     let rawgResults: RawgGame[] = [];
 
     if (provider === 'all' || provider === 'igdb') {
-        const results = await searchIgdbGames(query, 10); // Increase limit to filter effectively
-        igdbResults = results.filter(g => {
-            // Filter by category: Main Game (0), Remake (8), Remaster (9), Expanded Game (10)
-            const isMainGame = [0, 8, 9, 10].includes(g.category ?? 0);
-            if (!isMainGame) return false;
-
-            const score = checkTitleMatch(query, g.name);
-            return score >= 60; // Less strict for general search, but filter clear mismatches
-        });
+        igdbResults = await searchIgdbGames(query, 5);
     }
     if (provider === 'all' || provider === 'rawg') {
         const rawgList = await searchRawgGames(query, 5);
@@ -195,12 +139,13 @@ export interface BestArtResult {
  * Priority: Steam Library > IGDB > RAWG
  */
 export async function findBestGameArt(title: string, releaseYear?: number | null): Promise<BestArtResult | null> {
+    const normTitle = normalizeTitle(title);
+
     // 1. Steam Store (Priority for Library Assets)
     try {
         const steamResults = await searchSteamStore(title);
         const steamMatch = steamResults.find(g => {
-            const matchScore = checkTitleMatch(title, g.name);
-            const titleMatch = matchScore >= 80;
+            const titleMatch = normalizeTitle(g.name) === normTitle;
             const yearMatch = releaseYear ? isYearMatch(releaseYear, g.releaseYear) : true;
             return titleMatch && yearMatch;
         });
@@ -219,32 +164,13 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
 
     // 2. IGDB (High quality covers & art)
     try {
-        const igdbResults = await searchIgdbGames(title, 10); // Fetch more to filter down
-
-        // Filter by category and calculate score
-        const candidates = igdbResults.map(g => ({
-             ...g,
-             matchScore: checkTitleMatch(title, g.name)
-        })).filter(g => {
-             // Filter by Category (if source is IGDB): [0, 8, 9, 10].includes(game.category)
-             const isMainGame = [0, 8, 9, 10].includes(g.category ?? 0);
-             if (!isMainGame) return false;
-
-             // Threshold: Only accept matches with a similarity score ≥ 80% (or 90% if no release year is available).
-             const threshold = releaseYear ? 80 : 90;
-             if (g.matchScore < threshold) return false;
-
-             // Check year match if available
-             const gameYear = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null;
-             const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
-
-             return yearMatch;
+        const igdbResults = await searchIgdbGames(title, 5);
+        const igdbMatch = igdbResults.find(g => {
+            const titleMatch = normalizeTitle(g.name) === normTitle;
+            const gameYear = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null;
+            const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
+            return titleMatch && yearMatch;
         });
-
-        // Sort by match score descending
-        candidates.sort((a, b) => b.matchScore - a.matchScore);
-
-        const igdbMatch = candidates.length > 0 ? candidates[0] : null;
 
         if (igdbMatch) {
             let cover = null;
@@ -275,8 +201,7 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
     try {
         const rawgResults = await searchRawgGames(title, 5);
         const rawgMatch = rawgResults.find(g => {
-            const matchScore = checkTitleMatch(title, g.name);
-            const titleMatch = matchScore >= 80;
+            const titleMatch = normalizeTitle(g.name) === normTitle;
             const gameYear = g.released ? new Date(g.released).getFullYear() : null;
             const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
             return titleMatch && yearMatch;

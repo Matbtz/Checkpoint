@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
@@ -27,7 +26,6 @@ interface GameCardProps {
 }
 
 export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSelected, onToggleSelect }: GameCardProps) {
-  const router = useRouter();
   const { game } = item;
   const extendedGame = game as ExtendedGame;
 
@@ -147,15 +145,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
       <div className="relative z-20 grid h-full grid-cols-[100px_1fr] gap-4 p-3.5">
 
         {/* Column 1: Cover Art */}
-        <div
-            onClick={(e) => {
-                if (!isDeleteMode) {
-                    e.stopPropagation();
-                    router.push(`/game/${game.id}`);
-                }
-            }}
-            className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10 group-hover:scale-[1.02] transition-transform duration-500 cursor-alias"
-        >
+        <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10 group-hover:scale-[1.02] transition-transform duration-500">
              <Image
                 src={currentCoverImage}
                 alt={game.title}
