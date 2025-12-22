@@ -55,12 +55,12 @@ export default async function GamePage(props: { params: Promise<{ id: string }> 
             ) : (
                 <div className="w-full h-full bg-zinc-900" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-50 dark:from-black via-zinc-900/60 to-black/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/60 to-black/30" />
             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
         </div>
 
         {/* Hero Content */}
-        <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 lg:px-24 flex flex-col md:flex-row gap-8 items-end">
+        <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 lg:px-24 flex flex-col md:flex-row gap-8 items-end z-10">
 
             {/* Poster */}
             <div className="relative w-[140px] md:w-[200px] aspect-[3/4] rounded-lg shadow-2xl overflow-hidden border-2 border-white/10 shrink-0 hidden md:block">
@@ -88,7 +88,7 @@ export default async function GamePage(props: { params: Promise<{ id: string }> 
                     <ActionBar
                         gameId={game.id}
                         userLibrary={userLibrary}
-                        isLoggedIn={!!userId}
+                        isLoggedIn={!!session}
                     />
                     {game.dataMissing && (
                          <RefreshButton gameId={game.id} gameTitle={game.title} />
