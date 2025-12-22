@@ -157,7 +157,6 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         id: `igdb-${igdbGame.id}`, // Temporary ID
         igdbId: igdbGame.id.toString(),
         title: igdbGame.name,
-        slug: igdbGame.slug || '',
         coverImage: igdbGame.possibleCovers?.[0] || null,
         backgroundImage: igdbGame.possibleBackgrounds?.[0] || null,
         releaseDate: igdbGame.first_release_date ? new Date(igdbGame.first_release_date * 1000) : null,
@@ -165,7 +164,6 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         igdbScore: Math.round(igdbGame.aggregated_rating || igdbGame.total_rating || 0),
         opencriticScore: null,
         // Default empty/null for required fields
-        createdAt: new Date(),
         updatedAt: new Date(),
         steamAppId: null,
         steamReviewScore: null,
@@ -184,6 +182,10 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         hltbCompletionist: null,
         primaryColor: null,
         secondaryColor: null,
-        customCoverImage: null
+        igdbTime: null,
+        dataMissing: false,
+        dataFetched: false,
+        videos: [],
+        screenshots: [],
     };
 }
