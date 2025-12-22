@@ -10,6 +10,7 @@ export interface EnrichedGameData {
     studio: string | null;
     metacritic: number | null;
     opencriticScore?: number | null;
+    opencriticUrl?: string | null;
     genres: string[];
     platforms?: string[];
     availableCovers: string[];
