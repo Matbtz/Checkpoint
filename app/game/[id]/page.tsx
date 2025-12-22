@@ -60,7 +60,7 @@ export default async function GamePage(props: { params: Promise<{ id: string }> 
         </div>
 
         {/* Hero Content */}
-        <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 lg:px-24 flex flex-col md:flex-row gap-8 items-end z-10">
+        <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 lg:px-24 flex flex-col md:flex-row gap-8 items-center md:items-end z-10">
 
             {/* Poster */}
             <div className="relative w-[140px] md:w-[200px] aspect-[3/4] rounded-lg shadow-2xl overflow-hidden border-2 border-white/10 shrink-0 hidden md:block">
@@ -74,17 +74,17 @@ export default async function GamePage(props: { params: Promise<{ id: string }> 
             </div>
 
             {/* Info & Actions */}
-            <div className="flex-1 space-y-4 mb-4">
+            <div className="flex-1 space-y-4 mb-4 text-center md:text-left">
                 <div className="space-y-1">
                     <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white drop-shadow-xl">{game.title}</h1>
-                    <div className="flex items-center gap-3 text-lg text-zinc-300 font-medium">
+                    <div className="flex items-center justify-center md:justify-start gap-3 text-lg text-zinc-300 font-medium">
                         {game.studio && <span>{game.studio}</span>}
                         {game.studio && releaseYear && <span>•</span>}
                         {releaseYear && <span>{releaseYear}</span>}
                     </div>
                 </div>
 
-                <div className="pt-2 flex flex-wrap gap-4 items-center">
+                <div className="pt-2 flex flex-wrap gap-4 items-center justify-center md:justify-start">
                     <ActionBar
                         gameId={game.id}
                         userLibrary={userLibrary}
