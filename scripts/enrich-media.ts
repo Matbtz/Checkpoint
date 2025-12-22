@@ -37,7 +37,7 @@ async function main() {
          console.log(`   ✅ Images trouvées via [${art.source.toUpperCase()}]`);
          // Si la source est IGDB, on a déjà les données via findBestGameArt qui retourne originalData
          if (art.source === 'igdb' && art.originalData) {
-             igdbData = art.originalData;
+             igdbData = art.originalData as EnrichedIgdbGame;
          }
     } else {
         console.log(`   ❌ Aucun match strict trouvé pour les images.`);

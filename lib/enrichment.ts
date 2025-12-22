@@ -1,7 +1,7 @@
 
-import { searchIgdbGames, getIgdbImageUrl, IgdbGame } from './igdb';
+import { searchIgdbGames, getIgdbImageUrl, IgdbGame, EnrichedIgdbGame } from './igdb';
 import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
-import { searchSteamStore } from './steam-store';
+import { searchSteamStore, SteamStoreGame } from './steam-store';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -130,7 +130,7 @@ export interface BestArtResult {
     cover: string | null;
     background: string | null;
     source: 'steam' | 'igdb' | 'rawg';
-    originalData?: any;
+    originalData?: EnrichedIgdbGame | RawgGame | SteamStoreGame;
 }
 
 /**
