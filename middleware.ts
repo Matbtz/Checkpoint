@@ -6,16 +6,20 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req });
   const isAuth = !!token;
   const isAuthPage = req.nextUrl.pathname.startsWith('/login') || req.nextUrl.pathname.startsWith('/register');
-  const isRootPage = req.nextUrl.pathname === '/';
-
-  // If user is authenticated and tries to access login/register or root, redirect to dashboard
-  if (isAuth && (isAuthPage || isRootPage)) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+  // If user is authenticated and tries to access login/register, redirect to library
+  if (isAuth && isAuthPage) {
+    return NextResponse.redirect(new URL('/library', req.url));
   }
 
   // If user is NOT authenticated and tries to access protected routes, redirect to login
   // Add other protected routes here if needed
-  const isProtectedPath = req.nextUrl.pathname.startsWith('/dashboard') || req.nextUrl.pathname.startsWith('/import');
+  const isProtectedPath =
+    req.nextUrl.pathname.startsWith('/dashboard') ||
+    req.nextUrl.pathname.startsWith('/import') ||
+    req.nextUrl.pathname.startsWith('/library') ||
+    req.nextUrl.pathname.startsWith('/statistics') ||
+    req.nextUrl.pathname.startsWith('/add') ||
+    req.nextUrl.pathname.startsWith('/settings');
 
   if (!isAuth && isProtectedPath) {
     let from = req.nextUrl.pathname;
