@@ -2,9 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/auth";
 import {
-    getTopRatedGames,
-    getRecentReleases,
-    getUpcomingGames,
+    getCachedDiscoveryGames,
     getMostAnticipatedGames
 } from "@/actions/discovery";
 import { TopRatedGames } from "@/components/discovery/TopRatedGames";
@@ -22,9 +20,9 @@ export default async function Home() {
       upcomingGames,
       mostAnticipatedGames
   ] = await Promise.all([
-      getTopRatedGames(),
-      getRecentReleases(),
-      getUpcomingGames(),
+      getCachedDiscoveryGames('TOP_RATED'),
+      getCachedDiscoveryGames('RECENT'), // Or 'POPULAR' based on preference, using 'RECENT' per section title
+      getCachedDiscoveryGames('UPCOMING'),
       getMostAnticipatedGames()
   ]);
 

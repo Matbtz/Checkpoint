@@ -154,20 +154,9 @@ async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): 
 }
 
 /**
- * Recherche de jeux avec récupération étendue des images
+ * Helper to map raw IGDB games to EnrichedIgdbGame
  */
-export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
-    const body = `
-        search "${query}";
-        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
-               involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
-        limit ${limit};
-    `;
-
-    const games = await fetchIgdb<IgdbGame>('games', body);
-
-    // Mapping et déduplication des images
+function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
     return games.map(game => {
         const covers: string[] = [];
         const backgrounds: string[] = [];
@@ -196,6 +185,86 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
             possibleBackgrounds: Array.from(new Set(backgrounds))
         };
     });
+}
+
+/**
+ * Recherche de jeux avec récupération étendue des images
+ */
+export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
+    const body = `
+        search "${query}";
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+               involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+        limit ${limit};
+    `;
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
+}
+
+/**
+ * Discovery Queries for Homepage
+ */
+export async function getDiscoveryGamesIgdb(
+    type: 'UPCOMING' | 'POPULAR' | 'RECENT' | 'TOP_RATED' | 'HYPED',
+    limit: number = 10
+): Promise<EnrichedIgdbGame[]> {
+    const now = Math.floor(Date.now() / 1000);
+    let whereClause = '';
+    let sortClause = '';
+
+    // Standard fields for discovery
+    const fields = `fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+                    involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
+                    screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;`;
+
+    switch (type) {
+        case 'UPCOMING':
+            // Released in future, sort by soonest
+            const twoMonthsFromNow = now + (60 * 24 * 60 * 60);
+            whereClause = `where first_release_date > ${now} & first_release_date < ${twoMonthsFromNow} & cover != null;`;
+            sortClause = `sort first_release_date asc;`;
+            break;
+
+        case 'RECENT':
+            // Released in last 30 days
+            const thirtyDaysAgo = now - (30 * 24 * 60 * 60);
+            whereClause = `where first_release_date < ${now} & first_release_date > ${thirtyDaysAgo} & cover != null;`;
+            sortClause = `sort first_release_date desc;`;
+            break;
+
+        case 'TOP_RATED':
+            // Released current year, high rating
+            const currentYearStart = Math.floor(new Date(new Date().getFullYear(), 0, 1).getTime() / 1000);
+            whereClause = `where first_release_date >= ${currentYearStart} & first_release_date <= ${now} & total_rating_count > 10 & cover != null;`;
+            sortClause = `sort total_rating desc;`;
+            break;
+
+        case 'HYPED':
+             // Future releases with high hype/interest
+             whereClause = `where first_release_date > ${now} & hypes > 0 & cover != null;`;
+             sortClause = `sort hypes desc;`;
+             break;
+
+        case 'POPULAR':
+        default:
+             // Fallback to recent popular (last 3 months, high rating)
+             const threeMonthsAgo = now - (90 * 24 * 60 * 60);
+             whereClause = `where first_release_date > ${threeMonthsAgo} & first_release_date < ${now} & total_rating_count > 20 & cover != null;`;
+             sortClause = `sort total_rating_count desc;`;
+             break;
+    }
+
+    const body = `${fields} ${whereClause} ${sortClause} limit ${limit};`;
+
+    // For HYPED games, we might want to query hypes field specifically if needed, but 'hypes' is not in standard fields list above?
+    // Actually 'hypes' is a valid field on Game endpoint but let's check if we requested it.
+    // We didn't. But we are sorting by it. It works for sorting even if not in response, usually.
+    // However, to be safe and clean, let's stick to the requested fields.
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
 }
 
 /**
