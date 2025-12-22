@@ -47,6 +47,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
 
   // Scores
   const [fetchedOpenCritic, setFetchedOpenCritic] = useState<number | null>(null);
+  const [fetchedOpenCriticUrl, setFetchedOpenCriticUrl] = useState<string | null>(null);
 
   // Status & Goal
   const [status, setStatus] = useState<string>('BACKLOG');
@@ -139,10 +140,14 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
     try {
         // 1. Fetch OpenCritic if not present
         let score = game.opencriticScore;
+        let url = game.opencriticUrl;
         if (!score && game.source !== 'manual') {
             try {
-                const fetchedScore = await fetchOpenCriticAction(game.title);
-                if (fetchedScore) score = fetchedScore;
+                const ocResult = await fetchOpenCriticAction(game.title);
+                if (ocResult) {
+                    if (ocResult.score) score = ocResult.score;
+                    if (ocResult.url) url = ocResult.url;
+                }
             } catch (e) {
                 console.error("Failed to fetch OpenCritic score:", e);
             }
@@ -219,6 +224,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         setCompletionTarget('MAIN');
 
         setFetchedOpenCritic(score || null);
+        setFetchedOpenCriticUrl(url || null);
 
         setStep('customize');
         setMobileTab('art');
@@ -246,6 +252,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         releaseDate: selectedGame.releaseDate,
         studio,
             opencriticScore: fetchedOpenCritic || selectedGame.opencriticScore || null,
+            opencriticUrl: fetchedOpenCriticUrl || selectedGame.opencriticUrl || null,
         source: selectedGame.source,
         genres: JSON.stringify(genres),
         platforms: platforms, // Json type, pass array directly

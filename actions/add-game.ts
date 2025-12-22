@@ -150,6 +150,7 @@ export async function addGameExtended(payload: any) {
         // Priorité au score passé par le frontend (payload.opencritic)
         // Sinon, on tente de le fetcher
         let openCriticScore = payload.opencriticScore;
+        let openCriticUrl = payload.opencriticUrl;
 
         if (openCriticScore === undefined || openCriticScore === null) {
             // Also check legacy prop just in case frontend sends it
@@ -158,7 +159,11 @@ export async function addGameExtended(payload: any) {
 
         if (openCriticScore === undefined || openCriticScore === null) {
             try {
-                openCriticScore = await getOpenCriticScore(payload.title);
+                const ocResult = await getOpenCriticScore(payload.title);
+                openCriticScore = ocResult.score;
+                if (!openCriticUrl) {
+                    openCriticUrl = ocResult.url;
+                }
             } catch (e) {
                 console.error("OpenCritic Fetch Error:", e);
             }
@@ -173,6 +178,7 @@ export async function addGameExtended(payload: any) {
                 releaseDate: payload.releaseDate ? new Date(payload.releaseDate) : null,
                 studio: payload.studio,
                 opencriticScore: openCriticScore,
+                opencriticUrl: openCriticUrl,
                 genres: payload.genres, // Stringified JSON
                 platforms: payload.platforms, // Array/Json
                 description: payload.description,
@@ -185,6 +191,7 @@ export async function addGameExtended(payload: any) {
         // UPDATE EXISTING GAME if platforms/genres/etc are missing or explicit update requested
         // Since the user just customized it in the wizard, we should trust this new data.
         const openCriticScore = payload.opencriticScore !== undefined ? payload.opencriticScore : payload.opencritic;
+        const openCriticUrl = payload.opencriticUrl;
 
         await prisma.game.update({
             where: { id: payload.id },
@@ -195,6 +202,7 @@ export async function addGameExtended(payload: any) {
                 studio: payload.studio,
                 // Only update opencritic if payload has it (it might be null if not fetched)
                 ...(openCriticScore !== undefined && { opencriticScore: openCriticScore }),
+                ...(openCriticUrl !== undefined && { opencriticUrl: openCriticUrl }),
                 genres: payload.genres,
                 platforms: payload.platforms, // Array/Json
                 description: payload.description,
