@@ -69,7 +69,7 @@ export function TopRatedGames({ games }: TopRatedGamesProps) {
       </div>
 
       <ScrollArea className="w-full whitespace-nowrap pb-4">
-        <div className="flex w-max space-x-4 p-1">
+        <div className="flex space-x-4 p-1">
           {filteredGames.length > 0 ? (
               filteredGames.map((game, index) => (
                 <HomeGameCard key={game.id} game={game} rank={index + 1} />

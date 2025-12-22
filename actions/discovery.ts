@@ -2,72 +2,91 @@
 
 import { prisma } from '@/lib/db';
 import { unstable_cache } from 'next/cache';
-import { getDiscoveryGamesIgdb, EnrichedIgdbGame } from '@/lib/igdb';
 import { Game } from '@prisma/client';
-
-// -- Helpers --
-
-/**
- * Maps IGDB data to a mock Prisma Game object for UI compatibility
- */
-function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
-    const releaseDate = igdbGame.first_release_date
-        ? new Date(igdbGame.first_release_date * 1000)
-        : null;
-
-    // We mock the Game object.
-    // ID is prefixed to avoid collision with real UUIDs, though UI handles string IDs fine.
-    // We explicitly cast to any to bypass strict Prisma type requirements for missing fields
-    // that are not used in the Discovery UI.
-    return {
-        id: `igdb-${igdbGame.id}`,
-        title: igdbGame.name,
-        coverImage: igdbGame.possibleCovers[0] || null,
-        backgroundImage: igdbGame.possibleBackgrounds[0] || null,
-        description: igdbGame.summary || '',
-        releaseDate: releaseDate,
-        opencriticScore: igdbGame.total_rating ? Math.round(igdbGame.total_rating) : null,
-        studio: igdbGame.involved_companies?.find(c => c.developer)?.company.name || null,
-
-        // Mocking required fields
-        igdbId: igdbGame.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        genres: JSON.stringify(igdbGame.genres || []),
-        platforms: igdbGame.platforms || [], // Direct Json usage
-
-        // Nullable fields
-        steamAppId: null,
-        steamUrl: null,
-        opencriticUrl: null,
-        igdbUrl: igdbGame.url || null,
-        hltbUrl: null,
-        hltbMain: null,
-        hltbExtra: null,
-        hltbCompletionist: null,
-        igdbScore: igdbGame.aggregated_rating ? Math.round(igdbGame.aggregated_rating) : null,
-        steamReviewScore: null,
-        steamReviewCount: null,
-        steamReviewPercent: null,
-        isDlc: false,
-        primaryColor: null,
-        secondaryColor: null,
-    } as unknown as Game;
-}
-
-// -- Cached Actions --
 
 /**
  * Cached Data Fetcher for Discovery Sections
- * Revalidates every 24 hours (86400s) or 12 hours depending on logic usage.
+ * Revalidates every 12 hours.
  */
 export const getCachedDiscoveryGames = unstable_cache(
   async (type: 'UPCOMING' | 'POPULAR' | 'RECENT' | 'TOP_RATED' | 'HYPED') => {
-    console.log(`[Discovery] Fetching fresh data for ${type} from IGDB...`);
-    const games = await getDiscoveryGamesIgdb(type, type === 'TOP_RATED' ? 50 : 10);
-    return games.map(mapIgdbToPrismaGame);
+    console.log(`[Discovery] Fetching fresh data for ${type} from Local DB...`);
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const startOfYear = new Date(currentYear, 0, 1);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysFuture = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+    try {
+        switch (type) {
+            case 'UPCOMING':
+                return await prisma.game.findMany({
+                    where: {
+                        releaseDate: {
+                            gt: now,
+                            // extend to 6 months if 60 days is too strict, but strictly requested 60 days
+                            lte: sixtyDaysFuture
+                        }
+                    },
+                    orderBy: {
+                        releaseDate: 'asc'
+                    },
+                    take: 10
+                });
+
+            case 'RECENT':
+                return await prisma.game.findMany({
+                    where: {
+                        releaseDate: {
+                            gte: thirtyDaysAgo,
+                            lte: now
+                        }
+                    },
+                    orderBy: {
+                        releaseDate: 'desc'
+                    },
+                    take: 10
+                });
+
+            case 'TOP_RATED':
+                return await prisma.game.findMany({
+                    where: {
+                        releaseDate: {
+                            gte: startOfYear,
+                            lte: now
+                        },
+                        opencriticScore: {
+                            not: null
+                        }
+                    },
+                    orderBy: {
+                        opencriticScore: 'desc'
+                    },
+                    take: 50
+                });
+
+            case 'POPULAR':
+            default:
+                 // Fallback to generic highly rated games (all time)
+                 return await prisma.game.findMany({
+                    where: {
+                         opencriticScore: {
+                             gt: 80
+                         }
+                    },
+                    orderBy: {
+                        opencriticScore: 'desc'
+                    },
+                    take: 10
+                 });
+        }
+    } catch (error) {
+        console.error(`[Discovery] Error fetching ${type}:`, error);
+        return [];
+    }
   },
-  ['discovery-games-igdb-v1'],
+  ['discovery-games-local-v1'],
   {
     revalidate: 3600 * 12, // 12 hours cache
     tags: ['discovery']
@@ -75,7 +94,7 @@ export const getCachedDiscoveryGames = unstable_cache(
 );
 
 /**
- * Hybrid Fetcher: Local DB first, fallback to Cached IGDB
+ * Hybrid Fetcher: Local DB Anticipated
  */
 export async function getMostAnticipatedGames() {
   try {
@@ -90,8 +109,7 @@ export async function getMostAnticipatedGames() {
         take: 10,
       });
 
-      // If we have substantial local data (e.g., at least 5 anticipated games)
-      if (mostAnticipated.length >= 5) {
+      if (mostAnticipated.length > 0) {
         const gameIds = mostAnticipated.map((item) => item.gameId);
         const games = await prisma.game.findMany({
           where: {
@@ -109,9 +127,40 @@ export async function getMostAnticipatedGames() {
         });
       }
 
-      // 2. Fallback: IGDB Hypes (Global Interest)
-      // We use the cached action for this to avoid hitting API limit
-      return await getCachedDiscoveryGames('HYPED');
+      // 2. Fallback: Local games with high rating released in the future (or simply high rated if none)
+      // Since we might not have upcoming games with ratings yet, we fallback to just high rated recent games
+      // or games with release date in future (if any).
+
+      const futureGames = await prisma.game.findMany({
+          where: {
+              releaseDate: {
+                  gt: new Date()
+              }
+          },
+          orderBy: {
+             // If we had a hype score, we'd use it. releaseDate asc is reasonable for "anticipated" if no other metric.
+             releaseDate: 'asc'
+          },
+          take: 10
+      });
+
+      if (futureGames.length > 0) return futureGames;
+
+      // Final Fallback: just top rated games generally
+      // If opencriticScore is missing for all games (unlikely), we fallback to releaseDate desc
+      return await prisma.game.findMany({
+           where: {
+               OR: [
+                   { opencriticScore: { not: null } },
+                   { releaseDate: { not: null } }
+               ]
+           },
+           orderBy: [
+               { opencriticScore: 'desc' },
+               { releaseDate: 'desc' }
+           ],
+           take: 10
+      });
 
   } catch (error) {
       console.error("[Discovery] Error fetching anticipated games:", error);

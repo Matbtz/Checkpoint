@@ -27,7 +27,8 @@ export default async function Home() {
   ]);
 
   // Determine Hero Game (Use #1 Top Rated or fallback)
-  const heroGame: Game | null = topRatedGames.length > 0 ? topRatedGames[0] : (recentReleases[0] || null);
+  const isTopRated = topRatedGames.length > 0;
+  const heroGame: Game | null = isTopRated ? topRatedGames[0] : (recentReleases[0] || null);
 
   const heroImage = heroGame?.backgroundImage || heroGame?.coverImage;
 
@@ -58,7 +59,7 @@ export default async function Home() {
                 <div className="relative z-10 container mx-auto flex h-full flex-col justify-end pb-12 px-4 md:px-6">
                     <div className="max-w-2xl space-y-4">
                         <div className="flex items-center gap-2">
-                            {heroGame.opencriticScore && (
+                            {isTopRated && heroGame.opencriticScore && (
                                 <span className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-3 py-1 text-sm font-bold text-white shadow-lg">
                                     Top Rated #{1}
                                 </span>
