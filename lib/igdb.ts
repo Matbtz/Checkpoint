@@ -5,18 +5,21 @@ const IGDB_ACCESS_TOKEN = process.env.IGDB_ACCESS_TOKEN;
 const BASE_URL = 'https://api.igdb.com/v4';
 
 // Cache simple pour le token en mémoire
-// On initialise avec le token de l'env s'il existe
-let cachedToken: string | null = IGDB_ACCESS_TOKEN || null;
+let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
 
 /**
  * Récupère un token valide via Client ID + Secret.
  * Le token est mis en cache et régénéré automatiquement avant expiration.
  */
-export async function getValidToken(): Promise<string | null> {
+async function getValidToken(): Promise<string | null> {
+    // 0. Priorité au token statique s'il est fourni (cas sans Secret)
+    if (IGDB_ACCESS_TOKEN) {
+        return IGDB_ACCESS_TOKEN;
+    }
+
     // 1. Vérification du cache
-    // Si on a un token et qu'on ne connait pas son expiry (env) OU qu'il n'est pas expiré
-    if (cachedToken && (!tokenExpiry || Date.now() < tokenExpiry)) {
+    if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
         return cachedToken;
     }
 
@@ -87,13 +90,14 @@ export interface IgdbGame {
     videos?: IgdbVideo[];
     genres?: { id: number; name: string }[];
     platforms?: { id: number; name: string }[];
-    category?: number;
 }
 
 export interface EnrichedIgdbGame extends IgdbGame {
     possibleCovers: string[];
     possibleBackgrounds: string[];
 }
+
+export type DiscoveryType = 'UPCOMING' | 'POPULAR' | 'ANTICIPATED' | 'RECENT';
 
 export interface IgdbTimeToBeat {
     id: number;
@@ -152,20 +156,9 @@ async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): 
 }
 
 /**
- * Recherche de jeux avec récupération étendue des images
+ * Helper to map raw IGDB games to EnrichedIgdbGame
  */
-export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
-    const body = `
-        search "${query}";
-        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
-               involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name, category;
-        limit ${limit};
-    `;
-
-    const games = await fetchIgdb<IgdbGame>('games', body);
-
-    // Mapping et déduplication des images
+function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
     return games.map(game => {
         const covers: string[] = [];
         const backgrounds: string[] = [];
@@ -197,13 +190,78 @@ export async function searchIgdbGames(query: string, limit: number = 10): Promis
 }
 
 /**
+ * Recherche de jeux avec récupération étendue des images
+ */
+export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
+    const body = `
+        search "${query}";
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+               involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+        limit ${limit};
+    `;
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
+}
+
+/**
+ * Discovery Queries for Homepage
+ */
+export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number = 10): Promise<EnrichedIgdbGame[]> {
+    const now = Math.floor(Date.now() / 1000);
+    const oneMonthAgo = now - (30 * 24 * 60 * 60);
+
+    let whereClause = '';
+    let sortClause = '';
+
+    switch (type) {
+        case 'UPCOMING':
+            // Jeux qui sortent dans le futur
+            // category = (0, 8, 9) filtre pour avoir jeux principaux, remakes et remasters (exclut DLCs)
+            whereClause = `where first_release_date > ${now} & category = (0, 8, 9)`;
+            sortClause = 'sort first_release_date asc';
+            break;
+
+        case 'RECENT':
+            // Sortis dans les 30 derniers jours
+            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0, 8, 9)`;
+            sortClause = 'sort first_release_date desc';
+            break;
+
+        case 'POPULAR':
+            // Basé sur le nombre de votes (activité) et une note décente
+            whereClause = `where total_rating_count > 50 & total_rating > 70 & category = (0, 8, 9)`;
+            sortClause = 'sort total_rating_count desc';
+            break;
+
+        case 'ANTICIPATED':
+            // Basé sur la "hype" (feature spécifique IGDB) pour les jeux futurs
+            whereClause = `where first_release_date > ${now} & hypes > 0 & category = (0, 8, 9)`;
+            sortClause = 'sort hypes desc';
+            break;
+    }
+
+    const body = `
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, hypes,
+               involved_companies.company.name, genres.name, platforms.name, screenshots.image_id;
+        ${whereClause};
+        ${sortClause};
+        limit ${limit};
+    `;
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
+}
+
+/**
  * Récupère les détails d'un jeu spécifique par ID
  */
 export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGame | null> {
     const body = `
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name, category;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
         where id = ${gameId};
     `;
 
@@ -246,6 +304,22 @@ export async function getIgdbTimeToBeat(gameId: number): Promise<IgdbTimeToBeat 
         fields *;
         where game_id = ${gameId};
     `;
-    const results = await fetchIgdb<IgdbTimeToBeat>('game_time_to_beats', body);
+    const results = await fetchIgdb<IgdbTimeToBeat>('time_to_beat', body);
     return results.length > 0 ? results[0] : null;
+}
+
+/**
+ * Fetches "Hyped" games (future releases with high interest) from IGDB.
+ */
+export async function getHypedGames(limit: number = 10): Promise<EnrichedIgdbGame[]> {
+    const now = Math.floor(Date.now() / 1000);
+    const fields = `fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+                    involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
+                    screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name, hypes;`;
+
+    // Query: Released in future, has hype, has cover
+    const body = `${fields} where first_release_date > ${now} & hypes > 0 & cover != null; sort hypes desc; limit ${limit};`;
+
+    const games = await fetchIgdb<IgdbGame>('games', body);
+    return mapRawToEnriched(games);
 }

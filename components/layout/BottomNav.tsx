@@ -2,14 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Library, PieChart, Plus, User } from "lucide-react"
+import { Home, Library, PieChart, Plus, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function BottomNav() {
   const pathname = usePathname()
 
   const links = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/", label: "Home", icon: Home },
     { href: "/library", label: "Library", icon: Library },
     { href: "/statistics", label: "Statistics", icon: PieChart },
     { href: "/add", label: "", icon: Plus },

@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Library, PieChart, Plus, User, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Home, Library, PieChart, Plus, User, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useSession } from "next-auth/react"
@@ -20,7 +20,7 @@ export function Sidebar({ className, collapsed, toggleCollapse }: SidebarProps) 
   const { data: session } = useSession()
 
   const links = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/", label: "Home", icon: Home },
     { href: "/library", label: "Library", icon: Library },
     { href: "/statistics", label: "Statistics", icon: PieChart },
     { href: "/add", label: "Add Game", icon: Plus },

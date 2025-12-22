@@ -1,80 +1,158 @@
 import Image from "next/image";
 import Link from "next/link";
 import { auth } from "@/auth";
+import {
+    getCachedDiscoveryGames,
+    getMostAnticipatedGames
+} from "@/actions/discovery";
+import { TopRatedGames } from "@/components/discovery/TopRatedGames";
+import { DiscoverySection } from "@/components/discovery/DiscoverySection";
+import { Game } from "@prisma/client";
+import { Button } from "@/components/ui/button";
 
 export default async function Home() {
   const session = await auth();
 
+  // Parallel data fetching
+  const [
+      topRatedGames,
+      recentReleases,
+      upcomingGames,
+      mostAnticipatedGames
+  ] = await Promise.all([
+      getCachedDiscoveryGames('TOP_RATED'),
+      getCachedDiscoveryGames('RECENT'), // Or 'POPULAR' based on preference, using 'RECENT' per section title
+      getCachedDiscoveryGames('UPCOMING'),
+      getMostAnticipatedGames()
+  ]);
+
+  // Determine Hero Game (Use #1 Top Rated or fallback)
+  const isTopRated = topRatedGames.length > 0;
+  const heroGame: Game | null = isTopRated ? topRatedGames[0] : (recentReleases[0] || null);
+
+  const heroImage = heroGame?.backgroundImage || heroGame?.coverImage;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            Game Library Manager
-          </h1>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans">
 
-          {session ? (
-              <div className="space-y-4">
-                  <p className="text-lg text-zinc-600 dark:text-zinc-400">
-                      Welcome back, {session.user?.name || session.user?.email}
-                  </p>
-                   <div className="flex gap-4">
-                      <Link
-                          href="/dashboard"
-                          className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                      >
-                          Go to Dashboard
-                      </Link>
-                      <Link
-                          href="/import"
-                          className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-zinc-900 dark:text-white dark:ring-zinc-700 dark:hover:bg-zinc-800"
-                      >
-                          Import Steam Games
-                      </Link>
-                   </div>
-              </div>
-          ) : (
-             <div className="space-y-4">
-                 <p className="text-lg text-zinc-600 dark:text-zinc-400">
-                     Login to manage your game collection.
-                 </p>
-                 <div className="flex gap-4">
-                    <Link
-                        href="/login"
-                        className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                    >
-                        Sign In
-                    </Link>
-                     <Link
-                        href="/register"
-                        className="rounded-md bg-white px-3.5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                    >
-                        Register
-                    </Link>
-                 </div>
-             </div>
-          )}
+      {/* Hero Section */}
+      <section className="relative h-[500px] w-full overflow-hidden">
+        {heroGame ? (
+            <>
+                <div className="absolute inset-0 bg-zinc-900">
+                    {heroImage ? (
+                        <Image
+                            src={heroImage}
+                            alt={heroGame.title}
+                            fill
+                            className="object-cover"
+                            priority
+                        />
+                    ) : (
+                         // Fallback background if no image exists
+                         <div className="absolute inset-0 bg-zinc-900" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-50 dark:from-zinc-950 via-transparent to-black/30" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+                </div>
 
-        </div>
+                <div className="relative z-10 container mx-auto flex h-full flex-col justify-end pb-12 px-4 md:px-6">
+                    <div className="max-w-2xl space-y-4">
+                        <div className="flex items-center gap-2">
+                            {isTopRated && heroGame.opencriticScore && (
+                                <span className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-3 py-1 text-sm font-bold text-white shadow-lg">
+                                    Top Rated #{1}
+                                </span>
+                            )}
+                             <span className="inline-flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1 text-sm font-medium text-white shadow-lg">
+                                {heroGame.studio || 'Unknown Studio'}
+                            </span>
+                        </div>
 
-        <div className="mt-10">
-            <h2 className="text-xl font-bold mb-4">Project Status</h2>
-            <ul className="list-disc pl-5 space-y-2">
-                <li>Authentication (Email/Password & Steam) - Implemented</li>
-                <li>Database Schema - Updated</li>
-                <li>Steam Import Service - Implemented</li>
-                <li>Import Interface - Implemented</li>
-            </ul>
-        </div>
+                        <h1 className="text-4xl md:text-6xl font-black text-white drop-shadow-lg tracking-tight leading-none">
+                            {heroGame.title}
+                        </h1>
+
+                        <p className="line-clamp-3 text-lg text-zinc-200 drop-shadow-md max-w-xl">
+                            {heroGame.description}
+                        </p>
+
+                        <div className="flex gap-4 pt-4">
+                            {session ? (
+                                <Link href="/library">
+                                    <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+                                        Go to Library
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <div className="flex gap-4">
+                                     <Link href="/login">
+                                        <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+                                            Sign In
+                                        </Button>
+                                    </Link>
+                                    <Link href="/register">
+                                         <Button size="lg" variant="outline" className="bg-transparent text-white border-white hover:bg-white/20">
+                                            Register
+                                        </Button>
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </>
+        ) : (
+            <div className="flex h-full items-center justify-center bg-zinc-900 text-zinc-500">
+                <div className="text-center">
+                    <h1 className="text-4xl font-bold mb-4">Welcome to Game Library</h1>
+                    <p>Start importing games to see them here.</p>
+                     <div className="mt-8 flex justify-center gap-4">
+                        {session ? (
+                             <Link href="/library">
+                                <Button>Go to Library</Button>
+                             </Link>
+                        ) : (
+                             <Link href="/login">
+                                <Button>Sign In</Button>
+                             </Link>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+      </section>
+
+      {/* Discovery Sections */}
+      <main className="container mx-auto px-4 py-12 space-y-16 md:px-6">
+
+        {/* Top Rated Section (with Client Filter) */}
+        <section>
+             <TopRatedGames games={topRatedGames} />
+        </section>
+
+        {/* Other Sections */}
+        <section>
+            <DiscoverySection title="Recent Releases" games={recentReleases} />
+        </section>
+
+        <section>
+            <DiscoverySection title="Upcoming Games" games={upcomingGames} />
+        </section>
+
+        <section>
+             <DiscoverySection title="Most Anticipated" games={mostAnticipatedGames} />
+        </section>
+
       </main>
+
+       {/* Footer / Status */}
+       <footer className="border-t border-zinc-200 dark:border-zinc-800 py-12 bg-white dark:bg-black">
+            <div className="container mx-auto px-4 text-center text-zinc-500 text-sm">
+                <p>&copy; {new Date().getFullYear()} Game Library Manager. All rights reserved.</p>
+            </div>
+       </footer>
+
     </div>
   );
 }
