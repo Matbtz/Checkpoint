@@ -6,3 +6,4 @@ build/
 *.log
 .csv
 .env
+scripts/csv/
