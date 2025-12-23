@@ -225,7 +225,7 @@ export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number =
 
         case 'RECENT':
             // Sortis dans les 30 derniers jours
-            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0, 8, 9)`;
+            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0)`;
             sortClause = 'sort first_release_date desc';
             break;
 
