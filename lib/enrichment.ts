@@ -31,12 +31,12 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
         const rawgList = await searchRawgGames(query, 5);
         // Enrich RAWG results with details to get developers/studio which are missing in list view
         rawgResults = await Promise.all(rawgList.map(async (game) => {
-             const details = await getRawgGameDetails(game.id);
-             // Preserve short_screenshots from list view as they are missing in details view
-             if (details && game.short_screenshots) {
-                 details.short_screenshots = game.short_screenshots;
-             }
-             return details || game;
+            const details = await getRawgGameDetails(game.id);
+            // Preserve short_screenshots from list view as they are missing in details view
+            if (details && game.short_screenshots) {
+                details.short_screenshots = game.short_screenshots;
+            }
+            return details || game;
         }));
     }
 
@@ -79,7 +79,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
 
         const availableBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
         if (game.background_image && !availableBackgrounds.includes(game.background_image)) {
-             availableBackgrounds.unshift(game.background_image);
+            availableBackgrounds.unshift(game.background_image);
         }
 
         // Use background image AND screenshots for covers as well, as RAWG doesn't have dedicated vertical covers in search
