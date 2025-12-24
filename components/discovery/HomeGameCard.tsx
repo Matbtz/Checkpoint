@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { Game } from '@prisma/client';
 import { motion } from 'framer-motion';
 
@@ -21,6 +22,7 @@ export function HomeGameCard({ game, rank }: HomeGameCardProps) {
         className="relative flex-shrink-0 group"
         style={{ width: '160px', minWidth: '160px' }}
     >
+      <Link href={`/game/${game.id}`}>
         <motion.div
             whileHover={{ y: -5 }}
             className="w-full cursor-pointer flex flex-col gap-2"
@@ -70,6 +72,7 @@ export function HomeGameCard({ game, rank }: HomeGameCardProps) {
               </div>
           </div>
         </motion.div>
+      </Link>
     </div>
   );
 }
