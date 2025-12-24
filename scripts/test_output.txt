@@ -1,0 +1,13 @@
+Obtaining new access token...
+Token obtained successfully.
+Testing filters for year 2025 (Date range: 1735689600 - 1767225600)
+Filter: [No Filter (Baseline)          ] -> Count: 22529
+Filter: [Ratings >= 5                  ] -> Count: 280
+Filter: [Ratings >= 10                 ] -> Count: 166
+Filter: [Ratings >= 20                 ] -> Count: 78
+Filter: [Hypes >= 5                    ] -> Count: 472
+Filter: [Hypes >= 10                   ] -> Count: 240
+Filter: [Ratings >= 5 OR Hypes >= 3    ] -> Count: 857
+Filter: [Ratings >= 5 OR Hypes >= 5    ] -> Count: 588
+Filter: [Ratings >= 10 OR Hypes >= 5   ] -> Count: 519
+Filter: [Ratings >= 5 OR Hypes >= 2 (Loose)] -> Count: 1191

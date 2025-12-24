@@ -1,7 +1,8 @@
-
-import { searchIgdbGames, getIgdbImageUrl, IgdbGame, EnrichedIgdbGame } from './igdb';
+import { searchIgdbGames, getIgdbImageUrl, IgdbGame, IgdbTimeToBeat, EnrichedIgdbGame } from './igdb';
 import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
 import { searchSteamStore, SteamStoreGame } from './steam-store';
+import { stringSimilarity } from './utils';
+import { PrismaClient } from '@prisma/client';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -31,12 +32,12 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
         const rawgList = await searchRawgGames(query, 5);
         // Enrich RAWG results with details to get developers/studio which are missing in list view
         rawgResults = await Promise.all(rawgList.map(async (game) => {
-             const details = await getRawgGameDetails(game.id);
-             // Preserve short_screenshots from list view as they are missing in details view
-             if (details && game.short_screenshots) {
-                 details.short_screenshots = game.short_screenshots;
-             }
-             return details || game;
+            const details = await getRawgGameDetails(game.id);
+            // Preserve short_screenshots from list view as they are missing in details view
+            if (details && game.short_screenshots) {
+                details.short_screenshots = game.short_screenshots;
+            }
+            return details || game;
         }));
     }
 
@@ -79,7 +80,7 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
 
         const availableBackgrounds = game.short_screenshots ? game.short_screenshots.map(s => s.image) : [];
         if (game.background_image && !availableBackgrounds.includes(game.background_image)) {
-             availableBackgrounds.unshift(game.background_image);
+            availableBackgrounds.unshift(game.background_image);
         }
 
         // Use background image AND screenshots for covers as well, as RAWG doesn't have dedicated vertical covers in search
@@ -98,11 +99,6 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
             originalData: game
         };
     });
-
-    // Merge or present both? For now, we return a combined list, or maybe prioritize IGDB?
-    // The prompt says "Modify the search function".
-    // I will return a combined list for now, allowing the frontend to filter/display.
-    // Given IGDB is usually cleaner for metadata, we put it first.
 
     return [...enrichedIgdb, ...enrichedRawg];
 }
@@ -139,16 +135,23 @@ export interface BestArtResult {
  * Priority: Steam Library > IGDB > RAWG
  */
 export async function findBestGameArt(title: string, releaseYear?: number | null): Promise<BestArtResult | null> {
-    const normTitle = normalizeTitle(title);
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    const query = normalize(title);
+
+    // Helper for fuzzy matching
+    // Using simple substring strategy + new Levenshtein strictness
+    const isMatch = (candidateTitle: string, candidateYear?: number | null) => {
+        const sim = stringSimilarity(normalize(candidateTitle), query);
+        // High threshold (0.85) for safety, or substring match
+        const titleMatch = sim >= 0.85 || normalize(candidateTitle).includes(query) || query.includes(normalize(candidateTitle));
+        const yearMatch = releaseYear && candidateYear ? Math.abs(releaseYear - candidateYear) <= 1 : true;
+        return titleMatch && yearMatch;
+    };
 
     // 1. Steam Store (Priority for Library Assets)
     try {
         const steamResults = await searchSteamStore(title);
-        const steamMatch = steamResults.find(g => {
-            const titleMatch = normalizeTitle(g.name) === normTitle;
-            const yearMatch = releaseYear ? isYearMatch(releaseYear, g.releaseYear) : true;
-            return titleMatch && yearMatch;
-        });
+        const steamMatch = steamResults.find(g => isMatch(g.name, g.releaseYear));
 
         if (steamMatch) {
             return {
@@ -164,12 +167,11 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
 
     // 2. IGDB (High quality covers & art)
     try {
+        // Fetch a bit more to allow fuzzy match within top results
         const igdbResults = await searchIgdbGames(title, 5);
         const igdbMatch = igdbResults.find(g => {
-            const titleMatch = normalizeTitle(g.name) === normTitle;
             const gameYear = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null;
-            const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
-            return titleMatch && yearMatch;
+            return isMatch(g.name, gameYear);
         });
 
         if (igdbMatch) {
@@ -201,10 +203,8 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
     try {
         const rawgResults = await searchRawgGames(title, 5);
         const rawgMatch = rawgResults.find(g => {
-            const titleMatch = normalizeTitle(g.name) === normTitle;
             const gameYear = g.released ? new Date(g.released).getFullYear() : null;
-            const yearMatch = releaseYear ? isYearMatch(releaseYear, gameYear) : true;
-            return titleMatch && yearMatch;
+            return isMatch(g.name, gameYear);
         });
 
         if (rawgMatch) {

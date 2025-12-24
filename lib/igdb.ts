@@ -11,28 +11,30 @@ let tokenExpiry: number | null = null;
 /**
  * Récupère un token valide via Client ID + Secret.
  * Le token est mis en cache et régénéré automatiquement avant expiration.
+ * @param forceRefresh Si true, ignore le token statique et le cache pour forcer une régénération.
  */
-async function getValidToken(): Promise<string | null> {
-    // 0. Priorité au token statique s'il est fourni (cas sans Secret)
-    if (IGDB_ACCESS_TOKEN) {
+export async function getValidToken(forceRefresh = false): Promise<string | null> {
+    // 0. Priorité au token statique s'il est fourni (cas sans Secret), sauf si on force le refresh
+    if (IGDB_ACCESS_TOKEN && !forceRefresh) {
         return IGDB_ACCESS_TOKEN;
     }
 
-    // 1. Vérification du cache
-    if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
+    // 1. Vérification du cache (sauf si forceRefresh)
+    if (!forceRefresh && cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
         return cachedToken;
     }
 
     // 2. Génération d'un nouveau token
     if (IGDB_CLIENT_ID && IGDB_SECRET) {
         try {
-            // console.log("[IGDB] Refreshing access token..."); // Décommenter pour debug
             const response = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_SECRET}&grant_type=client_credentials`, {
                 method: 'POST'
             });
 
             if (!response.ok) {
                 console.error("[IGDB] Failed to refresh token:", await response.text());
+                // Fallback: si le refresh échoue mais qu'on a un token statique, on le renvoie
+                if (IGDB_ACCESS_TOKEN) return IGDB_ACCESS_TOKEN;
                 return null;
             }
 
@@ -43,8 +45,14 @@ async function getValidToken(): Promise<string | null> {
             return cachedToken;
         } catch (e) {
             console.error("[IGDB] Error refreshing token:", e);
+            if (IGDB_ACCESS_TOKEN) return IGDB_ACCESS_TOKEN;
             return null;
         }
+    }
+
+    // Si on n'a pas de secret mais qu'on a un token statique (qui a échoué car on est ici avec forceRefresh), on ne peut rien faire de plus.
+    if (IGDB_ACCESS_TOKEN) {
+        return IGDB_ACCESS_TOKEN;
     }
 
     console.error("[IGDB] Credentials missing. Please check IGDB_CLIENT_ID and IGDB_SECRET in .env");
@@ -117,8 +125,8 @@ export function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot
 /**
  * Fetch générique avec gestion du retry 401 (Unauthorized)
  */
-async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): Promise<T[]> {
-    const token = await getValidToken();
+export async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): Promise<T[]> {
+    const token = await getValidToken(retrying);
 
     if (!IGDB_CLIENT_ID || !token) {
         return [];
@@ -138,7 +146,6 @@ async function fetchIgdb<T>(endpoint: string, query: string, retrying = false): 
         if (!response.ok) {
             // Si le token est invalide (401), on le vide et on réessaie une fois
             if (response.status === 401 && !retrying) {
-                console.warn("[IGDB] Token expired (401). Retrying with fresh token...");
                 cachedToken = null;
                 tokenExpiry = null;
                 return fetchIgdb<T>(endpoint, query, true);
@@ -217,26 +224,21 @@ export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number =
 
     switch (type) {
         case 'UPCOMING':
-            // Jeux qui sortent dans le futur
-            // category = (0, 8, 9) filtre pour avoir jeux principaux, remakes et remasters (exclut DLCs)
             whereClause = `where first_release_date > ${now} & category = (0, 8, 9)`;
             sortClause = 'sort first_release_date asc';
             break;
 
         case 'RECENT':
-            // Sortis dans les 30 derniers jours
-            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0)`;
+            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0, 8, 9)`;
             sortClause = 'sort first_release_date desc';
             break;
 
         case 'POPULAR':
-            // Basé sur le nombre de votes (activité) et une note décente
             whereClause = `where total_rating_count > 50 & total_rating > 70 & category = (0, 8, 9)`;
             sortClause = 'sort total_rating_count desc';
             break;
 
         case 'ANTICIPATED':
-            // Basé sur la "hype" (feature spécifique IGDB) pour les jeux futurs
             whereClause = `where first_release_date > ${now} & hypes > 0 & category = (0, 8, 9)`;
             sortClause = 'sort hypes desc';
             break;
@@ -304,7 +306,7 @@ export async function getIgdbTimeToBeat(gameId: number): Promise<IgdbTimeToBeat 
         fields *;
         where game_id = ${gameId};
     `;
-    const results = await fetchIgdb<IgdbTimeToBeat>('time_to_beat', body);
+    const results = await fetchIgdb<IgdbTimeToBeat>('game_time_to_beats', body);
     return results.length > 0 ? results[0] : null;
 }
 
