@@ -1,8 +1,7 @@
-import { searchIgdbGames, getIgdbImageUrl, IgdbGame, IgdbTimeToBeat, EnrichedIgdbGame } from './igdb';
+import { searchIgdbGames, getIgdbImageUrl, IgdbGame, EnrichedIgdbGame } from './igdb';
 import { searchRawgGames, getRawgGameDetails, RawgGame } from './rawg';
 import { searchSteamStore, SteamStoreGame } from './steam-store';
 import { stringSimilarity } from './utils';
-import { PrismaClient } from '@prisma/client';
 
 export interface EnrichedGameData {
     id: string; // provider ID
@@ -101,26 +100,6 @@ export async function searchGamesEnriched(query: string, provider: 'igdb' | 'raw
     });
 
     return [...enrichedIgdb, ...enrichedRawg];
-}
-
-/**
- * Normalizes a title for loose comparison.
- * Removes special characters, extra spaces, and converts to lowercase.
- */
-function normalizeTitle(title: string): string {
-    return title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric chars
-        .replace(/\s+/g, ' ') // Collapse spaces
-        .trim();
-}
-
-/**
- * Checks if release year matches with a tolerance of +/- 1 year.
- */
-function isYearMatch(targetYear: number, candidateYear?: number | null): boolean {
-    if (!candidateYear) return false;
-    return Math.abs(targetYear - candidateYear) <= 1;
 }
 
 export interface BestArtResult {
