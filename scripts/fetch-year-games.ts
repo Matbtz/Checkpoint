@@ -1,7 +1,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import { fetchIgdb, getIgdbImageUrl, IgdbGame, IgdbTimeToBeat } from '../lib/igdb';
+import { loadEnvConfig } from '@next/env';
+import type { IgdbGame, IgdbTimeToBeat } from '../lib/igdb';
 
 // --- Configuration ---
 const BATCH_SIZE = 500;
@@ -12,10 +13,14 @@ const OUTPUT_DIR = path.join(process.cwd(), 'scripts', 'csv');
 function escapeCsv(field: any): string {
     if (field === null || field === undefined) return '';
     let str = String(field);
+
+    // Remove carriage returns and newlines (replace with space)
+    str = str.replace(/[\r\n]+/g, ' ');
+
     // Replace " with ""
     str = str.replace(/"/g, '""');
-    // If field contains comma, quote, or newline, wrap in quotes
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    // If field contains delimiter or quote, wrap in quotes
+    if (str.includes('|') || str.includes('"')) {
         return `"${str}"`;
     }
     return str;
@@ -30,6 +35,12 @@ function formatDate(timestamp?: number): string {
 // --- Main Script ---
 
 async function main() {
+    // Load environment variables before importing lib/igdb
+    loadEnvConfig(process.cwd());
+    const { fetchIgdb, getIgdbImageUrl } = await import('../lib/igdb');
+    const { findBestGameArt } = await import('../lib/enrichment');
+
+
     const yearArg = process.argv[2];
     if (!yearArg) {
         console.error("Please provide a year as an argument. Example: npx tsx scripts/fetch-year-games.ts 2023");
@@ -52,6 +63,7 @@ async function main() {
 
     console.log(`Fetching games for year ${year} (Timestamp: ${startDate} to ${endDate})...`);
 
+
     const headers = [
         "id", "title", "coverImage", "backgroundImage", "releaseDate", "description",
         "screenshots", "videos", "steamUrl", "opencriticUrl", "igdbUrl", "hltbUrl",
@@ -64,7 +76,7 @@ async function main() {
     const writeStream = fs.createWriteStream(csvPath);
 
     // Write Header
-    writeStream.write(headers.map(h => escapeCsv(h)).join(',') + '\n');
+    writeStream.write(headers.map(h => escapeCsv(h)).join('|') + '\n');
 
     let offset = 0;
     let totalFetched = 0;
@@ -73,22 +85,26 @@ async function main() {
     while (hasMore) {
         console.log(`Fetching batch starting at offset ${offset}...`);
 
-        // Fetch ALL games (no category filter in where clause)
-        // Included 'category' in fields to determine isDlc
+        // Fetch filtered games (popularity/rating filter)
+        // Filter: Ratings >= 5 OR Hypes >= 2
+        // This removes ~95% of junk/shovelware while keeping obscure but rated games and hyped upcoming titles.
         const query = `
-            fields name, slug, url, category, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+            fields name, slug, url, category, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count, hypes,
                    involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                    screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
                    websites.url, websites.category, external_games.uid, external_games.category;
-            where first_release_date >= ${startDate} & first_release_date < ${endDate};
+            where first_release_date >= ${startDate} & first_release_date < ${endDate} & (total_rating_count >= 5 | hypes >= 2);
             limit ${BATCH_SIZE};
             offset ${offset};
         `;
+        console.log("Querying IGDB with: " + query.replace(/\s+/g, ' '));
 
         const games = await fetchIgdb<IgdbGame & {
             category?: number,
             websites?: { category: number, url: string }[],
-            external_games?: { category: number, uid: string }[]
+            external_games?: { category: number, uid: string }[],
+            total_rating_count?: number,
+            hypes?: number
         }>('games', query);
 
         if (games.length === 0) {
@@ -107,29 +123,67 @@ async function main() {
 
         if (gameIds.length > 0) {
             try {
-                 // Try 'time_to_beats' (plural) as per docs/convention, fallback or ignore if 404
-                 const ttbResults = await fetchIgdb<IgdbTimeToBeat>('time_to_beats', ttbQuery);
-                 ttbResults.forEach(ttb => {
-                     timeToBeatMap[ttb.game_id] = ttb;
-                 });
+                // Try 'game_time_to_beats' (plural) as per docs/convention
+                const ttbResults = await fetchIgdb<IgdbTimeToBeat>('game_time_to_beats', ttbQuery);
+                ttbResults.forEach(ttb => {
+                    timeToBeatMap[ttb.game_id] = ttb;
+                });
             } catch (e) {
                 // Ignore TTB errors to keep script running
                 // console.warn("TTB fetch failed, skipping times.");
             }
         }
 
-        for (const game of games) {
+
+        const processedGames = [];
+        // Process art enrichment in parallel chunks
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < games.length; i += CHUNK_SIZE) {
+            const chunk = games.slice(i, i + CHUNK_SIZE);
+            const promises = chunk.map(async (game) => {
+                let bestArt = null;
+                try {
+                    const releaseYear = game.first_release_date ? new Date(game.first_release_date * 1000).getFullYear() : null;
+
+                    // Optimization: If we already have good IGDB art, maybe we skip? 
+                    // User thinks RAWG is better, so we ALWAYS try to find best art which might come from RAWG or Steam.
+                    // However, to save time on 1000s of games, we could only do it if the game is popular?
+                    // But we already filtered by popularity. So we do it for all.
+
+                    bestArt = await findBestGameArt(game.name, releaseYear);
+                } catch (e) {
+                    // console.error(`Failed to find best art for ${game.name}`, e);
+                }
+                return { game, bestArt };
+            });
+
+            const results = await Promise.all(promises);
+            processedGames.push(...results);
+
+            // Small delay between chunks to be polite to APIs
+            await new Promise(r => setTimeout(r, 100));
+        }
+
+        for (const { game, bestArt } of processedGames) {
             // Map Fields
             const id = game.id.toString();
             const title = game.name;
-            const coverImage = game.cover ? getIgdbImageUrl(game.cover.image_id, 'cover_big') : '';
 
-            // Prioritize Artwork/Screenshot Huge for background
+            // Default to IGDB provided art
+            let coverImage = game.cover ? getIgdbImageUrl(game.cover.image_id, 'cover_big') : '';
+
             let backgroundImage = '';
             if (game.artworks && game.artworks.length > 0) {
                 backgroundImage = getIgdbImageUrl(game.artworks[0].image_id, '1080p');
             } else if (game.screenshots && game.screenshots.length > 0) {
                 backgroundImage = getIgdbImageUrl(game.screenshots[0].image_id, '1080p');
+            }
+
+            // OVERRIDE with Best Art if found (Steam > IGDB > RAWG) and looks valid
+            // User specifically mentioned RAWG quality. findBestGameArt handles hierarchy.
+            if (bestArt) {
+                if (bestArt.cover) coverImage = bestArt.cover;
+                if (bestArt.background) backgroundImage = bestArt.background;
             }
 
             const releaseDate = formatDate(game.first_release_date);
@@ -190,7 +244,7 @@ async function main() {
                 dataMissing, dataFetched, hltbMain, hltbExtra, hltbCompletionist
             ];
 
-            writeStream.write(row.map(r => escapeCsv(r)).join(',') + '\n');
+            writeStream.write(row.map(r => escapeCsv(r)).join('|') + '\n');
         }
 
         totalFetched += games.length;

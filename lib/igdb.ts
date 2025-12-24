@@ -52,7 +52,7 @@ export async function getValidToken(forceRefresh = false): Promise<string | null
 
     // Si on n'a pas de secret mais qu'on a un token statique (qui a échoué car on est ici avec forceRefresh), on ne peut rien faire de plus.
     if (IGDB_ACCESS_TOKEN) {
-         return IGDB_ACCESS_TOKEN;
+        return IGDB_ACCESS_TOKEN;
     }
 
     console.error("[IGDB] Credentials missing. Please check IGDB_CLIENT_ID and IGDB_SECRET in .env");
@@ -306,7 +306,7 @@ export async function getIgdbTimeToBeat(gameId: number): Promise<IgdbTimeToBeat 
         fields *;
         where game_id = ${gameId};
     `;
-    const results = await fetchIgdb<IgdbTimeToBeat>('time_to_beats', body);
+    const results = await fetchIgdb<IgdbTimeToBeat>('game_time_to_beats', body);
     return results.length > 0 ? results[0] : null;
 }
 
