@@ -11,11 +11,10 @@ interface HomeGameCardProps {
 
 export function HomeGameCard({ game, rank }: HomeGameCardProps) {
   const releaseDate = game.releaseDate ? new Date(game.releaseDate) : null;
-  const isUpcoming = releaseDate && releaseDate > new Date();
 
-  const displayDate = isUpcoming
-    ? releaseDate?.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-    : releaseDate?.getFullYear();
+  const displayDate = releaseDate
+    ? releaseDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
 
   return (
     <div
