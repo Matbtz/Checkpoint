@@ -2,12 +2,14 @@
 
 import * as React from "react"
 import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import { Sidebar } from "./Sidebar"
 import { BottomNav } from "./BottomNav"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
+    const { status } = useSession()
     const [collapsed, setCollapsed] = React.useState(false)
 
     // Exclude login/register from AppShell
@@ -16,6 +18,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (isAuthPage) {
         return <>{children}</>
     }
+
+    const isAuthenticated = status === "authenticated"
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -26,7 +30,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main
             className={cn(
                 "flex-1 transition-all duration-300 min-h-screen w-full",
-                "pb-24 md:pb-8", // Mobile padding for bottom nav, normal padding for desktop
+                // Mobile padding for bottom nav only if authenticated
+                isAuthenticated ? "pb-24 md:pb-8" : "pb-8",
                 collapsed ? "md:ml-[64px]" : "md:ml-64"
             )}
         >
@@ -35,8 +40,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
         </main>
 
-        {/* Mobile Bottom Nav */}
-        <BottomNav />
+        {/* Mobile Bottom Nav - Only show when authenticated */}
+        {isAuthenticated && <BottomNav />}
     </div>
   )
 }
