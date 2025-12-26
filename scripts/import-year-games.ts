@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { loadEnvConfig } from '@next/env';
 import { PrismaClient } from '@prisma/client';
+
+// Load environment variables from .env
+loadEnvConfig(process.cwd());
 
 const prisma = new PrismaClient();
 const INPUT_DIR = path.join(process.cwd(), 'scripts', 'csv');
@@ -174,7 +178,7 @@ async function main() {
                             });
                             createdCount++;
                         } catch (e: any) {
-                             if (e.code === 'P2002') {
+                            if (e.code === 'P2002') {
                                 // Unique constraint failed (likely steamAppId or igdbId conflict)
                                 // console.warn(`Skipping create for ${id} due to unique constraint: ${e.message}`);
                                 skippedCount++;

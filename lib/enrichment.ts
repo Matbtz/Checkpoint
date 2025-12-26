@@ -144,7 +144,27 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
         console.error("Error finding art on Steam:", e);
     }
 
-    // 2. IGDB (High quality covers & art)
+    // 2. RAWG (Fallback -> Now 2nd Priority)
+    try {
+        const rawgResults = await searchRawgGames(title, 5);
+        const rawgMatch = rawgResults.find(g => {
+            const gameYear = g.released ? new Date(g.released).getFullYear() : null;
+            return isMatch(g.name, gameYear);
+        });
+
+        if (rawgMatch) {
+            return {
+                cover: rawgMatch.background_image || null,
+                background: rawgMatch.background_image || null, // RAWG often shares same image
+                source: 'rawg',
+                originalData: rawgMatch
+            };
+        }
+    } catch (e) {
+        console.error("Error finding art on RAWG:", e);
+    }
+
+    // 3. IGDB (High quality covers & art -> Now 3rd Priority)
     try {
         // Fetch a bit more to allow fuzzy match within top results
         const igdbResults = await searchIgdbGames(title, 5);
@@ -176,26 +196,6 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
         }
     } catch (e) {
         console.error("Error finding art on IGDB:", e);
-    }
-
-    // 3. RAWG (Fallback)
-    try {
-        const rawgResults = await searchRawgGames(title, 5);
-        const rawgMatch = rawgResults.find(g => {
-            const gameYear = g.released ? new Date(g.released).getFullYear() : null;
-            return isMatch(g.name, gameYear);
-        });
-
-        if (rawgMatch) {
-            return {
-                cover: rawgMatch.background_image || null,
-                background: rawgMatch.background_image || null, // RAWG often shares same image
-                source: 'rawg',
-                originalData: rawgMatch
-            };
-        }
-    } catch (e) {
-        console.error("Error finding art on RAWG:", e);
     }
 
     return null;
