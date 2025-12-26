@@ -2,19 +2,27 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Library, PieChart, Plus, User } from "lucide-react"
+import { Home, Library, User, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSession } from "next-auth/react"
 
 export function BottomNav() {
   const pathname = usePathname()
+  const { status } = useSession()
+  const isAuthenticated = status === "authenticated"
 
-  const links = [
+  const authenticatedLinks = [
     { href: "/", label: "Home", icon: Home },
     { href: "/library", label: "Library", icon: Library },
-    { href: "/statistics", label: "Statistics", icon: PieChart },
-    { href: "/add", label: "", icon: Plus },
+    { href: "/search", label: "Search", icon: Search },
     { href: "/settings", label: "Profile", icon: User },
   ]
+
+  const unauthenticatedLinks = [
+    { href: "/search", label: "Search", icon: Search },
+  ]
+
+  const links = isAuthenticated ? authenticatedLinks : unauthenticatedLinks
 
   return (
     <div className="fixed bottom-0 left-0 z-50 w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-border md:hidden pb-[env(safe-area-inset-bottom)]">
