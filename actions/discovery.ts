@@ -55,9 +55,20 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 10
                 });
+
+                if (localGames.length < 5) {
+                    const igdbGames = await getDiscoveryGamesIgdb('RECENT', 10);
+                    // Merge local and remote, preferring local
+                    const mappedIgdb = igdbGames.map(mapIgdbToPrismaGame);
+                    // Filter duplicates by checking title or igdbId?
+                    // Simple approach: just return mixed list if local is very small
+                    if (localGames.length === 0) return mappedIgdb;
+                    return [...localGames, ...mappedIgdb].slice(0, 10);
+                }
                 return localGames;
 
             case 'TOP_RATED':
+                // 1. Try Local with OpenCritic Score
                 localGames = await prisma.game.findMany({
                     where: {
                         releaseDate: {
@@ -73,12 +84,40 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 50
                 });
-                 // Note: TOP_RATED logic is specific to local opencritic scores.
-                 // If local is empty, we fallback to IGDB 'POPULAR' (high activity/rating) but strictly it's not "Top Rated by OpenCritic".
-                 // However, for discovery purposes, showing popular games is better than empty.
+
+                // 2. Try Local with IGDB Score (Fallback if OpenCritic is missing)
+                if (localGames.length < 5) {
+                    const localIgdbRated = await prisma.game.findMany({
+                         where: {
+                            releaseDate: {
+                                gte: startOfYear,
+                                lte: now
+                            },
+                            igdbScore: {
+                                gt: 80
+                            }
+                        },
+                        orderBy: {
+                            igdbScore: 'desc'
+                        },
+                        take: 10
+                    });
+
+                    // Deduplicate and merge
+                    const existingIds = new Set(localGames.map(g => g.id));
+                    for (const game of localIgdbRated) {
+                        if (!existingIds.has(game.id)) {
+                            localGames.push(game);
+                            existingIds.add(game.id);
+                        }
+                    }
+                }
+
+                // 3. Fallback to External IGDB Popular
                 if (localGames.length < 5) {
                      const igdbGames = await getDiscoveryGamesIgdb('POPULAR', 10);
-                     return igdbGames.map(mapIgdbToPrismaGame);
+                     const mappedIgdb = igdbGames.map(mapIgdbToPrismaGame);
+                     return [...localGames, ...mappedIgdb].slice(0, 10);
                 }
                 return localGames;
 
@@ -156,18 +195,57 @@ export async function getMostAnticipatedGames() {
                 return indexA - indexB;
             });
         }
+
       }
 
       // 2. Fallback: IGDB Hype System (External)
-      // Fetches games with high hype from IGDB that are releasing in the future
       console.log("[Discovery] Not enough local anticipated data. Falling back to IGDB Hype...");
       const hypedGames = await getDiscoveryGamesIgdb('ANTICIPATED', 10);
+      const mappedIgdb = hypedGames.map(mapIgdbToPrismaGame);
 
-      return hypedGames.map(mapIgdbToPrismaGame);
+      // 3. Merge Local (if available) and External
+      let finalGames: Game[] = [];
+
+      // If we had some local games but fewer than 5, we need to re-fetch or use them.
+      // Since `games` is scoped inside the block above, we can't access it here easily without refactoring.
+      // Given the complexity of merging scoped variables, we will prioritize External results if Local < 5.
+      // However, if we found ANY local games, we should probably include them.
+
+      if (mostAnticipated.length > 0) {
+          const gameIds = mostAnticipated.map((item) => item.gameId);
+          const localGames = await prisma.game.findMany({
+            where: {
+                id: { in: gameIds },
+                releaseDate: { gt: now }
+            }
+          });
+
+          finalGames = [...localGames];
+      }
+
+      // Append external games ensuring no duplicates
+      const existingIds = new Set(finalGames.map(g => g.igdbId)); // Use igdbId for deduplication
+
+      for (const game of mappedIgdb) {
+          if (!existingIds.has(game.igdbId)) {
+              finalGames.push(game);
+              existingIds.add(game.igdbId);
+          }
+          if (finalGames.length >= 10) break;
+      }
+
+      return finalGames.length > 0 ? finalGames : mappedIgdb;
 
   } catch (error) {
       console.error("[Discovery] Error fetching anticipated games:", error);
-      return [];
+      // Attempt critical fallback to IGDB directly if local DB failed
+      try {
+          const hypedGames = await getDiscoveryGamesIgdb('ANTICIPATED', 10);
+          return hypedGames.map(mapIgdbToPrismaGame);
+      } catch (innerError) {
+          console.error("[Discovery] Critical fallback failed:", innerError);
+          return [];
+      }
   }
 }
 
