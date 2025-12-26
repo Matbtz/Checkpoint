@@ -31,7 +31,7 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
             // Ideally we should reuse the "Add Wizard" logic but for "Quick Add" we just want Backlog/Main.
             const payload = {
                 id: game.id,
-                title: game.game?.title || game.title, // Handle both structures if needed
+                title: game.title,
                 coverImage: game.availableCovers?.[0] || null,
                 backgroundImage: game.availableBackgrounds?.[0] || null,
                 releaseDate: game.releaseDate,
@@ -45,8 +45,14 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
             };
 
             // Fix platform format if they are objects {id, name} from IGDB
-            if (game.source === 'igdb' && game.originalData?.platforms) {
-                 payload.platforms = game.originalData.platforms.map(p => p.name);
+            if (game.source === 'igdb' && game.originalData && 'platforms' in game.originalData) {
+                 // Explicitly cast or check safely
+                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                 const platforms = (game.originalData as any).platforms;
+                 if (Array.isArray(platforms)) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    payload.platforms = platforms.map((p: any) => p.name);
+                 }
             }
 
             await addGameExtended(payload);
@@ -91,7 +97,7 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
                     {game.opencriticScore !== null && (
                          <div className={cn(
                              "absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm z-10",
-                             getScoreColor(game.opencriticScore)
+                             getScoreColor(game.opencriticScore ?? null)
                          )}>
                              {game.opencriticScore}
                          </div>
