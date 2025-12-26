@@ -115,6 +115,12 @@ export interface IgdbTimeToBeat {
     completely: number; // Seconds
 }
 
+export interface SearchFilters {
+    genres?: string[];
+    platforms?: string[];
+    minScore?: number;
+}
+
 /**
  * Helper pour construire l'URL d'une image IGDB
  */
@@ -197,11 +203,36 @@ function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
 }
 
 /**
- * Recherche de jeux avec récupération étendue des images
+ * Recherche de jeux avec récupération étendue des images et filtres
  */
-export async function searchIgdbGames(query: string, limit: number = 10): Promise<EnrichedIgdbGame[]> {
+export async function searchIgdbGames(query: string, limit: number = 10, filters?: SearchFilters): Promise<EnrichedIgdbGame[]> {
+    let whereClause = `search "${query}"`;
+
+    // Add Filters
+    if (filters) {
+        const conditions: string[] = [];
+
+        if (filters.genres && filters.genres.length > 0) {
+            const genresStr = filters.genres.map(g => `"${g}"`).join(',');
+            conditions.push(`genres.name = (${genresStr})`);
+        }
+
+        if (filters.platforms && filters.platforms.length > 0) {
+            const platformsStr = filters.platforms.map(p => `"${p}"`).join(',');
+            conditions.push(`platforms.name = (${platformsStr})`);
+        }
+
+        if (filters.minScore !== undefined) {
+             conditions.push(`aggregated_rating >= ${filters.minScore}`);
+        }
+
+        if (conditions.length > 0) {
+            whereClause += ` & ${conditions.join(' & ')}`;
+        }
+    }
+
     const body = `
-        search "${query}";
+        ${whereClause};
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;

@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { searchIgdbGames, getIgdbImageUrl } from '@/lib/igdb';
+import { searchIgdbGames, getIgdbImageUrl, SearchFilters } from '@/lib/igdb';
 import { EnrichedGameData } from '@/lib/enrichment';
 import { auth } from '@/auth';
 
@@ -19,7 +19,7 @@ function sanitizeQuery(query: string): string {
     return query.replace(/[^\w\s\u00C0-\u00FF]/g, ' ').trim();
 }
 
-export async function searchLocalGames(query: string): Promise<SearchResult[]> {
+export async function searchLocalGames(query: string, filters?: SearchFilters): Promise<SearchResult[]> {
     const session = await auth();
     const userId = session?.user?.id;
 
@@ -32,7 +32,7 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
 
     // 2. Build Search Clause
     // We use OR to be permissive: match exact string OR sanitized string OR any individual word
-    const whereClause = {
+    const whereClause: any = {
         OR: [
             { title: { contains: query, mode: 'insensitive' as const } },           // Match "The Legend of Zelda:"
             { title: { contains: sanitizedQuery, mode: 'insensitive' as const } },  // Match "The Legend of Zelda "
@@ -42,19 +42,58 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
         ]
     };
 
-    // 3. Fetch Games
+    // Add Score Filter
+    if (filters?.minScore !== undefined) {
+        whereClause.opencriticScore = { gte: filters.minScore };
+    }
+
+    // 3. Fetch Games (More than 10 to allow in-memory filtering for JSON fields)
     const games = await prisma.game.findMany({
         where: whereClause,
-        take: 10,
+        take: 50, // Increase limit to allow for filtering
         orderBy: {
             updatedAt: 'desc',
         }
     });
 
-    // 4. Fetch Library Status (if logged in)
+    // 4. In-Memory Filtering for JSON fields (Genres, Platforms)
+    let filteredGames = games;
+
+    if (filters) {
+        if (filters.genres && filters.genres.length > 0) {
+            filteredGames = filteredGames.filter(game => {
+                 if (!game.genres) return false;
+                 try {
+                     const g = JSON.parse(game.genres as string);
+                     return Array.isArray(g) && g.some((genre: string) => filters.genres?.includes(genre));
+                 } catch { return false; }
+            });
+        }
+
+        if (filters.platforms && filters.platforms.length > 0) {
+            filteredGames = filteredGames.filter(game => {
+                if (!game.platforms) return false;
+                 try {
+                     const p = game.platforms;
+                     if (Array.isArray(p)) {
+                         return p.some((plat: any) => {
+                             const name = typeof plat === 'string' ? plat : plat?.name;
+                             return filters.platforms?.includes(name);
+                         });
+                     }
+                     return false;
+                 } catch { return false; }
+            });
+        }
+    }
+
+    // Limit back to 10
+    filteredGames = filteredGames.slice(0, 10);
+
+    // 5. Fetch Library Status (if logged in)
     const libraryMap = new Map<string, string>();
-    if (userId && games.length > 0) {
-        const gameIds = games.map(g => g.id);
+    if (userId && filteredGames.length > 0) {
+        const gameIds = filteredGames.map(g => g.id);
         const userLibraryEntries = await prisma.userLibrary.findMany({
             where: {
                 userId: userId,
@@ -71,15 +110,15 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
         }
     }
 
-    // 5. Map to SearchResult
-    return games.map(game => ({
+    // 6. Map to SearchResult
+    return filteredGames.map(game => ({
         id: game.id,
         title: game.title,
         releaseDate: game.releaseDate ? game.releaseDate.toISOString() : null,
         studio: game.studio,
         metacritic: null,
         opencriticScore: game.opencriticScore,
-        genres: game.genres ? JSON.parse(game.genres) : [],
+        genres: game.genres ? JSON.parse(game.genres as string) : [],
         availableCovers: game.coverImage ? [game.coverImage] : [],
         availableBackgrounds: game.backgroundImage ? [game.backgroundImage] : [],
         source: 'igdb', // Local games originated from IGDB usually
@@ -89,12 +128,12 @@ export async function searchLocalGames(query: string): Promise<SearchResult[]> {
     }));
 }
 
-export async function searchOnlineGames(query: string): Promise<SearchResult[]> {
+export async function searchOnlineGames(query: string, filters?: SearchFilters): Promise<SearchResult[]> {
     const session = await auth();
     const userId = session?.user?.id;
 
-    // 1. Fetch from IGDB
-    const igdbResults = await searchIgdbGames(query, 10);
+    // 1. Fetch from IGDB with filters
+    const igdbResults = await searchIgdbGames(query, 10, filters);
 
     if (igdbResults.length === 0) return [];
 
@@ -156,7 +195,7 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
                 studio: localMatch.studio,
                 metacritic: null,
                 opencriticScore: localMatch.opencriticScore,
-                genres: localMatch.genres ? JSON.parse(localMatch.genres) : [],
+                genres: localMatch.genres ? JSON.parse(localMatch.genres as string) : [],
                 availableCovers: localMatch.coverImage ? [localMatch.coverImage] : [],
                 availableBackgrounds: localMatch.backgroundImage ? [localMatch.backgroundImage] : [],
                 source: 'igdb',
@@ -188,6 +227,9 @@ export async function searchOnlineGames(query: string): Promise<SearchResult[]> 
                 releaseDate: game.first_release_date ? new Date(game.first_release_date * 1000).toISOString() : null,
                 studio: developer,
                 metacritic: null,
+                // Use IGDB aggregated_rating as proxy for OpenCritic if not local, but ideally we fetch real OpenCritic later.
+                // The interface expects opencriticScore. We can populate it if we have it from IGDB (aggregated_rating is critic score).
+                opencriticScore: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
                 genres,
                 availableCovers,
                 availableBackgrounds,
