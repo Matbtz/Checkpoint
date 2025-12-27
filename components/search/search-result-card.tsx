@@ -10,15 +10,19 @@ import { SearchResult } from '@/actions/search';
 import { addGameExtended } from '@/actions/add-game';
 import { toast } from 'sonner';
 
+import { useSession } from "next-auth/react";
+
 interface SearchResultCardProps {
     game: SearchResult;
 }
 
 export function SearchResultCard({ game }: SearchResultCardProps) {
+    const { data: session } = useSession();
     const [isAdding, setIsAdding] = React.useState(false);
     const [isAdded, setIsAdded] = React.useState(game.isAdded);
 
     const handleQuickAdd = async (e: React.MouseEvent) => {
+        // ... (rest of the function remains the same, I will leave it unchanged but I'm replacing the top part so I need to be careful with range)
         e.preventDefault();
         e.stopPropagation();
 
@@ -26,9 +30,16 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
 
         setIsAdding(true);
         try {
-            // Use the game data to add.
-            // Note: addGameExtended expects a payload. We map SearchResult to what it expects.
-            // Ideally we should reuse the "Add Wizard" logic but for "Quick Add" we just want Backlog/Main.
+            // ... logic ...
+            let status = 'BACKLOG';
+            if (game.releaseDate) {
+                const releaseDate = new Date(game.releaseDate);
+                const today = new Date();
+                if (releaseDate > today) {
+                    status = 'WISHLIST';
+                }
+            }
+
             const payload = {
                 id: game.id,
                 title: game.title,
@@ -38,26 +49,24 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
                 studio: game.studio,
                 opencriticScore: game.opencriticScore,
                 genres: JSON.stringify(game.genres),
-                platforms: game.platforms || [], // Might need better handling if its objects
+                platforms: game.platforms || [],
                 description: game.description,
-                status: 'BACKLOG',
+                status: status,
                 targetedCompletionType: 'MAIN'
             };
 
-            // Fix platform format if they are objects {id, name} from IGDB
             if (game.source === 'igdb' && game.originalData && 'platforms' in game.originalData) {
-                 // Explicitly cast or check safely
-                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                 const platforms = (game.originalData as any).platforms;
-                 if (Array.isArray(platforms)) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const platforms = (game.originalData as any).platforms;
+                if (Array.isArray(platforms)) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     payload.platforms = platforms.map((p: any) => p.name);
-                 }
+                }
             }
 
             await addGameExtended(payload);
             setIsAdded(true);
-            toast.success(`${game.title} added to backlog`);
+            toast.success(`${game.title} added to ${status.toLowerCase()}`);
         } catch (err) {
             console.error(err);
             toast.error("Failed to add game");
@@ -77,7 +86,7 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
     return (
         <div className="group relative flex flex-col bg-card rounded-lg border overflow-hidden hover:shadow-lg transition-all">
             <Link href={`/game/${game.id}`} className="flex-1">
-                {/* Image */}
+                {/* Image Wrapper */}
                 <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
                     {game.availableCovers?.[0] ? (
                         <Image
@@ -95,28 +104,34 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
 
                     {/* Score Badge */}
                     {game.opencriticScore !== null && (
-                         <div className={cn(
-                             "absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm z-10",
-                             getScoreColor(game.opencriticScore ?? null)
-                         )}>
-                             {game.opencriticScore}
-                         </div>
+                        <div className={cn(
+                            "absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm z-10",
+                            getScoreColor(game.opencriticScore ?? null)
+                        )}>
+                            {game.opencriticScore}
+                        </div>
                     )}
 
-                    {/* Quick Add Overlay Button (Desktop) */}
-                    <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        <Button
-                            size="icon"
-                            variant={isAdded ? "secondary" : "default"}
-                            className="h-8 w-8 shadow-md"
-                            onClick={handleQuickAdd}
-                            disabled={isAdded || isAdding}
-                        >
-                            {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                                isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />
-                            )}
-                        </Button>
-                    </div>
+                    {/* Quick Add Button - Absolute positioned overlay inside the image container 
+                        This ensures it stays with the image, but higher z-index catches clicks.
+                        Since it's inside the Link, handled by stopPropagation.
+                        Only visible if user is logged in.
+                    */}
+                    {session && (
+                        <div className="absolute bottom-2 right-2 z-20">
+                            <Button
+                                size="icon"
+                                variant={isAdded ? "secondary" : "default"}
+                                className="h-8 w-8 shadow-md"
+                                onClick={handleQuickAdd}
+                                disabled={isAdded || isAdding}
+                            >
+                                {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                                    isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Details */}
@@ -130,13 +145,6 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
                     </div>
                 </div>
             </Link>
-
-            {/* Mobile/Touch accessible button area if needed, but the overlay works well for desktop.
-                For mobile, hover might not work, so we might want to ensure it's accessible.
-                We can keep the button visible on mobile if we detect touch or just rely on the Game Page 'Add' button.
-                For now, we rely on hover which often maps to 'first tap' on mobile or we can make it always visible on small screens?
-                Let's make it always visible on small screens via CSS if desired, or keep it clean.
-            */}
         </div>
     );
 }

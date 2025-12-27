@@ -19,6 +19,7 @@ export function BottomNav() {
   ]
 
   const unauthenticatedLinks = [
+    { href: "/", label: "Home", icon: Home },
     { href: "/search", label: "Search", icon: Search },
   ]
 

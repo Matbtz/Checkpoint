@@ -21,27 +21,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     const isAuthenticated = status === "authenticated"
 
-  return (
-    <div className="flex min-h-screen bg-background text-foreground">
-        {/* Desktop Sidebar */}
-        <Sidebar collapsed={collapsed} toggleCollapse={() => setCollapsed(!collapsed)} />
+    return (
+        <div className="flex min-h-screen bg-background text-foreground">
+            {/* Desktop Sidebar */}
+            <Sidebar collapsed={collapsed} toggleCollapse={() => setCollapsed(!collapsed)} />
 
-        {/* Main Content */}
-        <main
-            className={cn(
-                "flex-1 transition-all duration-300 min-h-screen w-full",
-                // Mobile padding for bottom nav only if authenticated
-                isAuthenticated ? "pb-24 md:pb-8" : "pb-8",
-                collapsed ? "md:ml-[64px]" : "md:ml-64"
-            )}
-        >
-            <div className="h-full px-4 py-6 md:px-8">
-                {children}
-            </div>
-        </main>
+            {/* Main Content */}
+            <main
+                className={cn(
+                    "flex-1 transition-all duration-300 min-h-screen w-full",
+                    // Mobile padding for bottom nav only if authenticated
+                    isAuthenticated ? "pb-24 md:pb-8" : "pb-8",
+                    collapsed ? "md:ml-[64px]" : "md:ml-64"
+                )}
+            >
+                <div className="h-full px-4 py-6 md:px-8">
+                    {children}
+                </div>
+            </main>
 
-        {/* Mobile Bottom Nav - Only show when authenticated */}
-        {isAuthenticated && <BottomNav />}
-    </div>
-  )
+            {/* Mobile Bottom Nav - Always show (it handles its own auth state links) */}
+            <BottomNav />
+        </div>
+    )
 }
