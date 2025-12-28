@@ -112,18 +112,16 @@ export function SearchFilters({
                                         {genres.map((genre) => (
                                             <div
                                                 key={genre}
-                                                className="flex items-center space-x-2 rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                                                onClick={() => onGenreChange(genre)}
+                                                className="flex items-center space-x-2 rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground"
                                             >
                                                 <Checkbox
                                                     id={`genre-${genre}`}
                                                     checked={selectedGenres.includes(genre)}
-                                                    onCheckedChange={() => {}} // Handled by div click
-                                                    className="pointer-events-none"
+                                                    onCheckedChange={() => onGenreChange(genre)}
                                                 />
                                                 <label
                                                     htmlFor={`genre-${genre}`}
-                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer w-full"
+                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer w-full pl-2"
                                                 >
                                                     {genre}
                                                 </label>
@@ -157,18 +155,16 @@ export function SearchFilters({
                                         {platforms.map((platform) => (
                                             <div
                                                 key={platform}
-                                                className="flex items-center space-x-2 rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                                                onClick={() => onPlatformChange(platform)}
+                                                className="flex items-center space-x-2 rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground"
                                             >
                                                 <Checkbox
                                                     id={`platform-${platform}`}
                                                     checked={selectedPlatforms.includes(platform)}
-                                                    onCheckedChange={() => {}} // Handled by div click
-                                                    className="pointer-events-none"
+                                                    onCheckedChange={() => onPlatformChange(platform)}
                                                 />
                                                 <label
                                                     htmlFor={`platform-${platform}`}
-                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer w-full"
+                                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer w-full pl-2"
                                                 >
                                                     {platform}
                                                 </label>
