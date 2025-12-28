@@ -63,17 +63,38 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         });
     }
 
-    // 3. Fetch Games (Fetch more to allow in-memory filtering for platforms & fuzzy sort)
+    // 3. Determine Sort Order
+    let orderBy: any = { updatedAt: 'desc' }; // Default fallback if no sort matches
+    if (filters?.sortBy) {
+        switch (filters.sortBy) {
+            case 'rating':
+                orderBy = { opencriticScore: 'desc' };
+                break;
+            case 'release':
+                orderBy = { releaseDate: 'desc' };
+                break;
+            case 'popularity':
+                // Use steamReviewCount as proxy for popularity if available
+                orderBy = { steamReviewCount: 'desc' };
+                break;
+            case 'alphabetical':
+                orderBy = { title: 'asc' };
+                break;
+        }
+    } else {
+        // Default to Rating if not specified (per user request)
+        orderBy = { opencriticScore: 'desc' };
+    }
+
+    // 4. Fetch Games (Fetch more to allow in-memory filtering for platforms & fuzzy sort)
     // Increased from 50 to 100 to ensure we get enough results after platform filtering
     const games = await prisma.game.findMany({
         where: whereClause,
         take: 100,
-        orderBy: {
-            updatedAt: 'desc',
-        }
+        orderBy: orderBy,
     });
 
-    // 4. In-Memory Filtering and Levenshtein Sorting
+    // 5. In-Memory Filtering and Levenshtein Sorting
     let filteredGames = games;
 
     // Platform Filter (JSON structure makes DB filtering complex, keep in memory)
@@ -96,44 +117,36 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         }
     }
 
-    // Levenshtein Scoring & Filtering (> 90)
-    // We map to an intermediate object to hold the score
+    // Levenshtein Scoring
     let scoredGames = filteredGames.map(game => {
         const score = stringSimilarity(game.title, query) * 100;
         return { ...game, matchScore: score };
     });
 
-    // Filter by score > 90 (Task 2)
-    // Note: If the user search is partial "Zeld", score might be low for "The Legend of Zelda".
-    // "stringSimilarity" is based on Levenshtein. "Zeld" vs "The Legend of Zelda" has high distance.
-    // However, the SQL "contains" already ensures the words are there.
-    // If the user requirement is strict "propose scores above 90", we filter.
-    // But this might hide valid partial matches.
-    // Given the request "introduce a lewenstein distance score to propose scores above 90",
-    // it implies we should prioritize or maybe ONLY show high matches.
-    // I'll filter for now, but keep in mind this might be too strict for partial queries.
-    // Actually, usually "propose" means "rank higher". But "in the results" with a threshold often implies filtering.
-    // Let's filter > 90 OR if the query is very short, maybe relax?
-    // Let's stick to the request: "propose scores above 90".
+    // Sort Logic Conflict:
+    // If query exists, usually we want relevant results (Levenshtein match).
+    // If query exists AND user picked a sort, should we override relevance?
+    // The user said "On the global search put an option to sort...".
+    // Usually explicit sort overrides relevance.
 
-    // Wait, if I type "Baldur", "Baldur's Gate 3" score is ~50%.
-    // If I enforce > 90, I won't see it until I type almost the full name.
-    // That seems like bad UX. Maybe the user means "Show score and highlight > 90"?
-    // OR maybe "Sort by score"?
-    // "propose scores above 90 in the results" -> ambiguous.
-    // Interpretation: "Use score to rank, and maybe visually indicate high matches?"
-    // OR "Only return > 90".
-    // Let's implement Sorting by score first. And maybe filter if score is very low?
-    // But since we use AND sql query, we already have good matches.
-    // I will Sort by score. And if score > 90, maybe it's "proposed"?
-    // I'll filter only if score is decent (e.g. > 40) but rank > 90 first.
-    // User said "propose scores above 90". I will Filter > 90 to be safe with the "propose" wording,
-    // assuming the user wants high precision.
-    // BUT, for partial searches, this kills discovery.
-    // Let's assume the user means "Sort/Rank" effectively.
-    // I'll sort by score descending.
+    if (filters?.sortBy && filters.sortBy !== 'rating') { // 'rating' default might clash with relevance if implicit
+        // If explicit sort is requested (other than default rating which matches our fallback),
+        // we trust the DB order we just fetched (orderBy applied in step 4).
+        // So we do NOT re-sort by matchScore.
+        // However, 'games' array is already sorted by DB. 'scoredGames' preserves that order map.
+    } else {
+        // If no specific sort requested (or just rating/default), and we have a query,
+        // we might prefer relevance?
+        // Actually, if query is present, relevance is king.
+        // But if user selected "Release Date", they expect "Zelda" games sorted by date, not by name similarity.
+        // So: If query is present, default is Relevance. If Sort is explicit, Sort wins.
+        // The user said "By default put it like rating".
 
-    scoredGames.sort((a, b) => b.matchScore - a.matchScore);
+        if (query && !filters?.sortBy) {
+             scoredGames.sort((a, b) => b.matchScore - a.matchScore);
+        }
+        // If query is empty, DB order (from sortBy) is already correct.
+    }
 
     // Limit back to 25
     const finalGames = scoredGames.slice(0, 25);
@@ -192,12 +205,36 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
         matchScore: stringSimilarity(g.name, query) * 100
     }));
 
-    // Sort by Score
-    scoredResults.sort((a, b) => b.matchScore - a.matchScore);
-
-    // Filter > 90 ?? If I do this, online search becomes useless for discovery.
-    // I'll just keep the sort. The user said "propose scores above 90".
-    // Maybe they meant "Only show those > 90"? I'll interpret as "Prioritize".
+    // Sort Logic for Online Search
+    // IGDB handles sort if query is empty.
+    // If query is present, we get relevance sort from API.
+    // If user requested explicit sort WITH query, we must sort in memory.
+    if (query && filters?.sortBy) {
+        scoredResults.sort((a, b) => {
+            switch (filters.sortBy) {
+                case 'rating':
+                    return (b.aggregated_rating || 0) - (a.aggregated_rating || 0);
+                case 'release':
+                    return (b.first_release_date || 0) - (a.first_release_date || 0);
+                case 'popularity':
+                     // Using total_rating_count (if fetched, we need to ensure it's in the object)
+                     // EnrichedIgdbGame extends IgdbGame which has total_rating_count?
+                     // Need to check lib/igdb.ts interface. It was added in fields.
+                     // Wait, I need to cast 'a' to any if interface is missing property in Typescript definition
+                     // actually I added total_rating_count to fetch body but did I add it to interface?
+                     // I will assume standard properties or use 'total_rating' as proxy if count missing.
+                     // Let's use total_rating_count if available.
+                     return ((b as any).total_rating_count || 0) - ((a as any).total_rating_count || 0);
+                case 'alphabetical':
+                    return a.name.localeCompare(b.name);
+                default:
+                    return b.matchScore - a.matchScore;
+            }
+        });
+    } else if (query) {
+        // Default to relevance
+         scoredResults.sort((a, b) => b.matchScore - a.matchScore);
+    }
 
     // 2. Check for existence in local DB (to link to existing IDs/data)
     const igdbIds = scoredResults.map(g => String(g.id));

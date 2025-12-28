@@ -23,6 +23,7 @@ export function SearchPageContent() {
     const [selectedGenres, setSelectedGenres] = React.useState<string[]>([]);
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>([]);
     const [minScore, setMinScore] = React.useState(0);
+    const [sortBy, setSortBy] = React.useState<string>('rating');
 
     const [isExtendedSearch, setIsExtendedSearch] = React.useState(false);
 
@@ -55,7 +56,8 @@ export function SearchPageContent() {
                 const filters = {
                     genres: selectedGenres,
                     platforms: selectedPlatforms,
-                    minScore: debouncedMinScore > 0 ? debouncedMinScore : undefined
+                    minScore: debouncedMinScore > 0 ? debouncedMinScore : undefined,
+                    sortBy: sortBy as 'rating' | 'release' | 'popularity' | 'alphabetical'
                 };
 
                 const hasFilters = selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedMinScore > 0;
@@ -79,7 +81,7 @@ export function SearchPageContent() {
         };
 
         fetchResults();
-    }, [debouncedQuery, selectedGenres, selectedPlatforms, debouncedMinScore, isExtendedSearch]);
+    }, [debouncedQuery, selectedGenres, selectedPlatforms, debouncedMinScore, isExtendedSearch, sortBy]);
 
     const handleExtendedSearch = () => {
         setIsExtendedSearch(true);
@@ -89,6 +91,7 @@ export function SearchPageContent() {
         setSelectedGenres([]);
         setSelectedPlatforms([]);
         setMinScore(0);
+        setSortBy('rating');
         setIsExtendedSearch(false);
     };
 
@@ -128,9 +131,11 @@ export function SearchPageContent() {
                     selectedGenres={selectedGenres}
                     selectedPlatforms={selectedPlatforms}
                     minScore={minScore}
+                    sortBy={sortBy}
                     onGenreChange={toggleGenre}
                     onPlatformChange={togglePlatform}
                     onMinScoreChange={setMinScore}
+                    onSortChange={setSortBy}
                     onReset={handleResetFilters}
                 />
             </div>

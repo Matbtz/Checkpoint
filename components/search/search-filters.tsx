@@ -19,9 +19,11 @@ interface SearchFiltersProps {
     selectedGenres: string[];
     selectedPlatforms: string[];
     minScore: number;
+    sortBy: string;
     onGenreChange: (genre: string) => void;
     onPlatformChange: (platform: string) => void;
     onMinScoreChange: (score: number) => void;
+    onSortChange: (sort: string) => void;
     onReset: () => void;
 }
 
@@ -31,9 +33,11 @@ export function SearchFilters({
     selectedGenres,
     selectedPlatforms,
     minScore,
+    sortBy,
     onGenreChange,
     onPlatformChange,
     onMinScoreChange,
+    onSortChange,
     onReset
 }: SearchFiltersProps) {
     return (
@@ -45,7 +49,7 @@ export function SearchFilters({
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* Genres */}
                 <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground">Genre</Label>
@@ -80,6 +84,25 @@ export function SearchFilters({
                             {platforms.map(p => (
                                 <SelectItem key={p} value={p}>{p}</SelectItem>
                             ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Sort By */}
+                <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Sort By</Label>
+                    <Select
+                        value={sortBy}
+                        onValueChange={onSortChange}
+                    >
+                        <SelectTrigger className="w-full text-xs h-9">
+                            <SelectValue placeholder="Sort By" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="rating">Rating</SelectItem>
+                            <SelectItem value="release">Release Date</SelectItem>
+                            <SelectItem value="popularity">Popularity</SelectItem>
+                            <SelectItem value="alphabetical">Alphabetical</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

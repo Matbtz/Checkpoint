@@ -119,6 +119,7 @@ export interface SearchFilters {
     genres?: string[];
     platforms?: string[];
     minScore?: number;
+    sortBy?: 'rating' | 'release' | 'popularity' | 'alphabetical';
 }
 
 /**
@@ -206,7 +207,7 @@ function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
  * Recherche de jeux avec récupération étendue des images et filtres
  */
 export async function searchIgdbGames(query: string, limit: number = 10, filters?: SearchFilters): Promise<EnrichedIgdbGame[]> {
-    let whereClause = `search "${query}"`;
+    let whereClause = query ? `search "${query}"` : '';
 
     // Add Filters
     if (filters) {
@@ -227,15 +228,45 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
         }
 
         if (conditions.length > 0) {
-            whereClause += ` & ${conditions.join(' & ')}`;
+            // If we have a query (search "foo"), we append with &
+            // If no query, we start with 'where' if it's the first condition, or just join them
+            // But whereClause currently contains 'search "foo"' or is empty.
+            if (whereClause) {
+                whereClause += ` & ${conditions.join(' & ')}`;
+            } else {
+                whereClause = `where ${conditions.join(' & ')}`;
+            }
         }
     }
 
+    // Sort Logic (Only applies if NO text query is present, as IGDB forbids explicit sort with 'search')
+    let sortClause = '';
+    if (!query && filters?.sortBy) {
+        switch (filters.sortBy) {
+            case 'rating':
+                sortClause = 'sort aggregated_rating desc;';
+                break;
+            case 'release':
+                sortClause = 'sort first_release_date desc;';
+                break;
+            case 'popularity':
+                sortClause = 'sort total_rating_count desc;';
+                break;
+            case 'alphabetical':
+                sortClause = 'sort name asc;';
+                break;
+        }
+    } else if (!query) {
+         // Default sort if no query and no explicit sort
+         sortClause = 'sort aggregated_rating desc;';
+    }
+
     const body = `
-        ${whereClause};
-        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+        ${whereClause ? whereClause + ';' : ''}
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+        ${sortClause}
         limit ${limit};
     `;
 
