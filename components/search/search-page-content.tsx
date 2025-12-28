@@ -7,6 +7,7 @@ import { Search, Loader2, Globe } from 'lucide-react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { searchLocalGames, searchOnlineGames, SearchResult } from '@/actions/search';
 import { getFilterOptions, FilterOptions } from '@/actions/filters';
+import { SearchFilters as SearchFiltersType } from '@/lib/igdb';
 import { SearchFilters } from './search-filters';
 import { SearchResultCard } from './search-result-card';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ export function SearchPageContent() {
     const [minScore, setMinScore] = React.useState(0);
     const [sortBy, setSortBy] = React.useState<string>('rating');
     const [releaseYear, setReleaseYear] = React.useState<number | undefined>(undefined);
+    const [releaseDateModifier, setReleaseDateModifier] = React.useState<string | undefined>(undefined);
 
     const [isExtendedSearch, setIsExtendedSearch] = React.useState(false);
 
@@ -43,6 +45,19 @@ export function SearchPageContent() {
         if (platformParam) {
             setSelectedPlatforms([platformParam]);
         }
+
+        const releaseYearParam = searchParams.get('releaseYear');
+        if (releaseYearParam) {
+            const year = parseInt(releaseYearParam);
+            if (!isNaN(year)) {
+                setReleaseYear(year);
+            }
+        }
+
+        const releaseDateModifierParam = searchParams.get('releaseDateModifier');
+        if (releaseDateModifierParam) {
+            setReleaseDateModifier(releaseDateModifierParam);
+        }
     }, [searchParams]);
 
     // Fetch Filter Options on Mount
@@ -55,15 +70,16 @@ export function SearchPageContent() {
         const fetchResults = async () => {
             setLoading(true);
             try {
-                const filters = {
+                const filters: SearchFiltersType = {
                     genres: selectedGenres,
                     platforms: selectedPlatforms,
                     minScore: debouncedMinScore > 0 ? debouncedMinScore : undefined,
-                    sortBy: sortBy as 'rating' | 'release' | 'popularity' | 'alphabetical',
-                    releaseYear: debouncedReleaseYear
+                    sortBy: sortBy as SearchFiltersType['sortBy'],
+                    releaseYear: debouncedReleaseYear,
+                    releaseDateModifier: releaseDateModifier as SearchFiltersType['releaseDateModifier']
                 };
 
-                const hasFilters = selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedMinScore > 0 || debouncedReleaseYear !== undefined;
+                const hasFilters = selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedMinScore > 0 || debouncedReleaseYear !== undefined || releaseDateModifier !== undefined;
 
                 let data: SearchResult[] = [];
                 if (isExtendedSearch && debouncedQuery.length > 2) {
@@ -84,7 +100,7 @@ export function SearchPageContent() {
         };
 
         fetchResults();
-    }, [debouncedQuery, selectedGenres, selectedPlatforms, debouncedMinScore, debouncedReleaseYear, isExtendedSearch, sortBy]);
+    }, [debouncedQuery, selectedGenres, selectedPlatforms, debouncedMinScore, debouncedReleaseYear, releaseDateModifier, isExtendedSearch, sortBy]);
 
     const handleExtendedSearch = () => {
         setIsExtendedSearch(true);
@@ -96,6 +112,7 @@ export function SearchPageContent() {
         setMinScore(0);
         setSortBy('rating');
         setReleaseYear(undefined);
+        setReleaseDateModifier(undefined);
         setIsExtendedSearch(false);
     };
 
@@ -141,11 +158,13 @@ export function SearchPageContent() {
                     minScore={minScore}
                     sortBy={sortBy}
                     releaseYear={releaseYear}
+                    releaseDateModifier={releaseDateModifier}
                     onGenreChange={toggleGenre}
                     onPlatformChange={togglePlatform}
                     onMinScoreChange={setMinScore}
                     onSortChange={setSortBy}
                     onReleaseYearChange={setReleaseYear}
+                    onReleaseDateModifierChange={setReleaseDateModifier}
                     onReset={handleResetFilters}
                 />
             </div>
@@ -165,7 +184,7 @@ export function SearchPageContent() {
                                 ))}
                             </div>
                         ) : (
-                            (debouncedQuery.length > 0 || selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedReleaseYear !== undefined) && (
+                            (debouncedQuery.length > 0 || selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedReleaseYear !== undefined || releaseDateModifier !== undefined) && (
                                 <div className="text-center py-12 text-muted-foreground">
                                     <p>No local results found.</p>
                                     {!isExtendedSearch && debouncedQuery.length > 0 && (
