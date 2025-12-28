@@ -26,11 +26,13 @@ interface SearchFiltersProps {
     minScore: number;
     sortBy: string;
     releaseYear?: number;
+    releaseDateModifier?: string;
     onGenreChange: (genre: string) => void; // Expects to toggle specific genre
     onPlatformChange: (platform: string) => void; // Expects to toggle specific platform
     onMinScoreChange: (score: number) => void;
     onSortChange: (sort: string) => void;
     onReleaseYearChange: (year: number | undefined) => void;
+    onReleaseDateModifierChange: (modifier: string) => void;
     onReset: () => void;
 }
 
@@ -42,11 +44,13 @@ export function SearchFilters({
     minScore,
     sortBy,
     releaseYear,
+    releaseDateModifier,
     onGenreChange,
     onPlatformChange,
     onMinScoreChange,
     onSortChange,
     onReleaseYearChange,
+    onReleaseDateModifierChange,
     onReset
 }: SearchFiltersProps) {
     const [isOpen, setIsOpen] = React.useState(true);
@@ -176,12 +180,34 @@ export function SearchFilters({
                         </Popover>
                     </div>
 
-                    {/* Release Year */}
+                    {/* Release Range */}
                     <div className="space-y-2">
-                         <Label className="text-xs text-muted-foreground">Release Year</Label>
+                         <Label className="text-xs text-muted-foreground">Release Range</Label>
+                         <Select
+                            value={releaseDateModifier || "any"}
+                            onValueChange={(val) => onReleaseDateModifierChange(val === "any" ? "" : val)}
+                        >
+                            <SelectTrigger className="w-full text-xs h-9">
+                                <SelectValue placeholder="Time Period" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="any">Any Time</SelectItem>
+                                <SelectItem value="last_30_days">Last 30 Days</SelectItem>
+                                <SelectItem value="last_2_months">Last 2 Months</SelectItem>
+                                <SelectItem value="next_2_months">Next 2 Months</SelectItem>
+                                <SelectItem value="this_year">This Year</SelectItem>
+                                <SelectItem value="next_year">Next Year</SelectItem>
+                                <SelectItem value="past_year">Past Year</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Specific Year */}
+                    <div className="space-y-2">
+                         <Label className="text-xs text-muted-foreground">Specific Year</Label>
                          <Input
                             type="number"
-                            placeholder="Year (e.g. 2023)"
+                            placeholder="e.g. 2023"
                             className="h-9 text-xs"
                             min={1950}
                             max={new Date().getFullYear() + 5}

@@ -75,6 +75,53 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         });
     }
 
+    // Add Release Date Modifier filtering
+    if (filters?.releaseDateModifier) {
+        const now = new Date();
+        let start: Date | null = null;
+        let end: Date | null = null;
+
+        switch (filters.releaseDateModifier) {
+            case 'last_30_days':
+                end = new Date();
+                start = new Date();
+                start.setDate(now.getDate() - 30);
+                break;
+            case 'last_2_months':
+                end = new Date();
+                start = new Date();
+                start.setMonth(now.getMonth() - 2);
+                break;
+            case 'next_2_months':
+                start = new Date();
+                end = new Date();
+                end.setMonth(now.getMonth() + 2);
+                break;
+            case 'this_year':
+                start = new Date(now.getFullYear(), 0, 1);
+                end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                break;
+            case 'next_year':
+                start = new Date(now.getFullYear() + 1, 0, 1);
+                end = new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59);
+                break;
+            case 'past_year':
+                end = new Date();
+                start = new Date();
+                start.setFullYear(now.getFullYear() - 1);
+                break;
+        }
+
+        if (start && end) {
+            whereClause.AND.push({
+                releaseDate: {
+                    gte: start,
+                    lte: end
+                }
+            });
+        }
+    }
+
     // 3. Determine Sort Order
     let orderBy: any = { updatedAt: 'desc' }; // Default fallback if no sort matches
     if (filters?.sortBy) {

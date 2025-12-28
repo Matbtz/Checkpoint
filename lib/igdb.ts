@@ -121,6 +121,7 @@ export interface SearchFilters {
     minScore?: number;
     sortBy?: 'rating' | 'release' | 'popularity' | 'alphabetical';
     releaseYear?: number;
+    releaseDateModifier?: 'last_30_days' | 'last_2_months' | 'next_2_months' | 'this_year' | 'next_year' | 'past_year';
 }
 
 /**
@@ -232,6 +233,43 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
             const startOfYear = Math.floor(new Date(filters.releaseYear, 0, 1).getTime() / 1000);
             const endOfYear = Math.floor(new Date(filters.releaseYear, 11, 31, 23, 59, 59).getTime() / 1000);
             conditions.push(`first_release_date >= ${startOfYear} & first_release_date <= ${endOfYear}`);
+        }
+
+        if (filters.releaseDateModifier) {
+            const now = new Date();
+            let start: number | null = null;
+            let end: number | null = null;
+
+            switch (filters.releaseDateModifier) {
+                case 'last_30_days':
+                    end = Math.floor(now.getTime() / 1000);
+                    start = Math.floor(new Date(now.setDate(now.getDate() - 30)).getTime() / 1000);
+                    break;
+                case 'last_2_months':
+                    end = Math.floor(now.getTime() / 1000);
+                    start = Math.floor(new Date(now.setMonth(now.getMonth() - 2)).getTime() / 1000);
+                    break;
+                case 'next_2_months':
+                    start = Math.floor(now.getTime() / 1000);
+                    end = Math.floor(new Date(now.setMonth(now.getMonth() + 2)).getTime() / 1000);
+                    break;
+                case 'this_year':
+                    start = Math.floor(new Date(now.getFullYear(), 0, 1).getTime() / 1000);
+                    end = Math.floor(new Date(now.getFullYear(), 11, 31, 23, 59, 59).getTime() / 1000);
+                    break;
+                case 'next_year':
+                    start = Math.floor(new Date(now.getFullYear() + 1, 0, 1).getTime() / 1000);
+                    end = Math.floor(new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59).getTime() / 1000);
+                    break;
+                 case 'past_year':
+                    end = Math.floor(now.getTime() / 1000);
+                    start = Math.floor(new Date(now.setFullYear(now.getFullYear() - 1)).getTime() / 1000);
+                    break;
+            }
+
+            if (start && end) {
+                conditions.push(`first_release_date >= ${start} & first_release_date <= ${end}`);
+            }
         }
 
         if (conditions.length > 0) {
