@@ -27,10 +27,18 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
 
     // 1. Prepare Query Terms
     const sanitizedQuery = sanitizeQuery(query);
-    if (!sanitizedQuery) return [];
+
+    // Check if we have filters but no query
+    const hasFilters = filters && (
+        (filters.genres && filters.genres.length > 0) ||
+        (filters.platforms && filters.platforms.length > 0) ||
+        (filters.minScore !== undefined && filters.minScore > 0)
+    );
+
+    if (!sanitizedQuery && !hasFilters) return [];
 
     // Split into individual terms (e.g. "Zelda:" -> ["Zelda"])
-    const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
+    const terms = sanitizedQuery ? sanitizedQuery.split(/\s+/).filter(t => t.length > 0) : [];
 
     // 2. Build Search Clause - AND condition for strict term matching
     const whereClause: any = {

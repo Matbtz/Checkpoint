@@ -20,6 +20,16 @@ export function MediaCarousel({ screenshots, videos, className }: MediaCarouselP
     ...screenshots.filter(s => s && s.startsWith('http')).map((s) => ({ type: "image" as const, src: s })),
   ];
 
+  const getVideoId = (url: string) => {
+    try {
+      if (!url.includes("youtube.com") && !url.includes("youtu.be")) return url;
+      const urlObj = new URL(url);
+      return urlObj.searchParams.get("v") || url.split("/").pop();
+    } catch {
+      return url;
+    }
+  };
+
   return (
     <div className={cn("w-full space-y-4", className)}>
       <h3 className="text-xl font-bold">Media</h3>
@@ -34,7 +44,7 @@ export function MediaCarousel({ screenshots, videos, className }: MediaCarouselP
                 <iframe
                   width="100%"
                   height="100%"
-                  src={`https://www.youtube.com/embed/${item.src}`}
+                  src={`https://www.youtube.com/embed/${getVideoId(item.src)}`}
                   title="Game Trailer"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

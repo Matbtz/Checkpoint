@@ -58,11 +58,14 @@ export function SearchPageContent() {
                     minScore: debouncedMinScore > 0 ? debouncedMinScore : undefined
                 };
 
+                const hasFilters = selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedMinScore > 0;
+
                 let data: SearchResult[] = [];
                 if (isExtendedSearch && debouncedQuery.length > 2) {
                      data = await searchOnlineGames(debouncedQuery, filters);
                 } else {
-                     if (debouncedQuery.length > 0) {
+                     // Search if query exists OR if filters are active
+                     if (debouncedQuery.length > 0 || hasFilters) {
                         data = await searchLocalGames(debouncedQuery, filters);
                      }
                 }
@@ -147,10 +150,10 @@ export function SearchPageContent() {
                                 ))}
                             </div>
                         ) : (
-                            debouncedQuery.length > 0 && (
+                            (debouncedQuery.length > 0 || selectedGenres.length > 0 || selectedPlatforms.length > 0) && (
                                 <div className="text-center py-12 text-muted-foreground">
                                     <p>No local results found.</p>
-                                    {!isExtendedSearch && (
+                                    {!isExtendedSearch && debouncedQuery.length > 0 && (
                                         <div className="mt-4">
                                             <Button onClick={handleExtendedSearch} variant="outline">
                                                 <Globe className="w-4 h-4 mr-2" />
