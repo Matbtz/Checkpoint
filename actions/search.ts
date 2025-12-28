@@ -52,10 +52,22 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         ]
     };
 
-    // 3. Fetch Games (More than 10 to allow in-memory filtering for JSON fields & fuzzy sort)
+    // Add Genre filtering to DB query (since it's a stringified JSON, contains works well)
+    if (filters?.genres && filters.genres.length > 0) {
+        // We want games that have AT LEAST ONE of the selected genres.
+        // OR logic: (genre contains A) OR (genre contains B)
+        whereClause.AND.push({
+            OR: filters.genres.map(g => ({
+                genres: { contains: g }
+            }))
+        });
+    }
+
+    // 3. Fetch Games (Fetch more to allow in-memory filtering for platforms & fuzzy sort)
+    // Increased from 50 to 100 to ensure we get enough results after platform filtering
     const games = await prisma.game.findMany({
         where: whereClause,
-        take: 50,
+        take: 100,
         orderBy: {
             updatedAt: 'desc',
         }
@@ -64,17 +76,8 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
     // 4. In-Memory Filtering and Levenshtein Sorting
     let filteredGames = games;
 
-    // JSON Filters
+    // Platform Filter (JSON structure makes DB filtering complex, keep in memory)
     if (filters) {
-        if (filters.genres && filters.genres.length > 0) {
-            filteredGames = filteredGames.filter(game => {
-                 if (!game.genres) return false;
-                 try {
-                     const g = JSON.parse(game.genres as string);
-                     return Array.isArray(g) && g.some((genre: string) => filters.genres?.includes(genre));
-                 } catch { return false; }
-            });
-        }
 
         if (filters.platforms && filters.platforms.length > 0) {
             filteredGames = filteredGames.filter(game => {
@@ -132,8 +135,8 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
 
     scoredGames.sort((a, b) => b.matchScore - a.matchScore);
 
-    // Limit back to 10
-    const finalGames = scoredGames.slice(0, 10);
+    // Limit back to 25
+    const finalGames = scoredGames.slice(0, 25);
 
     // 5. Fetch Library Status (if logged in)
     const libraryMap = new Map<string, string>();
