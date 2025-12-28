@@ -9,8 +9,8 @@ export type FilterOptions = {
 };
 
 export async function getFilterOptions(): Promise<FilterOptions> {
-    const session = await auth();
-    if (!session?.user?.id) return { genres: [], platforms: [] };
+    // Note: We deliberately allow unauthenticated users to see filter options
+    // as the game database is public information.
 
     // Fetch all games to count stats
     // We fetch everything because we want global stats for the filter list,
