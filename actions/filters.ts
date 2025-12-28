@@ -47,8 +47,22 @@ export async function getFilterOptions(): Promise<FilterOptions> {
         }
     }
 
+    // Fallback lists if local data is sparse
+    const commonGenres = [
+        "Action", "Adventure", "RPG", "Shooter", "Strategy", "Sports",
+        "Racing", "Fighting", "Platform", "Puzzle", "Simulation", "Indie"
+    ];
+    const commonPlatforms = [
+        "PC", "PlayStation 5", "PlayStation 4", "Xbox Series X", "Xbox One",
+        "Nintendo Switch", "Mac", "Linux", "iOS", "Android"
+    ];
+
+    // Merge detected tags with common ones to ensure dropdowns aren't empty
+    const finalGenres = Array.from(new Set([...genreSet, ...commonGenres])).sort();
+    const finalPlatforms = Array.from(new Set([...platformSet, ...commonPlatforms])).sort();
+
     return {
-        genres: Array.from(genreSet).sort(),
-        platforms: Array.from(platformSet).sort(),
+        genres: finalGenres,
+        platforms: finalPlatforms,
     };
 }
