@@ -15,12 +15,13 @@ import { format } from "date-fns";
 export default async function GameDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
+  const userId = session?.user?.id;
 
   const game = await prisma.game.findUnique({
     where: { id },
     include: {
       users: {
-        where: { userId: session?.user?.id },
+        where: { userId: userId ?? "" }, // Prevent fetching all users if not logged in
       },
     },
   });
