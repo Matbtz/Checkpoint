@@ -308,19 +308,6 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
             const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
             const genres = game.genres?.map(g => g.name) || [];
 
-            const availableCovers: string[] = [];
-            if (game.cover) {
-                availableCovers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
-            }
-
-            const availableBackgrounds: string[] = [];
-            if (game.screenshots) {
-                game.screenshots.forEach(s => availableBackgrounds.push(getIgdbImageUrl(s.image_id, '1080p')));
-            }
-            if (game.artworks) {
-                game.artworks.forEach(a => availableBackgrounds.push(getIgdbImageUrl(a.image_id, '1080p')));
-            }
-
             return {
                 id: idStr,
                 title: game.name,
@@ -331,8 +318,8 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
                 // The interface expects opencriticScore. We can populate it if we have it from IGDB (aggregated_rating is critic score).
                 opencriticScore: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
                 genres,
-                availableCovers,
-                availableBackgrounds,
+                availableCovers: game.possibleCovers || [],
+                availableBackgrounds: game.possibleBackgrounds || [],
                 source: 'igdb',
                 originalData: game,
                 isAdded: false,

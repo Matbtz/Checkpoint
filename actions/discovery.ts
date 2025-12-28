@@ -55,6 +55,10 @@ export const getCachedDiscoveryGames = unstable_cache(
                     },
                     take: 10
                 });
+                if (localGames.length < 5) {
+                    const igdbGames = await getDiscoveryGamesIgdb('RECENT', 10);
+                    return igdbGames.map(mapIgdbToPrismaGame);
+                }
                 return localGames;
 
             case 'TOP_RATED':
