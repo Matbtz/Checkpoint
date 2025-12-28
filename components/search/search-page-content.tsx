@@ -24,11 +24,13 @@ export function SearchPageContent() {
     const [selectedPlatforms, setSelectedPlatforms] = React.useState<string[]>([]);
     const [minScore, setMinScore] = React.useState(0);
     const [sortBy, setSortBy] = React.useState<string>('rating');
+    const [releaseYear, setReleaseYear] = React.useState<number | undefined>(undefined);
 
     const [isExtendedSearch, setIsExtendedSearch] = React.useState(false);
 
     const debouncedQuery = useDebounce(query, 500);
     const debouncedMinScore = useDebounce(minScore, 500);
+    const debouncedReleaseYear = useDebounce(releaseYear, 500);
 
     // Initialize from URL search params
     React.useEffect(() => {
@@ -57,10 +59,11 @@ export function SearchPageContent() {
                     genres: selectedGenres,
                     platforms: selectedPlatforms,
                     minScore: debouncedMinScore > 0 ? debouncedMinScore : undefined,
-                    sortBy: sortBy as 'rating' | 'release' | 'popularity' | 'alphabetical'
+                    sortBy: sortBy as 'rating' | 'release' | 'popularity' | 'alphabetical',
+                    releaseYear: debouncedReleaseYear
                 };
 
-                const hasFilters = selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedMinScore > 0;
+                const hasFilters = selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedMinScore > 0 || debouncedReleaseYear !== undefined;
 
                 let data: SearchResult[] = [];
                 if (isExtendedSearch && debouncedQuery.length > 2) {
@@ -81,7 +84,7 @@ export function SearchPageContent() {
         };
 
         fetchResults();
-    }, [debouncedQuery, selectedGenres, selectedPlatforms, debouncedMinScore, isExtendedSearch, sortBy]);
+    }, [debouncedQuery, selectedGenres, selectedPlatforms, debouncedMinScore, debouncedReleaseYear, isExtendedSearch, sortBy]);
 
     const handleExtendedSearch = () => {
         setIsExtendedSearch(true);
@@ -92,17 +95,22 @@ export function SearchPageContent() {
         setSelectedPlatforms([]);
         setMinScore(0);
         setSortBy('rating');
+        setReleaseYear(undefined);
         setIsExtendedSearch(false);
     };
 
     const toggleGenre = (g: string) => {
         if (!g) return;
-        setSelectedGenres([g]);
+        setSelectedGenres(prev =>
+            prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
+        );
     };
 
     const togglePlatform = (p: string) => {
         if (!p) return;
-        setSelectedPlatforms([p]);
+        setSelectedPlatforms(prev =>
+            prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+        );
     };
 
     return (
@@ -132,10 +140,12 @@ export function SearchPageContent() {
                     selectedPlatforms={selectedPlatforms}
                     minScore={minScore}
                     sortBy={sortBy}
+                    releaseYear={releaseYear}
                     onGenreChange={toggleGenre}
                     onPlatformChange={togglePlatform}
                     onMinScoreChange={setMinScore}
                     onSortChange={setSortBy}
+                    onReleaseYearChange={setReleaseYear}
                     onReset={handleResetFilters}
                 />
             </div>
@@ -155,7 +165,7 @@ export function SearchPageContent() {
                                 ))}
                             </div>
                         ) : (
-                            (debouncedQuery.length > 0 || selectedGenres.length > 0 || selectedPlatforms.length > 0) && (
+                            (debouncedQuery.length > 0 || selectedGenres.length > 0 || selectedPlatforms.length > 0 || debouncedReleaseYear !== undefined) && (
                                 <div className="text-center py-12 text-muted-foreground">
                                     <p>No local results found.</p>
                                     {!isExtendedSearch && debouncedQuery.length > 0 && (
