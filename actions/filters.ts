@@ -12,6 +12,10 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     const session = await auth();
     if (!session?.user?.id) return { genres: [], platforms: [] };
 
+    // Fetch all games to count stats
+    // We fetch everything because we want global stats for the filter list,
+    // not just the user's library stats (though in this app 'Game' table is shared,
+    // so it represents all known games).
     const games = await prisma.game.findMany({
         select: {
             genres: true,
@@ -19,8 +23,8 @@ export async function getFilterOptions(): Promise<FilterOptions> {
         },
     });
 
-    const genreSet = new Set<string>();
-    const platformSet = new Set<string>();
+    const genreCounts = new Map<string, number>();
+    const platformCounts = new Map<string, number>();
 
     for (const game of games) {
         // Parse Genres
@@ -28,7 +32,9 @@ export async function getFilterOptions(): Promise<FilterOptions> {
             try {
                 const parsed = JSON.parse(game.genres);
                 if (Array.isArray(parsed)) {
-                    parsed.forEach((g: string) => genreSet.add(g));
+                    parsed.forEach((g: string) => {
+                        genreCounts.set(g, (genreCounts.get(g) || 0) + 1);
+                    });
                 }
             } catch (e) {
                 // ignore
@@ -38,16 +44,30 @@ export async function getFilterOptions(): Promise<FilterOptions> {
         // Parse Platforms
         if (game.platforms && Array.isArray(game.platforms)) {
              game.platforms.forEach((p: any) => {
+                let name = '';
                 if (typeof p === 'string') {
-                    platformSet.add(p);
+                    name = p;
                 } else if (p && typeof p === 'object' && p.name) {
-                    platformSet.add(p.name);
+                    name = p.name;
+                }
+
+                if (name) {
+                    platformCounts.set(name, (platformCounts.get(name) || 0) + 1);
                 }
              });
         }
     }
 
-    // Fallback lists if local data is sparse
+    // Sort by count descending
+    const sortedGenres = Array.from(genreCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(entry => entry[0]);
+
+    const sortedPlatforms = Array.from(platformCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(entry => entry[0]);
+
+    // Fallback lists
     const commonGenres = [
         "Action", "Adventure", "RPG", "Shooter", "Strategy", "Sports",
         "Racing", "Fighting", "Platform", "Puzzle", "Simulation", "Indie"
@@ -57,12 +77,21 @@ export async function getFilterOptions(): Promise<FilterOptions> {
         "Nintendo Switch", "Mac", "Linux", "iOS", "Android"
     ];
 
-    // Merge detected tags with common ones to ensure dropdowns aren't empty
-    const finalGenres = Array.from(new Set([...genreSet, ...commonGenres])).sort();
-    const finalPlatforms = Array.from(new Set([...platformSet, ...commonPlatforms])).sort();
+    // Append common ones if not present (to ensure options exist for new users)
+    commonGenres.forEach(g => {
+        if (!genreCounts.has(g)) {
+            sortedGenres.push(g);
+        }
+    });
+
+    commonPlatforms.forEach(p => {
+        if (!platformCounts.has(p)) {
+            sortedPlatforms.push(p);
+        }
+    });
 
     return {
-        genres: finalGenres,
-        platforms: finalPlatforms,
+        genres: sortedGenres,
+        platforms: sortedPlatforms,
     };
 }
