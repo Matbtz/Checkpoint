@@ -10,8 +10,10 @@ import { getFilterOptions, FilterOptions } from '@/actions/filters';
 import { SearchFilters } from './search-filters';
 import { SearchResultCard } from './search-result-card';
 import { toast } from 'sonner';
+import { useSearchParams } from 'next/navigation';
 
 export function SearchPageContent() {
+    const searchParams = useSearchParams();
     const [query, setQuery] = React.useState('');
     const [results, setResults] = React.useState<SearchResult[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -26,6 +28,19 @@ export function SearchPageContent() {
 
     const debouncedQuery = useDebounce(query, 500);
     const debouncedMinScore = useDebounce(minScore, 500);
+
+    // Initialize from URL search params
+    React.useEffect(() => {
+        const genreParam = searchParams.get('genre');
+        if (genreParam) {
+            setSelectedGenres([genreParam]);
+        }
+
+        const platformParam = searchParams.get('platform');
+        if (platformParam) {
+            setSelectedPlatforms([platformParam]);
+        }
+    }, [searchParams]);
 
     // Fetch Filter Options on Mount
     React.useEffect(() => {

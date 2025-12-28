@@ -1,15 +1,15 @@
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ScoreBadge } from "@/components/game/ScoreBadge";
 import { HLTBCard } from "@/components/game/HLTBCard";
 import { ActionBar } from "@/components/game/ActionBar";
-import { MediaGallery } from "@/components/game/MediaGallery";
+import { MediaCarousel } from "@/components/game/MediaCarousel";
+import { RatingsSection } from "@/components/game/RatingsSection";
 import { RefreshButton } from "@/components/game/RefreshButton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ExternalLink, Calendar, Building2 } from "lucide-react";
+import { Calendar, Building2 } from "lucide-react";
 import { format } from "date-fns";
 
 export default async function GameDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -121,10 +121,10 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
 
       {/* Main Content Grid */}
       <div className="container mx-auto px-4 py-8 md:py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
 
             {/* Left Column (Details & Media) */}
-            <div className="md:col-span-2 space-y-10">
+            <div className="lg:col-span-2 space-y-10">
                 {/* About Section */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -133,6 +133,25 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                             <RefreshButton gameId={game.id} gameTitle={game.title} />
                         )}
                     </div>
+
+                    {/* Genres & Platforms Badges */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {genres.map((g) => (
+                            <Link key={g} href={`/search?genre=${encodeURIComponent(g)}`}>
+                                <Badge variant="secondary" className="cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700">
+                                    {g}
+                                </Badge>
+                            </Link>
+                        ))}
+                        {platforms.map((p, i) => (
+                            <Link key={i} href={`/search?platform=${encodeURIComponent(p.name)}`}>
+                                <Badge variant="outline" className="bg-zinc-50 dark:bg-zinc-900 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                                    {p.name}
+                                </Badge>
+                            </Link>
+                        ))}
+                    </div>
+
                     <div className="prose dark:prose-invert max-w-none text-zinc-600 dark:text-zinc-300 leading-relaxed">
                         {game.description ? (
                             <p className="whitespace-pre-line">{game.description}</p>
@@ -142,8 +161,8 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                     </div>
                 </div>
 
-                {/* Media Gallery */}
-                <MediaGallery screenshots={game.screenshots} videos={game.videos} />
+                {/* Media Carousel */}
+                <MediaCarousel screenshots={game.screenshots} videos={game.videos} />
             </div>
 
             {/* Right Column (Stats Stack) */}
@@ -157,76 +176,16 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                     userPlaytime={userLibrary?.playtimeManual || userLibrary?.playtimeSteam}
                 />
 
-                {/* Ratings Card */}
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 space-y-4 shadow-sm">
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                        Ratings & Info
-                    </h3>
-
-                    <div className="flex flex-wrap gap-2">
-                        {game.opencriticScore && (
-                            <ScoreBadge score={game.opencriticScore} type="opencritic" />
-                        )}
-                        {game.igdbScore && (
-                            <ScoreBadge score={game.igdbScore} type="igdb" />
-                        )}
-                        {game.steamReviewScore && (
-                            <Badge variant="secondary" className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                                Steam: {game.steamReviewScore}
-                            </Badge>
-                        )}
-                    </div>
-
-                    {/* Metadata */}
-                    <div className="space-y-4 pt-2">
-                         {genres.length > 0 && (
-                            <div className="space-y-2">
-                                <span className="text-xs font-medium text-zinc-500 uppercase">Genres</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {genres.map((g) => (
-                                        <Badge key={g} variant="outline" className="text-xs">{g}</Badge>
-                                    ))}
-                                </div>
-                            </div>
-                         )}
-
-                         {platforms.length > 0 && (
-                            <div className="space-y-2">
-                                <span className="text-xs font-medium text-zinc-500 uppercase">Platforms</span>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {platforms.map((p, i) => (
-                                        <Badge key={i} variant="outline" className="text-xs bg-zinc-50 dark:bg-zinc-900">{p.name}</Badge>
-                                    ))}
-                                </div>
-                            </div>
-                         )}
-                    </div>
-
-                    {/* External Links */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 mt-4">
-                        {game.steamUrl && (
-                            <Button variant="ghost" size="icon" asChild title="Steam Store">
-                                <a href={game.steamUrl} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-                            </Button>
-                        )}
-                        {game.igdbUrl && (
-                             <Button variant="ghost" size="icon" asChild title="IGDB">
-                                <a href={game.igdbUrl} target="_blank" rel="noopener noreferrer">
-                                    <span className="font-bold text-xs">IGDB</span>
-                                </a>
-                            </Button>
-                        )}
-                        {game.opencriticUrl && (
-                             <Button variant="ghost" size="icon" asChild title="OpenCritic">
-                                <a href={game.opencriticUrl} target="_blank" rel="noopener noreferrer">
-                                    <span className="font-bold text-xs">OC</span>
-                                </a>
-                            </Button>
-                        )}
-                    </div>
-                </div>
+                {/* Ratings Section */}
+                <RatingsSection
+                    opencriticScore={game.opencriticScore}
+                    igdbScore={game.igdbScore}
+                    steamReviewScore={game.steamReviewScore}
+                    steamReviewPercent={game.steamReviewPercent}
+                    steamUrl={game.steamUrl}
+                    igdbUrl={game.igdbUrl}
+                    opencriticUrl={game.opencriticUrl}
+                />
 
             </div>
 
