@@ -63,6 +63,18 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         });
     }
 
+    // Add Release Year filtering
+    if (filters?.releaseYear) {
+        const startOfYear = new Date(filters.releaseYear, 0, 1);
+        const endOfYear = new Date(filters.releaseYear, 11, 31, 23, 59, 59);
+        whereClause.AND.push({
+            releaseDate: {
+                gte: startOfYear,
+                lte: endOfYear
+            }
+        });
+    }
+
     // 3. Determine Sort Order
     let orderBy: any = { updatedAt: 'desc' }; // Default fallback if no sort matches
     if (filters?.sortBy) {

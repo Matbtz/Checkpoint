@@ -120,6 +120,7 @@ export interface SearchFilters {
     platforms?: string[];
     minScore?: number;
     sortBy?: 'rating' | 'release' | 'popularity' | 'alphabetical';
+    releaseYear?: number;
 }
 
 /**
@@ -225,6 +226,12 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
 
         if (filters.minScore !== undefined) {
              conditions.push(`aggregated_rating >= ${filters.minScore}`);
+        }
+
+        if (filters.releaseYear !== undefined) {
+            const startOfYear = Math.floor(new Date(filters.releaseYear, 0, 1).getTime() / 1000);
+            const endOfYear = Math.floor(new Date(filters.releaseYear, 11, 31, 23, 59, 59).getTime() / 1000);
+            conditions.push(`first_release_date >= ${startOfYear} & first_release_date <= ${endOfYear}`);
         }
 
         if (conditions.length > 0) {
