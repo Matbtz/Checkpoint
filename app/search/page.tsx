@@ -1,4 +1,6 @@
 import { SearchPageContent } from "@/components/search/search-page-content";
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
 
 export default function SearchPage() {
     return (
@@ -10,7 +12,13 @@ export default function SearchPage() {
                 </p>
             </div>
 
-            <SearchPageContent />
+            <Suspense fallback={
+                <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            }>
+                <SearchPageContent />
+            </Suspense>
         </div>
     );
 }
