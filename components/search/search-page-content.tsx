@@ -58,6 +58,19 @@ export function SearchPageContent() {
         if (releaseDateModifierParam) {
             setReleaseDateModifier(releaseDateModifierParam);
         }
+
+        const minScoreParam = searchParams.get('minScore');
+        if (minScoreParam) {
+            const score = parseInt(minScoreParam);
+            if (!isNaN(score)) {
+                setMinScore(score);
+            }
+        }
+
+        const sortByParam = searchParams.get('sortBy');
+        if (sortByParam) {
+            setSortBy(sortByParam);
+        }
     }, [searchParams]);
 
     // Fetch Filter Options on Mount

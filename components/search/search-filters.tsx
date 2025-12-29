@@ -192,6 +192,9 @@ export function SearchFilters({
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="any">Any Time</SelectItem>
+                                <SelectItem value="this_month">This Month</SelectItem>
+                                <SelectItem value="last_month">Last Month</SelectItem>
+                                <SelectItem value="next_month">Next Month</SelectItem>
                                 <SelectItem value="last_30_days">Last 30 Days</SelectItem>
                                 <SelectItem value="last_2_months">Last 2 Months</SelectItem>
                                 <SelectItem value="next_2_months">Next 2 Months</SelectItem>

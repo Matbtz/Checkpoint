@@ -119,9 +119,9 @@ export interface SearchFilters {
     genres?: string[];
     platforms?: string[];
     minScore?: number;
-    sortBy?: 'rating' | 'release' | 'popularity' | 'alphabetical';
+    sortBy?: 'rating' | 'release' | 'popularity' | 'alphabetical' | 'release_asc';
     releaseYear?: number;
-    releaseDateModifier?: 'last_30_days' | 'last_2_months' | 'next_2_months' | 'this_year' | 'next_year' | 'past_year';
+    releaseDateModifier?: 'last_30_days' | 'last_2_months' | 'next_2_months' | 'this_year' | 'next_year' | 'past_year' | 'this_month' | 'last_month' | 'next_month';
 }
 
 /**
@@ -241,30 +241,65 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
             let end: number | null = null;
 
             switch (filters.releaseDateModifier) {
-                case 'last_30_days':
+                case 'last_30_days': {
                     end = Math.floor(now.getTime() / 1000);
-                    start = Math.floor(new Date(now.setDate(now.getDate() - 30)).getTime() / 1000);
+                    const d = new Date(); d.setDate(d.getDate() - 30);
+                    start = Math.floor(d.getTime() / 1000);
                     break;
-                case 'last_2_months':
+                }
+                case 'last_2_months': {
                     end = Math.floor(now.getTime() / 1000);
-                    start = Math.floor(new Date(now.setMonth(now.getMonth() - 2)).getTime() / 1000);
+                    const d = new Date(); d.setMonth(d.getMonth() - 2);
+                    start = Math.floor(d.getTime() / 1000);
                     break;
-                case 'next_2_months':
+                }
+                case 'next_2_months': {
                     start = Math.floor(now.getTime() / 1000);
-                    end = Math.floor(new Date(now.setMonth(now.getMonth() + 2)).getTime() / 1000);
+                    const d = new Date(); d.setMonth(d.getMonth() + 2);
+                    end = Math.floor(d.getTime() / 1000);
                     break;
-                case 'this_year':
-                    start = Math.floor(new Date(now.getFullYear(), 0, 1).getTime() / 1000);
-                    end = Math.floor(new Date(now.getFullYear(), 11, 31, 23, 59, 59).getTime() / 1000);
+                }
+                case 'this_year': {
+                    const startD = new Date(now.getFullYear(), 0, 1);
+                    const endD = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
                     break;
-                case 'next_year':
-                    start = Math.floor(new Date(now.getFullYear() + 1, 0, 1).getTime() / 1000);
-                    end = Math.floor(new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59).getTime() / 1000);
+                }
+                case 'next_year': {
+                    const startD = new Date(now.getFullYear() + 1, 0, 1);
+                    const endD = new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
                     break;
-                 case 'past_year':
+                }
+                case 'past_year': {
                     end = Math.floor(now.getTime() / 1000);
-                    start = Math.floor(new Date(now.setFullYear(now.getFullYear() - 1)).getTime() / 1000);
+                    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+                    start = Math.floor(d.getTime() / 1000);
                     break;
+                }
+                case 'this_month': {
+                    const startD = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const endD = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+                case 'last_month': {
+                    const startD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const endD = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+                case 'next_month': {
+                    const startD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                    const endD = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
             }
 
             if (start && end) {
@@ -275,7 +310,6 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
         if (conditions.length > 0) {
             // If we have a query (search "foo"), we append with &
             // If no query, we start with 'where' if it's the first condition, or just join them
-            // But whereClause currently contains 'search "foo"' or is empty.
             if (whereClause) {
                 whereClause += ` & ${conditions.join(' & ')}`;
             } else {
@@ -293,6 +327,9 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
                 break;
             case 'release':
                 sortClause = 'sort first_release_date desc;';
+                break;
+            case 'release_asc':
+                sortClause = 'sort first_release_date asc;';
                 break;
             case 'popularity':
                 sortClause = 'sort total_rating_count desc;';

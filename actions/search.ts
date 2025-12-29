@@ -32,7 +32,9 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
     const hasFilters = filters && (
         (filters.genres && filters.genres.length > 0) ||
         (filters.platforms && filters.platforms.length > 0) ||
-        (filters.minScore !== undefined && filters.minScore > 0)
+        (filters.minScore !== undefined && filters.minScore > 0) ||
+        (filters.releaseYear !== undefined) ||
+        (filters.releaseDateModifier !== undefined)
     );
 
     if (!sanitizedQuery && !hasFilters) return [];
@@ -82,21 +84,24 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         let end: Date | null = null;
 
         switch (filters.releaseDateModifier) {
-            case 'last_30_days':
+            case 'last_30_days': {
                 end = new Date();
-                start = new Date();
-                start.setDate(now.getDate() - 30);
+                const d = new Date(); d.setDate(d.getDate() - 30);
+                start = d;
                 break;
-            case 'last_2_months':
+            }
+            case 'last_2_months': {
                 end = new Date();
-                start = new Date();
-                start.setMonth(now.getMonth() - 2);
+                const d = new Date(); d.setMonth(d.getMonth() - 2);
+                start = d;
                 break;
-            case 'next_2_months':
+            }
+            case 'next_2_months': {
                 start = new Date();
-                end = new Date();
-                end.setMonth(now.getMonth() + 2);
+                const d = new Date(); d.setMonth(d.getMonth() + 2);
+                end = d;
                 break;
+            }
             case 'this_year':
                 start = new Date(now.getFullYear(), 0, 1);
                 end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
@@ -105,11 +110,27 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
                 start = new Date(now.getFullYear() + 1, 0, 1);
                 end = new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59);
                 break;
-            case 'past_year':
+            case 'past_year': {
                 end = new Date();
-                start = new Date();
-                start.setFullYear(now.getFullYear() - 1);
+                const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+                start = d;
                 break;
+            }
+            case 'this_month': {
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                break;
+            }
+            case 'last_month': {
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+                break;
+            }
+            case 'next_month': {
+                start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+                break;
+            }
         }
 
         if (start && end) {
@@ -131,6 +152,9 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
                 break;
             case 'release':
                 orderBy = { releaseDate: 'desc' };
+                break;
+            case 'release_asc':
+                orderBy = { releaseDate: 'asc' };
                 break;
             case 'popularity':
                 // Use steamReviewCount as proxy for popularity if available
@@ -184,27 +208,14 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
 
     // Sort Logic Conflict:
     // If query exists, usually we want relevant results (Levenshtein match).
-    // If query exists AND user picked a sort, should we override relevance?
-    // The user said "On the global search put an option to sort...".
-    // Usually explicit sort overrides relevance.
+    // If query exists AND user picked a sort, should we override relevance.
 
     if (filters?.sortBy && filters.sortBy !== 'rating') { // 'rating' default might clash with relevance if implicit
-        // If explicit sort is requested (other than default rating which matches our fallback),
-        // we trust the DB order we just fetched (orderBy applied in step 4).
-        // So we do NOT re-sort by matchScore.
-        // However, 'games' array is already sorted by DB. 'scoredGames' preserves that order map.
+        // If explicit sort is requested, we trust the DB order.
     } else {
-        // If no specific sort requested (or just rating/default), and we have a query,
-        // we might prefer relevance?
-        // Actually, if query is present, relevance is king.
-        // But if user selected "Release Date", they expect "Zelda" games sorted by date, not by name similarity.
-        // So: If query is present, default is Relevance. If Sort is explicit, Sort wins.
-        // The user said "By default put it like rating".
-
         if (query && !filters?.sortBy) {
              scoredGames.sort((a, b) => b.matchScore - a.matchScore);
         }
-        // If query is empty, DB order (from sortBy) is already correct.
     }
 
     // Limit back to 25
@@ -265,9 +276,6 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
     }));
 
     // Sort Logic for Online Search
-    // IGDB handles sort if query is empty.
-    // If query is present, we get relevance sort from API.
-    // If user requested explicit sort WITH query, we must sort in memory.
     if (query && filters?.sortBy) {
         scoredResults.sort((a, b) => {
             switch (filters.sortBy) {
@@ -275,14 +283,9 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
                     return (b.aggregated_rating || 0) - (a.aggregated_rating || 0);
                 case 'release':
                     return (b.first_release_date || 0) - (a.first_release_date || 0);
+                case 'release_asc':
+                    return (a.first_release_date || 0) - (b.first_release_date || 0);
                 case 'popularity':
-                     // Using total_rating_count (if fetched, we need to ensure it's in the object)
-                     // EnrichedIgdbGame extends IgdbGame which has total_rating_count?
-                     // Need to check lib/igdb.ts interface. It was added in fields.
-                     // Wait, I need to cast 'a' to any if interface is missing property in Typescript definition
-                     // actually I added total_rating_count to fetch body but did I add it to interface?
-                     // I will assume standard properties or use 'total_rating' as proxy if count missing.
-                     // Let's use total_rating_count if available.
                      return ((b as any).total_rating_count || 0) - ((a as any).total_rating_count || 0);
                 case 'alphabetical':
                     return a.name.localeCompare(b.name);

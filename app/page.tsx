@@ -133,15 +133,27 @@ export default async function Home() {
 
         {/* Other Sections */}
         <section>
-            <DiscoverySection title="Recent Releases" games={recentReleases} />
+            <DiscoverySection
+                title="Recent Releases"
+                games={recentReleases}
+                viewMoreHref="/search?releaseDateModifier=last_2_months&sortBy=release"
+            />
         </section>
 
         <section>
-            <DiscoverySection title="Upcoming Games" games={upcomingGames} />
+            <DiscoverySection
+                title="Upcoming Games"
+                games={upcomingGames}
+                viewMoreHref="/search?releaseDateModifier=next_2_months&sortBy=release_asc"
+            />
         </section>
 
         <section>
-             <DiscoverySection title="Most Anticipated" games={mostAnticipatedGames} />
+             <DiscoverySection
+                title="Most Anticipated"
+                games={mostAnticipatedGames}
+                viewMoreHref="/search?releaseDateModifier=next_year&sortBy=popularity"
+             />
         </section>
 
       </main>
