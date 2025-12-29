@@ -81,14 +81,14 @@ async function fetchAdditionalMetadata(title: string) {
             return {
                 description: g.description_raw || null,
                 genres: g.genres ? JSON.stringify(g.genres.map(x => x.name)) : null,
-                platforms: null,
+                platforms: [],
                 igdbId: null
             };
         }
     } catch (e) {
         console.error(`Error fetching metadata for ${title}`, e);
     }
-    return { description: null, genres: null, platforms: null, igdbId: null };
+    return { description: null, genres: null, platforms: [], igdbId: null };
 }
 
 // --- SCRIPT PRINCIPAL ---
