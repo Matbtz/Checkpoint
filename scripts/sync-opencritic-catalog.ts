@@ -30,7 +30,7 @@ const prisma = new PrismaClient();
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const DELAY_MS = 2000;
 const MAX_PAGES = 5;
-const START_SKIP = 0;
+const STATE_FILE = path.resolve(process.cwd(), 'scripts/sync-state.json');
 
 // --- UTILS ---
 function normalize(str: string) {
@@ -98,6 +98,27 @@ async function main() {
     return;
   }
 
+  // Handle Modes
+  const args = process.argv.slice(2);
+  const isContinue = args.includes('--continue') || args.includes('continue');
+
+  let startSkip = 0;
+  if (isContinue) {
+      try {
+          if (fs.existsSync(STATE_FILE)) {
+              const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+              startSkip = state.nextSkip || 0;
+              console.log(`🔄 CONTINUE MODE: Resuming from skip ${startSkip}`);
+          } else {
+              console.log("⚠️ CONTINUE MODE: No state file found. Starting from 0.");
+          }
+      } catch (e) {
+          console.error("⚠️ Failed to read state file. Starting from 0.", e);
+      }
+  } else {
+      console.log("🆕 NEW MODE: Starting fresh from 0.");
+  }
+
   console.log("🚀 Starting OpenCritic Discovery & Sync (Sort: Newest)...");
 
   // 1. Pré-chargement des jeux locaux pour éviter des milliers de requêtes DB
@@ -115,12 +136,12 @@ async function main() {
   let gamesUpdated = 0;
 
   for (let i = 0; i < MAX_PAGES; i++) {
-    const skip = START_SKIP + (i * 20);
+    const currentSkip = startSkip + (i * 20);
 
     // sort=newest pour avoir les dernières sorties
-    const url = `https://opencritic-api.p.rapidapi.com/game?skip=${skip}&sort=newest`;
+    const url = `https://opencritic-api.p.rapidapi.com/game?skip=${currentSkip}&sort=newest`;
 
-    console.log(`\n📄 Fetching page ${i + 1} (skip: ${skip})...`);
+    console.log(`\n📄 Fetching page ${i + 1} (skip: ${currentSkip})...`);
 
     try {
       const res = await fetch(url, {
@@ -238,6 +259,15 @@ async function main() {
       }
 
       pagesProcessed++;
+
+      // Save State after each page
+      const nextSkip = currentSkip + 20;
+      try {
+          fs.writeFileSync(STATE_FILE, JSON.stringify({ nextSkip, lastRun: new Date().toISOString() }, null, 2));
+      } catch (e) {
+          console.error("⚠️ Failed to save sync state", e);
+      }
+
       if (i < MAX_PAGES - 1) {
           await new Promise(r => setTimeout(r, DELAY_MS)); // Respect rate limit
       }
