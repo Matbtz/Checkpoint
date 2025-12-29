@@ -27,10 +27,20 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
 
     // 1. Prepare Query Terms
     const sanitizedQuery = sanitizeQuery(query);
-    if (!sanitizedQuery) return [];
+
+    // Check if we have filters but no query
+    const hasFilters = filters && (
+        (filters.genres && filters.genres.length > 0) ||
+        (filters.platforms && filters.platforms.length > 0) ||
+        (filters.minScore !== undefined && filters.minScore > 0) ||
+        (filters.releaseYear !== undefined) ||
+        (filters.releaseDateModifier !== undefined)
+    );
+
+    if (!sanitizedQuery && !hasFilters) return [];
 
     // Split into individual terms (e.g. "Zelda:" -> ["Zelda"])
-    const terms = sanitizedQuery.split(/\s+/).filter(t => t.length > 0);
+    const terms = sanitizedQuery ? sanitizedQuery.split(/\s+/).filter(t => t.length > 0) : [];
 
     // 2. Build Search Clause - AND condition for strict term matching
     const whereClause: any = {
@@ -44,29 +54,134 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         ]
     };
 
-    // 3. Fetch Games (More than 10 to allow in-memory filtering for JSON fields & fuzzy sort)
-    const games = await prisma.game.findMany({
-        where: whereClause,
-        take: 50,
-        orderBy: {
-            updatedAt: 'desc',
+    // Add Genre filtering to DB query (since it's a stringified JSON, contains works well)
+    if (filters?.genres && filters.genres.length > 0) {
+        // We want games that have AT LEAST ONE of the selected genres.
+        // OR logic: (genre contains A) OR (genre contains B)
+        whereClause.AND.push({
+            OR: filters.genres.map(g => ({
+                genres: { contains: g }
+            }))
+        });
+    }
+
+    // Add Release Year filtering
+    if (filters?.releaseYear) {
+        const startOfYear = new Date(filters.releaseYear, 0, 1);
+        const endOfYear = new Date(filters.releaseYear, 11, 31, 23, 59, 59);
+        whereClause.AND.push({
+            releaseDate: {
+                gte: startOfYear,
+                lte: endOfYear
+            }
+        });
+    }
+
+    // Add Release Date Modifier filtering
+    if (filters?.releaseDateModifier) {
+        const now = new Date();
+        let start: Date | null = null;
+        let end: Date | null = null;
+
+        switch (filters.releaseDateModifier) {
+            case 'last_30_days': {
+                end = new Date();
+                const d = new Date(); d.setDate(d.getDate() - 30);
+                start = d;
+                break;
+            }
+            case 'last_2_months': {
+                end = new Date();
+                const d = new Date(); d.setMonth(d.getMonth() - 2);
+                start = d;
+                break;
+            }
+            case 'next_2_months': {
+                start = new Date();
+                const d = new Date(); d.setMonth(d.getMonth() + 2);
+                end = d;
+                break;
+            }
+            case 'this_year':
+                start = new Date(now.getFullYear(), 0, 1);
+                end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                break;
+            case 'next_year':
+                start = new Date(now.getFullYear() + 1, 0, 1);
+                end = new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59);
+                break;
+            case 'past_year': {
+                end = new Date();
+                const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+                start = d;
+                break;
+            }
+            case 'this_month': {
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                break;
+            }
+            case 'last_month': {
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+                break;
+            }
+            case 'next_month': {
+                start = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+                break;
+            }
         }
-    });
 
-    // 4. In-Memory Filtering and Levenshtein Sorting
-    let filteredGames = games;
-
-    // JSON Filters
-    if (filters) {
-        if (filters.genres && filters.genres.length > 0) {
-            filteredGames = filteredGames.filter(game => {
-                 if (!game.genres) return false;
-                 try {
-                     const g = JSON.parse(game.genres as string);
-                     return Array.isArray(g) && g.some((genre: string) => filters.genres?.includes(genre));
-                 } catch { return false; }
+        if (start && end) {
+            whereClause.AND.push({
+                releaseDate: {
+                    gte: start,
+                    lte: end
+                }
             });
         }
+    }
+
+    // 3. Determine Sort Order
+    let orderBy: any = { updatedAt: 'desc' }; // Default fallback if no sort matches
+    if (filters?.sortBy) {
+        switch (filters.sortBy) {
+            case 'rating':
+                orderBy = { opencriticScore: 'desc' };
+                break;
+            case 'release':
+                orderBy = { releaseDate: 'desc' };
+                break;
+            case 'release_asc':
+                orderBy = { releaseDate: 'asc' };
+                break;
+            case 'popularity':
+                // Use steamReviewCount as proxy for popularity if available
+                orderBy = { steamReviewCount: 'desc' };
+                break;
+            case 'alphabetical':
+                orderBy = { title: 'asc' };
+                break;
+        }
+    } else {
+        // Default to Rating if not specified (per user request)
+        orderBy = { opencriticScore: 'desc' };
+    }
+
+    // 4. Fetch Games (Fetch more to allow in-memory filtering for platforms & fuzzy sort)
+    // Increased from 50 to 100 to ensure we get enough results after platform filtering
+    const games = await prisma.game.findMany({
+        where: whereClause,
+        take: 100,
+        orderBy: orderBy,
+    });
+
+    // 5. In-Memory Filtering and Levenshtein Sorting
+    let filteredGames = games;
+
+    // Platform Filter (JSON structure makes DB filtering complex, keep in memory)
+    if (filters) {
 
         if (filters.platforms && filters.platforms.length > 0) {
             filteredGames = filteredGames.filter(game => {
@@ -85,47 +200,26 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         }
     }
 
-    // Levenshtein Scoring & Filtering (> 90)
-    // We map to an intermediate object to hold the score
+    // Levenshtein Scoring
     let scoredGames = filteredGames.map(game => {
         const score = stringSimilarity(game.title, query) * 100;
         return { ...game, matchScore: score };
     });
 
-    // Filter by score > 90 (Task 2)
-    // Note: If the user search is partial "Zeld", score might be low for "The Legend of Zelda".
-    // "stringSimilarity" is based on Levenshtein. "Zeld" vs "The Legend of Zelda" has high distance.
-    // However, the SQL "contains" already ensures the words are there.
-    // If the user requirement is strict "propose scores above 90", we filter.
-    // But this might hide valid partial matches.
-    // Given the request "introduce a lewenstein distance score to propose scores above 90",
-    // it implies we should prioritize or maybe ONLY show high matches.
-    // I'll filter for now, but keep in mind this might be too strict for partial queries.
-    // Actually, usually "propose" means "rank higher". But "in the results" with a threshold often implies filtering.
-    // Let's filter > 90 OR if the query is very short, maybe relax?
-    // Let's stick to the request: "propose scores above 90".
+    // Sort Logic Conflict:
+    // If query exists, usually we want relevant results (Levenshtein match).
+    // If query exists AND user picked a sort, should we override relevance.
 
-    // Wait, if I type "Baldur", "Baldur's Gate 3" score is ~50%.
-    // If I enforce > 90, I won't see it until I type almost the full name.
-    // That seems like bad UX. Maybe the user means "Show score and highlight > 90"?
-    // OR maybe "Sort by score"?
-    // "propose scores above 90 in the results" -> ambiguous.
-    // Interpretation: "Use score to rank, and maybe visually indicate high matches?"
-    // OR "Only return > 90".
-    // Let's implement Sorting by score first. And maybe filter if score is very low?
-    // But since we use AND sql query, we already have good matches.
-    // I will Sort by score. And if score > 90, maybe it's "proposed"?
-    // I'll filter only if score is decent (e.g. > 40) but rank > 90 first.
-    // User said "propose scores above 90". I will Filter > 90 to be safe with the "propose" wording,
-    // assuming the user wants high precision.
-    // BUT, for partial searches, this kills discovery.
-    // Let's assume the user means "Sort/Rank" effectively.
-    // I'll sort by score descending.
+    if (filters?.sortBy && filters.sortBy !== 'rating') { // 'rating' default might clash with relevance if implicit
+        // If explicit sort is requested, we trust the DB order.
+    } else {
+        if (query && !filters?.sortBy) {
+             scoredGames.sort((a, b) => b.matchScore - a.matchScore);
+        }
+    }
 
-    scoredGames.sort((a, b) => b.matchScore - a.matchScore);
-
-    // Limit back to 10
-    const finalGames = scoredGames.slice(0, 10);
+    // Limit back to 25
+    const finalGames = scoredGames.slice(0, 25);
 
     // 5. Fetch Library Status (if logged in)
     const libraryMap = new Map<string, string>();
@@ -181,12 +275,28 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
         matchScore: stringSimilarity(g.name, query) * 100
     }));
 
-    // Sort by Score
-    scoredResults.sort((a, b) => b.matchScore - a.matchScore);
-
-    // Filter > 90 ?? If I do this, online search becomes useless for discovery.
-    // I'll just keep the sort. The user said "propose scores above 90".
-    // Maybe they meant "Only show those > 90"? I'll interpret as "Prioritize".
+    // Sort Logic for Online Search
+    if (query && filters?.sortBy) {
+        scoredResults.sort((a, b) => {
+            switch (filters.sortBy) {
+                case 'rating':
+                    return (b.aggregated_rating || 0) - (a.aggregated_rating || 0);
+                case 'release':
+                    return (b.first_release_date || 0) - (a.first_release_date || 0);
+                case 'release_asc':
+                    return (a.first_release_date || 0) - (b.first_release_date || 0);
+                case 'popularity':
+                     return ((b as any).total_rating_count || 0) - ((a as any).total_rating_count || 0);
+                case 'alphabetical':
+                    return a.name.localeCompare(b.name);
+                default:
+                    return b.matchScore - a.matchScore;
+            }
+        });
+    } else if (query) {
+        // Default to relevance
+         scoredResults.sort((a, b) => b.matchScore - a.matchScore);
+    }
 
     // 2. Check for existence in local DB (to link to existing IDs/data)
     const igdbIds = scoredResults.map(g => String(g.id));
@@ -260,19 +370,6 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
             const developer = game.involved_companies?.find(c => c.developer)?.company.name || null;
             const genres = game.genres?.map(g => g.name) || [];
 
-            const availableCovers: string[] = [];
-            if (game.cover) {
-                availableCovers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
-            }
-
-            const availableBackgrounds: string[] = [];
-            if (game.screenshots) {
-                game.screenshots.forEach(s => availableBackgrounds.push(getIgdbImageUrl(s.image_id, '1080p')));
-            }
-            if (game.artworks) {
-                game.artworks.forEach(a => availableBackgrounds.push(getIgdbImageUrl(a.image_id, '1080p')));
-            }
-
             return {
                 id: idStr,
                 title: game.name,
@@ -283,8 +380,8 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
                 // The interface expects opencriticScore. We can populate it if we have it from IGDB (aggregated_rating is critic score).
                 opencriticScore: game.aggregated_rating ? Math.round(game.aggregated_rating) : null,
                 genres,
-                availableCovers,
-                availableBackgrounds,
+                availableCovers: game.possibleCovers || [],
+                availableBackgrounds: game.possibleBackgrounds || [],
                 source: 'igdb',
                 originalData: game,
                 isAdded: false,

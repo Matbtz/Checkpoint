@@ -102,9 +102,6 @@ export async function searchOnlineGamesAction(query: string) {
     return igdbResults.map(game => {
         const existing = existingGames.find(e => e.id === String(game.id));
 
-        const availableCovers: string[] = [];
-        if (game.cover) availableCovers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
-
         return {
             id: String(game.id),
             title: game.name,
@@ -114,7 +111,7 @@ export async function searchOnlineGamesAction(query: string) {
             opencritic: existing?.opencriticScore || null,
             genres: game.genres?.map(g => g.name) || [],
             platforms: game.platforms?.map(p => p.name) || [],
-            availableCovers,
+            availableCovers: game.possibleCovers || [],
             availableBackgrounds: game.possibleBackgrounds || [],
             source: 'igdb' as const,
             originalData: game,

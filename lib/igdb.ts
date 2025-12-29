@@ -119,6 +119,9 @@ export interface SearchFilters {
     genres?: string[];
     platforms?: string[];
     minScore?: number;
+    sortBy?: 'rating' | 'release' | 'popularity' | 'alphabetical' | 'release_asc';
+    releaseYear?: number;
+    releaseDateModifier?: 'last_30_days' | 'last_2_months' | 'next_2_months' | 'this_year' | 'next_year' | 'past_year' | 'this_month' | 'last_month' | 'next_month';
 }
 
 /**
@@ -206,7 +209,7 @@ function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
  * Recherche de jeux avec récupération étendue des images et filtres
  */
 export async function searchIgdbGames(query: string, limit: number = 10, filters?: SearchFilters): Promise<EnrichedIgdbGame[]> {
-    let whereClause = `search "${query}"`;
+    let whereClause = query ? `search "${query}"` : '';
 
     // Add Filters
     if (filters) {
@@ -226,16 +229,126 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
              conditions.push(`aggregated_rating >= ${filters.minScore}`);
         }
 
+        if (filters.releaseYear !== undefined) {
+            const startOfYear = Math.floor(new Date(filters.releaseYear, 0, 1).getTime() / 1000);
+            const endOfYear = Math.floor(new Date(filters.releaseYear, 11, 31, 23, 59, 59).getTime() / 1000);
+            conditions.push(`first_release_date >= ${startOfYear} & first_release_date <= ${endOfYear}`);
+        }
+
+        if (filters.releaseDateModifier) {
+            const now = new Date();
+            let start: number | null = null;
+            let end: number | null = null;
+
+            switch (filters.releaseDateModifier) {
+                case 'last_30_days': {
+                    end = Math.floor(now.getTime() / 1000);
+                    const d = new Date(); d.setDate(d.getDate() - 30);
+                    start = Math.floor(d.getTime() / 1000);
+                    break;
+                }
+                case 'last_2_months': {
+                    end = Math.floor(now.getTime() / 1000);
+                    const d = new Date(); d.setMonth(d.getMonth() - 2);
+                    start = Math.floor(d.getTime() / 1000);
+                    break;
+                }
+                case 'next_2_months': {
+                    start = Math.floor(now.getTime() / 1000);
+                    const d = new Date(); d.setMonth(d.getMonth() + 2);
+                    end = Math.floor(d.getTime() / 1000);
+                    break;
+                }
+                case 'this_year': {
+                    const startD = new Date(now.getFullYear(), 0, 1);
+                    const endD = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+                case 'next_year': {
+                    const startD = new Date(now.getFullYear() + 1, 0, 1);
+                    const endD = new Date(now.getFullYear() + 1, 11, 31, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+                case 'past_year': {
+                    end = Math.floor(now.getTime() / 1000);
+                    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+                    start = Math.floor(d.getTime() / 1000);
+                    break;
+                }
+                case 'this_month': {
+                    const startD = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const endD = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+                case 'last_month': {
+                    const startD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const endD = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+                case 'next_month': {
+                    const startD = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                    const endD = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+                    start = Math.floor(startD.getTime() / 1000);
+                    end = Math.floor(endD.getTime() / 1000);
+                    break;
+                }
+            }
+
+            if (start && end) {
+                conditions.push(`first_release_date >= ${start} & first_release_date <= ${end}`);
+            }
+        }
+
         if (conditions.length > 0) {
-            whereClause += ` & ${conditions.join(' & ')}`;
+            // If we have a query (search "foo"), we append with &
+            // If no query, we start with 'where' if it's the first condition, or just join them
+            if (whereClause) {
+                whereClause += ` & ${conditions.join(' & ')}`;
+            } else {
+                whereClause = `where ${conditions.join(' & ')}`;
+            }
         }
     }
 
+    // Sort Logic (Only applies if NO text query is present, as IGDB forbids explicit sort with 'search')
+    let sortClause = '';
+    if (!query && filters?.sortBy) {
+        switch (filters.sortBy) {
+            case 'rating':
+                sortClause = 'sort aggregated_rating desc;';
+                break;
+            case 'release':
+                sortClause = 'sort first_release_date desc;';
+                break;
+            case 'release_asc':
+                sortClause = 'sort first_release_date asc;';
+                break;
+            case 'popularity':
+                sortClause = 'sort total_rating_count desc;';
+                break;
+            case 'alphabetical':
+                sortClause = 'sort name asc;';
+                break;
+        }
+    } else if (!query) {
+         // Default sort if no query and no explicit sort
+         sortClause = 'sort aggregated_rating desc;';
+    }
+
     const body = `
-        ${whereClause};
-        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+        ${whereClause ? whereClause + ';' : ''}
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+        ${sortClause}
         limit ${limit};
     `;
 

@@ -5,6 +5,9 @@ import { Game } from '@prisma/client';
 import { HomeGameCard } from './HomeGameCard';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { ChevronRight } from 'lucide-react';
 
 interface TopRatedGamesProps {
   games: Game[];
@@ -56,7 +59,14 @@ export function TopRatedGames({ games }: TopRatedGamesProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold tracking-tight">Top Rated Games of {new Date().getFullYear()}</h2>
+        <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold tracking-tight">Top Rated Games of {new Date().getFullYear()}</h2>
+            <Link href={`/search?minScore=85&sortBy=rating&releaseYear=${new Date().getFullYear()}`}>
+                <Button variant="ghost" size="sm" className="hidden sm:flex text-muted-foreground hover:text-primary">
+                    View More <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+            </Link>
+        </div>
         <Tabs value={selectedPlatform} onValueChange={setSelectedPlatform} className="w-full sm:w-auto">
           <TabsList className="w-full flex justify-start overflow-x-auto sm:w-auto sm:overflow-visible bg-zinc-100 dark:bg-zinc-800 no-scrollbar pb-1 sm:pb-0">
              {PLATFORMS.map((platform) => (
@@ -66,6 +76,13 @@ export function TopRatedGames({ games }: TopRatedGamesProps) {
              ))}
           </TabsList>
         </Tabs>
+
+        {/* Mobile View More */}
+        <Link href={`/search?minScore=85&sortBy=rating&releaseYear=${new Date().getFullYear()}`} className="sm:hidden w-full">
+            <Button variant="outline" size="sm" className="w-full text-muted-foreground">
+                View More Top Rated
+            </Button>
+        </Link>
       </div>
 
       <ScrollArea className="w-full whitespace-nowrap pb-4">

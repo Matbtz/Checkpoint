@@ -181,6 +181,41 @@ export async function searchAndAddGame(query: string) {
     return game;
 }
 
+export async function addGameToLibrary(gameId: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    // Check if game exists in DB
+    const game = await prisma.game.findUnique({
+        where: { id: gameId },
+    });
+
+    if (!game) throw new Error("Game not found");
+
+    // Add to user library if not exists
+    const existingEntry = await prisma.userLibrary.findUnique({
+        where: {
+            userId_gameId: {
+                userId: session.user.id,
+                gameId: game.id
+            }
+        }
+    });
+
+    if (!existingEntry) {
+        await prisma.userLibrary.create({
+            data: {
+                userId: session.user.id,
+                gameId: game.id,
+                status: 'BACKLOG',
+            }
+        });
+    }
+
+    revalidatePath(`/game/${gameId}`);
+    revalidatePath('/dashboard');
+}
+
 export async function removeGamesFromLibrary(gameIds: string[]) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
