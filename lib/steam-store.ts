@@ -15,7 +15,7 @@ export async function searchSteamStore(query: string): Promise<SteamStoreGame[]>
     try {
         const url = `https://store.steampowered.com/search/?term=${encodeURIComponent(query)}`;
         const response = await fetch(url, {
-             headers: {
+            headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         });
@@ -64,3 +64,43 @@ export async function searchSteamStore(query: string): Promise<SteamStoreGame[]>
         return [];
     }
 }
+
+export interface SteamReviewStats {
+    scoreDesc: string; // e.g., "Overwhelmingly Positive"
+    totalReviews: number;
+    percentPositive: number;
+}
+
+export async function getSteamReviewStats(appId: number): Promise<SteamReviewStats | null> {
+    try {
+        const url = `https://store.steampowered.com/appreviews/${appId}?json=1&purchase_type=all&language=all`;
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        if (data && data.query_summary) {
+            const summary = data.query_summary;
+            const total = summary.total_reviews;
+            const positive = summary.total_positive;
+
+            if (total === 0) return null;
+
+            return {
+                scoreDesc: summary.review_score_desc,
+                totalReviews: total,
+                percentPositive: Math.round((positive / total) * 100)
+            };
+        }
+        return null;
+
+    } catch (e) {
+        console.error(`Error fetching Steam reviews for ${appId}:`, e);
+        return null;
+    }
+}
+

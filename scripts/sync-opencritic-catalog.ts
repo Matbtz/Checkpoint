@@ -1,3 +1,4 @@
+import './env-loader';
 import { PrismaClient } from '@prisma/client';
 import { findBestGameArt } from '../lib/enrichment';
 import { searchIgdbGames } from '../lib/igdb';
@@ -5,32 +6,13 @@ import { searchRawgGames, getRawgGameDetails } from '../lib/rawg';
 import fs from 'fs';
 import path from 'path';
 
-// --- ENV LOADING ---
-try {
-  const envPath = path.resolve(process.cwd(), '.env');
-  if (fs.existsSync(envPath)) {
-    const file = fs.readFileSync(envPath, 'utf8');
-    file.split('\n').forEach(line => {
-      const idx = line.indexOf('=');
-      if (idx > 0 && !line.trim().startsWith('#')) {
-        const key = line.substring(0, idx).trim();
-        let val = line.substring(idx + 1).trim();
-        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
-        process.env[key] = val;
-      }
-    });
-  }
-} catch (e) {
-  console.warn("Failed to load .env file manually");
-}
-
 const prisma = new PrismaClient();
 
 // --- CONFIGURATION ---
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 const DELAY_MS = 2000;
-const MAX_PAGES = 5;
-const STATE_FILE = path.resolve(process.cwd(), 'scripts/sync-state.json');
+const MAX_PAGES = 50;
+
 
 // --- UTILS ---
 function normalize(str: string) {
@@ -46,10 +28,10 @@ function isMatch(localGame: { title: string, releaseDate: Date | null }, apiTitl
   // If both have dates, check year match to avoid remakes/sequels with same name
   // OpenCritic date is ISO string (e.g. "2023-10-20T...")
   if (localGame.releaseDate && apiDateStr) {
-      const localYear = localGame.releaseDate.getFullYear();
-      const apiYear = new Date(apiDateStr).getFullYear();
-      // Allow 1 year difference (e.g. late Dec vs early Jan, or regional release)
-      return Math.abs(localYear - apiYear) <= 1;
+    const localYear = localGame.releaseDate.getFullYear();
+    const apiYear = new Date(apiDateStr).getFullYear();
+    // Allow 1 year difference (e.g. late Dec vs early Jan, or regional release)
+    return Math.abs(localYear - apiYear) <= 1;
   }
 
   return true;
@@ -57,38 +39,38 @@ function isMatch(localGame: { title: string, releaseDate: Date | null }, apiTitl
 
 // Fonction pour récupérer les métadonnées manquantes (Desc, Genres) via IGDB/RAWG
 async function fetchAdditionalMetadata(title: string) {
-    try {
-        // 1. Essai IGDB (Meilleure source pour genres/desc structurés)
-        const igdbResults = await searchIgdbGames(title, 1);
-        if (igdbResults.length > 0) {
-            const g = igdbResults[0];
-            return {
-                description: g.summary || null,
-                genres: g.genres ? JSON.stringify(g.genres.map(x => x.name)) : null,
-                platforms: g.platforms ? g.platforms.map(x => ({ name: x.name })) : [], // Return Object for Prisma Json
-                igdbId: String(g.id)
-            };
-        }
-
-        // 2. Fallback RAWG
-        const rawgResults = await searchRawgGames(title, 1);
-        if (rawgResults.length > 0) {
-            const listGame = rawgResults[0];
-            // Fetch details for description because list view usually lacks it
-            const details = await getRawgGameDetails(listGame.id);
-            const g = details || listGame;
-
-            return {
-                description: g.description_raw || null,
-                genres: g.genres ? JSON.stringify(g.genres.map(x => x.name)) : null,
-                platforms: [],
-                igdbId: null
-            };
-        }
-    } catch (e) {
-        console.error(`Error fetching metadata for ${title}`, e);
+  try {
+    // 1. Essai IGDB (Meilleure source pour genres/desc structurés)
+    const igdbResults = await searchIgdbGames(title, 1);
+    if (igdbResults.length > 0) {
+      const g = igdbResults[0];
+      return {
+        description: g.summary || null,
+        genres: g.genres ? JSON.stringify(g.genres.map(x => x.name)) : null,
+        platforms: g.platforms ? g.platforms.map(x => ({ name: x.name })) : [], // Return Object for Prisma Json
+        igdbId: String(g.id)
+      };
     }
-    return { description: null, genres: null, platforms: [], igdbId: null };
+
+    // 2. Fallback RAWG
+    const rawgResults = await searchRawgGames(title, 1);
+    if (rawgResults.length > 0) {
+      const listGame = rawgResults[0];
+      // Fetch details for description because list view usually lacks it
+      const details = await getRawgGameDetails(listGame.id);
+      const g = details || listGame;
+
+      return {
+        description: g.description_raw || null,
+        genres: g.genres ? JSON.stringify(g.genres.map(x => x.name)) : null,
+        platforms: [],
+        igdbId: null
+      };
+    }
+  } catch (e) {
+    console.error(`Error fetching metadata for ${title}`, e);
+  }
+  return { description: null, genres: null, platforms: [], igdbId: null };
 }
 
 // --- SCRIPT PRINCIPAL ---
@@ -102,24 +84,66 @@ async function main() {
   const args = process.argv.slice(2);
   const isContinue = args.includes('--continue') || args.includes('continue');
 
-  let startSkip = 0;
-  if (isContinue) {
-      try {
-          if (fs.existsSync(STATE_FILE)) {
-              const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-              startSkip = state.nextSkip || 0;
-              console.log(`🔄 CONTINUE MODE: Resuming from skip ${startSkip}`);
-          } else {
-              console.log("⚠️ CONTINUE MODE: No state file found. Starting from 0.");
-          }
-      } catch (e) {
-          console.error("⚠️ Failed to read state file. Starting from 0.", e);
-      }
-  } else {
-      console.log("🆕 NEW MODE: Starting fresh from 0.");
+  // Parse Sort Mode
+  let sortMode = 'newest';
+  const sortArg = args.find(a => a.startsWith('--sort='));
+  if (sortArg) {
+    const val = sortArg.split('=')[1];
+    if (val === 'popular') sortMode = 'popularity';
+    else sortMode = val;
+  } else if (args.includes('score') || args.includes('--score')) {
+    sortMode = 'score';
+  } else if (args.includes('popular') || args.includes('--popular')) {
+    sortMode = 'popularity';
   }
 
-  console.log("🚀 Starting OpenCritic Discovery & Sync (Sort: Newest)...");
+  // Parse Platform
+  let platformMode: string | null = null;
+  let platformId: string | null = null;
+
+  const platArg = args.find(a => a.startsWith('--platform='));
+  if (platArg) {
+    platformMode = platArg.split('=')[1].toLowerCase();
+  }
+
+  // Platform Mapping (OpenCritic IDs)
+  // PC=27, PS5=39, Switch=26, XBXS=40, PS4=6, XB1=7
+  if (platformMode) {
+    switch (platformMode) {
+      case 'pc': platformId = '27'; break;
+      case 'ps5': platformId = '39'; break;
+      case 'ps4': platformId = '6'; break;
+      case 'switch': platformId = '26'; break;
+      // "switch 2" is speculative, mapping to Switch (26) or unknown. ignoring for now or mapping specific if verified.
+      case 'xbox': platformId = '7,40'; break; // Xbox One + Series
+      case 'series': platformId = '40'; break;
+      default:
+        console.warn(`⚠️ Unknown platform "${platformMode}". Ignoring filter.`);
+        platformMode = null;
+    }
+  }
+
+  const stateSuffix = platformMode ? `-${sortMode}-${platformMode}` : `-${sortMode}`;
+  const STATE_FILE = path.resolve(process.cwd(), `scripts/sync-state${stateSuffix}.json`);
+
+  let startSkip = 0;
+  if (isContinue) {
+    try {
+      if (fs.existsSync(STATE_FILE)) {
+        const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+        startSkip = state.nextSkip || 0;
+        console.log(`🔄 CONTINUE MODE (${sortMode}${platformMode ? '/' + platformMode : ''}): Resuming from skip ${startSkip}`);
+      } else {
+        console.log(`⚠️ CONTINUE MODE (${sortMode}${platformMode ? '/' + platformMode : ''}): No state file found. Starting from 0.`);
+      }
+    } catch (e) {
+      console.error("⚠️ Failed to read state file. Starting from 0.", e);
+    }
+  } else {
+    console.log(`🆕 NEW MODE (${sortMode}${platformMode ? '/' + platformMode : ''}): Starting fresh from 0.`);
+  }
+
+  console.log(`🚀 Starting OpenCritic Discovery & Sync (Sort: ${sortMode}${platformMode ? ', Platform: ' + platformMode : ''})...`);
 
   // 1. Pré-chargement des jeux locaux pour éviter des milliers de requêtes DB
   const localGames = await prisma.game.findMany({
@@ -138,8 +162,11 @@ async function main() {
   for (let i = 0; i < MAX_PAGES; i++) {
     const currentSkip = startSkip + (i * 20);
 
-    // sort=newest pour avoir les dernières sorties
-    const url = `https://opencritic-api.p.rapidapi.com/game?skip=${currentSkip}&sort=newest`;
+    // URL construction with sort mode and platform
+    let url = `https://opencritic-api.p.rapidapi.com/game?skip=${currentSkip}&sort=${sortMode}`;
+    if (platformId) {
+      url += `&platforms=${platformId}`;
+    }
 
     console.log(`\n📄 Fetching page ${i + 1} (skip: ${currentSkip})...`);
 
@@ -174,15 +201,18 @@ async function main() {
           if (newScore && match.opencriticScore !== newScore) {
             console.log(`   🔄 UPDATING: "${match.title}" (Score: ${newScore})`);
             await prisma.game.update({
-                where: { id: match.id },
-                data: {
-                    opencriticScore: newScore,
-                    // Also update URL if available, as user script missed it
-                    ...(apiGame.url ? { opencriticUrl: apiGame.url } : {})
-                }
+              where: { id: match.id },
+              data: {
+                opencriticScore: newScore,
+                // Also update URL if available, as user script missed it
+                ...(apiGame.url ? { opencriticUrl: apiGame.url } : {})
+              }
             });
             gamesUpdated++;
             match.opencriticScore = newScore;
+          } else {
+            // Debug log for popular sort transparency
+            // console.log(`   . Skipped: "${match.title}" (Up to date)`);
           }
         }
         else {
@@ -190,6 +220,9 @@ async function main() {
           console.log(`   ✨ CREATING: "${cleanTitle}"...`);
 
           const releaseYear = apiReleaseDateStr ? new Date(apiReleaseDateStr).getFullYear() : null;
+
+          // ... (rest of creation logic)
+
 
           // 1. Récupération des images (Steam > IGDB > RAWG)
           const art = await findBestGameArt(cleanTitle, releaseYear);
@@ -201,59 +234,110 @@ async function main() {
           let newGameId = meta.igdbId;
 
           if (!newGameId && art?.source === 'igdb' && art.originalData) {
-              // Cast to any because originalData is a union but all members have 'id' (number)
-             newGameId = String((art.originalData as any).id);
+            // Cast to any because originalData is a union but all members have 'id' (number)
+            newGameId = String((art.originalData as any).id);
+          }
+
+
+          // Check for collision by IGDB ID (P2002 prevention)
+          if (newGameId && newGameId !== meta.igdbId) {
+            // newGameId might be the string ID, we need to check the actual igdbId field
+          }
+
+          let existingByIgdb: { id: string, title: string, opencriticScore: number | null } | null = null;
+          if (meta.igdbId) {
+            existingByIgdb = await prisma.game.findUnique({
+              where: { igdbId: meta.igdbId },
+              select: { id: true, title: true, opencriticScore: true }
+            });
+          } else if (art?.source === 'igdb' && art.originalData) {
+            const aid = String((art.originalData as any).id);
+            existingByIgdb = await prisma.game.findUnique({
+              where: { igdbId: aid },
+              select: { id: true, title: true, opencriticScore: true }
+            });
+          }
+
+          if (existingByIgdb) {
+            console.log(`      ⚠️ Game exists by IGDB ID (${existingByIgdb.title}). Merging/Skipping.`);
+
+            // Optional: Update matching OpenCritic data if connected
+            const newScore = apiGame.topCriticScore ? Math.round(apiGame.topCriticScore) : null;
+            if (newScore && existingByIgdb.opencriticScore !== newScore) {
+              await prisma.game.update({
+                where: { id: existingByIgdb.id },
+                data: { opencriticScore: newScore }
+              });
+              console.log(`         -> Updated score to ${newScore}`);
+              gamesUpdated++;
+            }
+            continue;
           }
 
           if (!newGameId) {
-             newGameId = `opencritic-${apiGame.id}`;
+            newGameId = `opencritic-${apiGame.id}`;
           }
 
           // Check for collision by ID (in case title match failed but ID exists)
           const existingById = await prisma.game.findUnique({ where: { id: newGameId } });
           if (existingById) {
-               console.log(`      ⚠️ Game exists by ID (${newGameId}) but title mismatch. Skipping creation.`);
-               continue;
+            console.log(`      ⚠️ Game exists by ID (${newGameId}) but title mismatch. Skipping creation.`);
+            continue;
           }
 
-          const releaseDate = apiReleaseDateStr ? new Date(apiReleaseDateStr) : null;
+          // Prefer Enriched Release Date (IGDB/RAWG/Steam) over OpenCritic's date
+          // OpenCritic often tracks Early Access / Review dates, whereas IGDB/Steam might track Full Release.
+          let releaseDate = apiReleaseDateStr ? new Date(apiReleaseDateStr) : null;
+
+          if (art?.originalData) {
+            if (art.source === 'igdb') {
+              // IGDB timestamp is in seconds
+              const d = (art.originalData as any).first_release_date;
+              if (d) releaseDate = new Date(d * 1000);
+            } else if (art.source === 'rawg') {
+              // RAWG released is string YYYY-MM-DD
+              const d = (art.originalData as any).released;
+              if (d) releaseDate = new Date(d);
+            }
+          }
+
           const opencriticScore = apiGame.topCriticScore ? Math.round(apiGame.topCriticScore) : null;
 
           // 3. Insertion en base
           await prisma.game.create({
             data: {
-                id: newGameId,
-                title: cleanTitle,
-                releaseDate: releaseDate,
+              id: newGameId,
+              title: cleanTitle,
+              releaseDate: releaseDate,
 
-                // Données OpenCritic
-                opencriticScore: opencriticScore,
-                opencriticUrl: apiGame.url || `https://opencritic.com/game/${apiGame.id}/${normalize(cleanTitle)}`,
+              // Données OpenCritic
+              opencriticScore: opencriticScore,
+              opencriticUrl: apiGame.url || `https://opencritic.com/game/${apiGame.id}/${normalize(cleanTitle)}`,
 
-                // Données Enrichies (Images)
-                coverImage: art?.cover || null,
-                backgroundImage: art?.background || null,
+              // Données Enrichies (Images)
+              coverImage: art?.cover || null,
+              backgroundImage: art?.background || null,
 
-                // Données Enrichies (Texte)
-                description: meta.description,
-                genres: meta.genres, // Stringified JSON
-                platforms: meta.platforms, // Object/Array for Json type
+              // Données Enrichies (Texte)
+              description: meta.description,
+              genres: meta.genres, // Stringified JSON
+              platforms: meta.platforms, // Object/Array for Json type
 
-                // Flags
-                dataFetched: true,
-                updatedAt: new Date(),
+              // Flags
+              dataFetched: true,
+              updatedAt: new Date(),
 
-                // Helper IDs
-                igdbId: (meta.igdbId || (art?.source === 'igdb' ? String((art.originalData as any).id) : null))
+              // Helper IDs
+              igdbId: (meta.igdbId || (art?.source === 'igdb' ? String((art.originalData as any).id) : null))
             }
           });
 
           gamesCreated++;
           knownGames.push({
-              id: newGameId,
-              title: cleanTitle,
-              opencriticScore: opencriticScore,
-              releaseDate: releaseDate
+            id: newGameId,
+            title: cleanTitle,
+            opencriticScore: opencriticScore,
+            releaseDate: releaseDate
           });
         }
       }
@@ -263,13 +347,13 @@ async function main() {
       // Save State after each page
       const nextSkip = currentSkip + 20;
       try {
-          fs.writeFileSync(STATE_FILE, JSON.stringify({ nextSkip, lastRun: new Date().toISOString() }, null, 2));
+        fs.writeFileSync(STATE_FILE, JSON.stringify({ nextSkip, lastRun: new Date().toISOString() }, null, 2));
       } catch (e) {
-          console.error("⚠️ Failed to save sync state", e);
+        console.error("⚠️ Failed to save sync state", e);
       }
 
       if (i < MAX_PAGES - 1) {
-          await new Promise(r => setTimeout(r, DELAY_MS)); // Respect rate limit
+        await new Promise(r => setTimeout(r, DELAY_MS)); // Respect rate limit
       }
 
     } catch (e) {

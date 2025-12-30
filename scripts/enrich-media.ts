@@ -1,3 +1,4 @@
+import './env-loader';
 import { PrismaClient } from '@prisma/client';
 import { findBestGameArt } from '../lib/enrichment';
 import { searchIgdbGames, getIgdbImageUrl, getIgdbTimeToBeat, IgdbGame, EnrichedIgdbGame } from '../lib/igdb';
@@ -81,8 +82,22 @@ async function main() {
             }
 
             // IGDB ID
+            // IGDB ID
             if (!game.igdbId) {
-                updateData.igdbId = String(igdbData.id);
+                const newIgdbId = String(igdbData.id);
+                // Check if ID is already taken by another game
+                // Note: This adds a query but prevents crashing on duplicates
+                const existing = await prisma.game.findUnique({
+                    where: { igdbId: newIgdbId },
+                    select: { id: true, title: true }
+                });
+
+                if (existing && existing.id !== game.id) {
+                    console.warn(`   ⚠️ IGDB ID collision: ${newIgdbId} used by "${existing.title}". Skipping ID update.`);
+                    // We can still update other fields like description/images
+                } else {
+                    updateData.igdbId = newIgdbId;
+                }
             }
 
             // IGDB Score
