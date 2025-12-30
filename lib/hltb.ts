@@ -1,8 +1,6 @@
-import { HowLongToBeatService, HowLongToBeatEntry } from 'howlongtobeat';
+import { HowLongToBeatEntry } from 'howlongtobeat';
 
-/**
- * Calculates the Levenshtein distance between two strings.
- */
+// Helper: Levenshtein Distance
 function levenshteinDistance(a: string, b: string): number {
   const matrix = [];
 
@@ -47,10 +45,6 @@ export function selectBestMatch(results: HowLongToBeatEntry[], gameTitle: string
 
     if (!bestMatch) return null;
 
-    // Reject if distance is too high.
-    // We allow small errors (<=2) regardless of length to handle minor typos or formatting differences.
-    // For larger discrepancies, we enforce the 20% length threshold.
-    // Hard limit at distance > 5 (completely different).
     if (bestMatch.dist > 5 || (bestMatch.dist > 2 && bestMatch.dist > normalizedTarget.length * 0.2)) {
          console.warn(`[HLTB] Rejected match: "${bestMatch.result.name}" for query "${gameTitle}" (Dist: ${bestMatch.dist})`);
          return null;
@@ -61,16 +55,131 @@ export function selectBestMatch(results: HowLongToBeatEntry[], gameTitle: string
 
 export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: number; extra: number; completionist: number } | null> {
   try {
-    const hltbService = new HowLongToBeatService();
-    const results = await hltbService.search(gameTitle);
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+    const referer = 'https://howlongtobeat.com/';
+    const origin = 'https://howlongtobeat.com';
 
-    const bestMatch = selectBestMatch(results, gameTitle);
+    // 1. Get Token and Cookies
+    const initUrl = `https://howlongtobeat.com/api/search/init?t=${Date.now()}`;
+    const initResponse = await fetch(initUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': ua,
+        'Referer': referer,
+        'Origin': origin
+      }
+    });
+
+    if (!initResponse.ok) {
+      // Gracefully handle init failure (e.g. 404/403)
+      console.warn(`HLTB Init failed with status: ${initResponse.status}`);
+      return null;
+    }
+
+    const initData = await initResponse.json();
+    const token = initData.token;
+
+    // Extract and parse cookies properly
+    const cookieHeader = initResponse.headers.get('set-cookie');
+    let cookies = '';
+    if (cookieHeader) {
+       // set-cookie can be a comma-separated string of multiple cookies
+       // We need to parse each cookie string (e.g. "name=val; Path=/; HttpOnly") and keep only "name=val"
+       // Node's fetch usually returns a combined string if multiple headers exist.
+       // We split by comma (carefully, as comma is also in Date format, but usually safe for simple split here if careful)
+       // Actually, naive splitting by comma might break Expires dates.
+       // But for HLTB session cookies, they usually don't have complicated dates.
+       // Better approach: Extract parts before the first semicolon of each segment.
+       // However, `headers.get` might join with `, `.
+       // Let's rely on a simpler regex to extract `name=value`.
+       // We match anything that looks like `key=value` at the start of a cookie string.
+       // Or simply: pass the whole thing if the server is lenient.
+       // But to be "Clean", let's try to pass `key=value`.
+       // Since implementing a full cookie jar is overkill, we'll try to just forward the raw header if it's simpler,
+       // but `Cookie` header expects semicolon separation, while `Set-Cookie` (multiple) comes as array or comma-joined.
+       // Let's assume standard formatting.
+       cookies = cookieHeader.split(/,(?=\s*[a-zA-Z0-9_-]+=)/).map(c => c.split(';')[0].trim()).join('; ');
+    }
+
+    if (!token) {
+      console.warn("HLTB Token not found in init response");
+      return null;
+    }
+
+    // 2. Search
+    const searchUrl = 'https://howlongtobeat.com/api/search';
+    const searchPayload = {
+      searchType: "games",
+      searchTerms: gameTitle.split(' '), // Split terms as per JS logic
+      searchPage: 1,
+      size: 20,
+      searchOptions: {
+        games: {
+          userId: 0,
+          platform: "",
+          sortCategory: "popular",
+          rangeCategory: "main",
+          rangeTime: { min: null, max: null },
+          gameplay: { perspective: "", flow: "", genre: "" },
+          rangeYear: { min: "", max: "" },
+          modifier: ""
+        },
+        users: { sortCategory: "postcount" },
+        lists: { sortCategory: "follows" },
+        filter: "",
+        sort: 0,
+        randomizer: 0
+      },
+      useCache: true
+    };
+
+    const headers: any = {
+        'User-Agent': ua,
+        'Referer': referer,
+        'Origin': origin,
+        'Content-Type': 'application/json',
+        'x-auth-token': token
+    };
+
+    if (cookies) {
+        headers['Cookie'] = cookies;
+    }
+
+    const searchResponse = await fetch(searchUrl, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(searchPayload)
+    });
+
+    if (!searchResponse.ok) {
+      // 404 is common if the endpoint is strictly blocked or rotated.
+      console.warn(`HLTB Search failed: ${searchResponse.status}`);
+      return null;
+    }
+
+    const data = await searchResponse.json();
+    const entries: HowLongToBeatEntry[] = (data.data || []).map((item: any) => ({
+        id: item.game_id,
+        name: item.game_name,
+        description: "",
+        platforms: item.profile_platform ? item.profile_platform.split(", ") : [],
+        imageUrl: `https://howlongtobeat.com/games/${item.game_image}`,
+        timeLabels: [],
+        gameplayMain: item.comp_main,  // Seconds
+        gameplayMainExtra: item.comp_plus,
+        gameplayCompletionist: item.comp_100,
+        similarity: 0,
+        searchTerm: gameTitle
+    }));
+
+    const bestMatch = selectBestMatch(entries, gameTitle);
     if (!bestMatch) return null;
 
+    // Return Minutes
     return {
-      main: Math.round(bestMatch.gameplayMain * 60),
-      extra: Math.round(bestMatch.gameplayMainExtra * 60),
-      completionist: Math.round(bestMatch.gameplayCompletionist * 60)
+      main: Math.round(bestMatch.gameplayMain / 60),
+      extra: Math.round(bestMatch.gameplayMainExtra / 60),
+      completionist: Math.round(bestMatch.gameplayCompletionist / 60)
     };
   } catch (error) {
     console.error("HLTB Search Error:", error);
