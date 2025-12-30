@@ -50,9 +50,17 @@ export function TopRatedGames({ games }: TopRatedGamesProps) {
         }
 
         // Check if any platform name contains the selected platform string (case-insensitive partial match)
-        return platforms.some((p) =>
-            p.name && p.name.toLowerCase().includes(selectedPlatform.toLowerCase())
-        );
+        // Ensure "Switch" matches "Nintendo Switch", "Nintendo Switch 2", etc.
+        const target = selectedPlatform.toLowerCase();
+
+        return platforms.some((p) => {
+            if (!p.name) return false;
+            const name = p.name.toLowerCase();
+            if (target === 'switch') {
+                return name.includes('switch') || name.includes('nintendo');
+            }
+            return name.includes(target);
+        });
     }).slice(0, 10);
   }, [games, selectedPlatform]);
 

@@ -62,6 +62,7 @@ export const getCachedDiscoveryGames = unstable_cache(
                 return localGames;
 
             case 'TOP_RATED':
+                // Increase the limit to 100 to ensure we have enough candidates for client-side platform filtering
                 localGames = await prisma.game.findMany({
                     where: {
                         releaseDate: {
@@ -75,11 +76,9 @@ export const getCachedDiscoveryGames = unstable_cache(
                     orderBy: {
                         opencriticScore: 'desc'
                     },
-                    take: 50
+                    take: 100
                 });
-                 // Note: TOP_RATED logic is specific to local opencritic scores.
-                 // If local is empty, we fallback to IGDB 'POPULAR' (high activity/rating) but strictly it's not "Top Rated by OpenCritic".
-                 // However, for discovery purposes, showing popular games is better than empty.
+
                 if (localGames.length < 5) {
                      const igdbGames = await getDiscoveryGamesIgdb('POPULAR', 10);
                      return igdbGames.map(mapIgdbToPrismaGame);
