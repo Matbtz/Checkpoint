@@ -2,10 +2,21 @@
 
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
+import { Game } from '@prisma/client';
 
 interface GenreScore {
   name: string;
   score: number;
+}
+
+interface UserPreferences {
+  genres: GenreScore[];
+  lastUpdated: string | Date; // Can be string from JSON.parse or Date object
+}
+
+interface DailyRecommendation {
+  games: Game[];
+  reason: string;
 }
 
 export async function refreshUserPreferences() {
@@ -89,7 +100,7 @@ export async function refreshUserPreferences() {
     .sort((a, b) => b.score - a.score);
 
   // 6. Save to User preferences
-  const preferences = {
+  const preferences: UserPreferences = {
     genres: sortedGenres,
     lastUpdated: new Date(),
   };
@@ -102,4 +113,82 @@ export async function refreshUserPreferences() {
   });
 
   return preferences;
+}
+
+export async function getDailyRecommendations(): Promise<DailyRecommendation | null> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  const userId = session.user.id;
+
+  // 1. Fetch User Preferences
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { preferences: true },
+  });
+
+  let preferences: UserPreferences | null = null;
+
+  if (user?.preferences) {
+    try {
+      preferences = JSON.parse(user.preferences);
+    } catch (e) {
+      console.error("Failed to parse user preferences", e);
+    }
+  }
+
+  // Check if refresh is needed
+  const now = new Date();
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  let shouldRefresh = false;
+  if (!preferences || !preferences.genres || preferences.genres.length === 0) {
+    shouldRefresh = true;
+  } else {
+    const lastUpdated = new Date(preferences.lastUpdated);
+    if (isNaN(lastUpdated.getTime()) || lastUpdated < oneDayAgo) {
+      shouldRefresh = true;
+    }
+  }
+
+  if (shouldRefresh) {
+    preferences = await refreshUserPreferences();
+  }
+
+  // Ensure we have preferences now
+  if (!preferences || !preferences.genres || preferences.genres.length === 0) {
+    return null; // Or return empty state
+  }
+
+  // 2. Deterministic Rotation
+  const topGenres = preferences.genres.slice(0, 5); // Take top 5
+  if (topGenres.length === 0) return null;
+
+  const dayIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+  const selectedGenreObj = topGenres[dayIndex % topGenres.length];
+  const selectedGenre = selectedGenreObj.name;
+
+  // 3. Prisma Query
+  // Find 10 games containing this genre, not in user library, sorted by opencriticScore
+  const games = await prisma.game.findMany({
+    where: {
+      genres: {
+        contains: selectedGenre, // Simple string containment
+      },
+      users: {
+        none: {
+          userId: userId,
+        },
+      },
+    },
+    orderBy: {
+      opencriticScore: 'desc',
+    },
+    take: 10,
+  });
+
+  return {
+    games,
+    reason: `Parce que vous aimez le genre ${selectedGenre}`,
+  };
 }
