@@ -169,17 +169,33 @@ export async function getDailyRecommendations(): Promise<DailyRecommendation | n
   const selectedGenre = selectedGenreObj.name;
 
   // 3. Prisma Query
-  // Find 10 games containing this genre, not in user library, sorted by opencriticScore
+  // Find 10 games containing this genre, not in user library.
+  // Must satisfy ONE of:
+  // - High OpenCritic Score (>= 80)
+  // - High IGDB Score (>= 80) as proxy for popularity if pure popularity missing
+  // - High Steam Review Count (>= 1000) proxy for user gallery/popularity
+  // - (Optional) Check users relation count if possible? Not directly in where.
+
+  // Note: "que beaucoup d'utilisateurs ont dans leur gallerie de jeux" (that many users have in their gallery)
+  // Since we cannot filter by relation count in standard Prisma `where` easily without grouping,
+  // we rely on Steam Review Count as a strong proxy for global popularity,
+  // and IGDB Score/OpenCritic as quality metrics.
+
   const games = await prisma.game.findMany({
     where: {
       genres: {
-        contains: selectedGenre, // Simple string containment
+        contains: selectedGenre,
       },
       users: {
         none: {
           userId: userId,
         },
       },
+      OR: [
+        { opencriticScore: { gte: 80 } },
+        { igdbScore: { gte: 80 } },
+        { steamReviewCount: { gte: 1000 } }
+      ]
     },
     orderBy: {
       opencriticScore: 'desc',
