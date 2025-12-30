@@ -258,3 +258,18 @@ export async function fixGameMatch(gameId: string, hltbData: { main: number, ext
 
     revalidatePath('/dashboard');
 }
+
+export async function updateGamesStatus(gameIds: string[], status: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await prisma.userLibrary.updateMany({
+    where: {
+      userId: session.user.id,
+      gameId: { in: gameIds }
+    },
+    data: { status }
+  });
+
+  revalidatePath('/dashboard');
+}
