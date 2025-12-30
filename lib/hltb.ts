@@ -1,6 +1,7 @@
 import { HowLongToBeatService, HowLongToBeatEntry } from 'howlongtobeat';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { searchIgdbGames, getIgdbTimeToBeat } from './igdb';
 
 /**
  * Calculates the Levenshtein distance between two strings.
@@ -103,18 +104,11 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
     $ddg('a.result__a').each((i, el) => {
       if (gameId) return;
       const href = $ddg(el).attr('href');
-      // DDG uses uuddg.com/url?q=REAL_URL
-      // But scraping /html/ usually gives direct links or different format.
-      // Let's check the href.
       if (href) {
-        // Decode it if needed (DDG wraps it sometimes)
-        // Usually plain HTML version has straightforward links?
-        // Actually, let's look for the text or href content.
         const match = href.match(/howlongtobeat\.com\/game\/(\d+)/);
         if (match) {
             gameId = match[1];
         } else {
-             // Try to extract from query param if wrapped
              const urlParams = new URLSearchParams(href.split('?')[1]);
              const q = urlParams.get('uddg');
              if (q) {
@@ -125,57 +119,75 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
       }
     });
 
-    if (!gameId) {
+    if (gameId) {
+      // Fetch the Game Page
+      const gameUrl = `https://howlongtobeat.com/game/${gameId}`;
+      const gameRes = await axios.get(gameUrl, {
+        headers: { 'User-Agent': ua }
+      });
+
+      const $game = cheerio.load(gameRes.data);
+      const pageTitle = $game('div[class*="GameHeader_profile_header__"]').first().text().trim() ||
+                        $game('title').text().replace('How long is', '').replace('| HowLongToBeat', '').trim();
+
+      // Verify Title Match
+      const dist = levenshtein(pageTitle.toLowerCase(), normalizedTitle);
+      const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.3));
+      if (dist <= threshold) {
+          const pageText = $game('body').text().replace(/\s+/g, ' ');
+
+          const extractTime = (labelRegex: RegExp) => {
+              const match = pageText.match(labelRegex);
+              return match ? parseTime(match[1]) : 0;
+          };
+
+          const main = extractTime(/Main Story\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
+                       extractTime(/Main Story\s*([\d½\.]+)/i);
+
+          const extra = extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
+                        extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+)/i);
+
+          const completionist = extractTime(/Completionist\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
+                                extractTime(/Completionist\s*([\d½\.]+)/i);
+
+          return { main, extra, completionist };
+      } else {
+          console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
+      }
+    } else {
         console.warn(`[HLTB] Fallback: No ID found via DDG for "${gameTitle}"`);
-        return null;
     }
-
-    // Fetch the Game Page
-    const gameUrl = `https://howlongtobeat.com/game/${gameId}`;
-    const gameRes = await axios.get(gameUrl, {
-      headers: { 'User-Agent': ua }
-    });
-
-    const $game = cheerio.load(gameRes.data);
-    const pageTitle = $game('div[class*="GameHeader_profile_header__"]').first().text().trim() ||
-                      $game('title').text().replace('How long is', '').replace('| HowLongToBeat', '').trim();
-
-    // Verify Title Match on the fallback result to avoid bad DDG hits
-    const dist = levenshtein(pageTitle.toLowerCase(), normalizedTitle);
-    const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.3)); // Slightly looser for fallback
-    if (dist > threshold) {
-        console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
-        return null;
-    }
-
-    // Scrape Times
-    // We look for the "Main Story", "Main + Sides", "Completionist" labels in the text
-    // The structure is usually: Label followed by Time.
-    // Example: "Main Story 29½ Hours"
-    // We can iterate over all elements or just grab body text and regex.
-    // Regex is safer given class obfuscation.
-
-    const pageText = $game('body').text().replace(/\s+/g, ' ');
-
-    const extractTime = (labelRegex: RegExp) => {
-        const match = pageText.match(labelRegex);
-        return match ? parseTime(match[1]) : 0;
-    };
-
-    // Regex explanation: Look for Label, optional space, capture digits/dots/½, space, Hours/Mins
-    const main = extractTime(/Main Story\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
-                 extractTime(/Main Story\s*([\d½\.]+)/i); // aggressive fallback
-
-    const extra = extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
-                  extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+)/i);
-
-    const completionist = extractTime(/Completionist\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
-                          extractTime(/Completionist\s*([\d½\.]+)/i);
-
-    return { main, extra, completionist };
 
   } catch (err) {
     console.error(`[HLTB] Fallback error for "${gameTitle}":`, err instanceof Error ? err.message : err);
-    return null;
   }
+
+  // 3. Fallback: IGDB API (Most Robust)
+  try {
+      console.log(`[HLTB] Attempting IGDB fallback for "${gameTitle}"`);
+      const igdbResults = await searchIgdbGames(gameTitle, 1);
+
+      if (igdbResults.length > 0) {
+          const bestIgdb = igdbResults[0];
+          // Check match distance just in case
+          const dist = levenshtein(bestIgdb.name.toLowerCase(), normalizedTitle);
+          const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.4)); // Slightly looser for IGDB as names are usually good
+
+          if (dist <= threshold) {
+               const timeData = await getIgdbTimeToBeat(bestIgdb.id);
+               if (timeData) {
+                   // Convert Seconds to Minutes
+                   return {
+                       main: Math.round((timeData.normally || 0) / 60),
+                       extra: Math.round((timeData.normally || 0) / 60), // IGDB 'normally' is roughly 'Main + Extra' or 'Main'
+                       completionist: Math.round((timeData.completely || 0) / 60)
+                   };
+               }
+          }
+      }
+  } catch (err) {
+      console.error(`[HLTB] IGDB Fallback error for "${gameTitle}":`, err instanceof Error ? err.message : err);
+  }
+
+  return null;
 }
