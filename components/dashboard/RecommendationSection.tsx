@@ -16,7 +16,7 @@ export async function RecommendationSection() {
       <div className="flex flex-col gap-1 mb-4 px-1">
         <h2 className="text-xl font-bold flex items-center gap-2 text-zinc-100">
            <Sparkles className="w-5 h-5 text-indigo-400" />
-           Recommendation du jour
+           Recommandation du jour
         </h2>
         <p className="text-sm text-zinc-400">
           {recommendation.reason}

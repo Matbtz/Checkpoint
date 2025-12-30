@@ -7,6 +7,7 @@ import {
 } from "@/actions/discovery";
 import { TopRatedGames } from "@/components/discovery/TopRatedGames";
 import { DiscoverySection } from "@/components/discovery/DiscoverySection";
+import { RecommendationSection } from "@/components/dashboard/RecommendationSection";
 import { Game } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 
@@ -125,6 +126,11 @@ export default async function Home() {
 
       {/* Discovery Sections */}
       <main className="container mx-auto px-4 py-12 space-y-16 md:px-6">
+
+        {/* Daily Recommendations (Authenticated Only) */}
+        {session && (
+          <RecommendationSection />
+        )}
 
         {/* Top Rated Section (with Client Filter) */}
         <section>
