@@ -1,8 +1,9 @@
 import React from 'react';
 import { User } from '@/types/profile';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Edit2 } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 interface ProfileHeaderProps {
   user: User;
@@ -22,16 +23,18 @@ export function ProfileHeader({ user, isOwnProfile = false }: ProfileHeaderProps
       {/* Gradient Overlay */}
       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-background to-transparent" />
 
-      {/* Edit Profile Button */}
+      {/* Settings Link */}
       {isOwnProfile && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="absolute right-4 top-4 bg-background/50 backdrop-blur-sm hover:bg-background/80"
-        >
-          <Edit2 className="mr-2 h-4 w-4" />
-          Edit Profile
-        </Button>
+        <Link href="/settings" className="absolute right-4 top-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="bg-background/50 backdrop-blur-sm hover:bg-background/80 text-foreground"
+            title="Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </Button>
+        </Link>
       )}
 
       {/* Avatar */}
