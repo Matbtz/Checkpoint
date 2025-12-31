@@ -24,7 +24,7 @@ export function StatsOverview({ stats }: StatsOverviewProps) {
   return (
     <div className="grid grid-cols-3 gap-4">
       {displayStats.map((stat, index) => (
-        <Link href="/profile/stats" key={index} className="block">
+        <Link href="/statistics" key={index} className="block">
           <Card className="cursor-pointer transition-colors hover:bg-accent/50 h-full">
             <CardContent className="flex flex-col items-center justify-center py-6 text-center">
               <span className="text-3xl font-bold">{stat.value}</span>

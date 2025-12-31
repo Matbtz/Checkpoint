@@ -32,7 +32,7 @@ export function FriendActivityCard({ activity }: FriendActivityCardProps) {
             {activity.friend.username}
           </h3>
         </Link>
-        <Link href={`/game/${activity.game.slug}`} className="block">
+        <Link href={`/game/${activity.game.id}`} className="block">
            <p className="truncate text-xs text-muted-foreground hover:text-foreground transition-colors" title={activity.game.title}>
              {activity.game.title}
            </p>
