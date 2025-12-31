@@ -62,3 +62,65 @@ export async function getUserPreferences() {
 
     return { pace: 1.0 };
 }
+
+export async function searchUsers(query: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  if (!query || query.length < 2) return [];
+
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+      ],
+      // Exclude self
+      NOT: {
+        id: session.user.id
+      }
+    },
+    select: {
+      id: true,
+      name: true,
+      image: true,
+    },
+    take: 5
+  });
+
+  // Check which are already friends
+  const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+          following: {
+              select: { id: true }
+          }
+      }
+  });
+
+  const followingIds = new Set(currentUser?.following.map(u => u.id) || []);
+
+  return users.map(user => ({
+      ...user,
+      isFollowing: followingIds.has(user.id)
+  }));
+}
+
+export async function followUser(targetUserId: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    if (session.user.id === targetUserId) throw new Error("Cannot follow self");
+
+    // Add to following
+    await prisma.user.update({
+        where: { id: session.user.id },
+        data: {
+            following: {
+                connect: { id: targetUserId }
+            }
+        }
+    });
+
+    revalidatePath('/profile');
+}

@@ -7,13 +7,17 @@ interface SectionCarouselProps {
   title: string;
   viewMoreLink?: string;
   children: ReactNode;
+  action?: ReactNode;
 }
 
-export function SectionCarousel({ title, viewMoreLink, children }: SectionCarouselProps) {
+export function SectionCarousel({ title, viewMoreLink, children, action }: SectionCarouselProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">{title}</h2>
+        <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold">{title}</h2>
+            {action}
+        </div>
         {viewMoreLink && (
           <Link
             href={viewMoreLink}
