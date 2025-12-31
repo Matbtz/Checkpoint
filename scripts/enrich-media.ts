@@ -5,7 +5,7 @@ import { searchIgdbGames, getIgdbImageUrl, getIgdbTimeToBeat, IgdbGame, Enriched
 import { searchHowLongToBeat } from '../lib/hltb';
 
 const prisma = new PrismaClient();
-const DELAY_MS = 1000;
+const DELAY_MS = 5000;
 
 interface HltbResultRow {
     Title: string;
@@ -75,7 +75,7 @@ async function runHltbOnly() {
         } catch (error) {
             console.error(`   ⚠️ Error processing ${game.title}:`, error);
         }
-        await new Promise(r => setTimeout(r, 2000)); // 2s delay for HLTB safety
+        await new Promise(r => setTimeout(r, DELAY_MS)); // 5s delay for HLTB safety
     }
 
     console.log("\n\n📊 Enrichment Results:");

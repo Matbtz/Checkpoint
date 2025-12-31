@@ -1,7 +1,6 @@
 import { HowLongToBeatService, HowLongToBeatEntry } from 'howlongtobeat';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { searchIgdbGames, getIgdbTimeToBeat } from './igdb';
 
 /**
  * Calculates the Levenshtein distance between two strings.
@@ -58,25 +57,23 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
   const normalizedTitle = gameTitle.toLowerCase().trim();
 
   // 1. Try the Official Library
+  // (We keep this as a "try" because if it ever gets fixed or works in some environments, it's the most direct method)
   try {
     const hltbService = new HowLongToBeatService();
+    // Short timeout for library to not waste time if it's hanging
+    // But the library doesn't support timeout easily. We assume it fails fast (403).
     const results = await hltbService.search(gameTitle);
 
     if (results && results.length > 0) {
-      // Find best match using Levenshtein
       const sorted = results.map(r => ({
         item: r,
         dist: levenshtein(r.name.toLowerCase(), normalizedTitle)
       })).sort((a, b) => a.dist - b.dist);
 
       const best = sorted[0];
-
-      // Validation: Accept if exact match or close enough
-      // Threshold: Distance <= 5 or <= 20% of title length
       const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.2));
 
       if (best.dist <= threshold) {
-        // Library returns Hours. Convert to Minutes.
         return {
           main: Math.round(best.item.gameplayMain * 60),
           extra: Math.round(best.item.gameplayMainExtra * 60),
@@ -85,36 +82,43 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
       }
     }
   } catch (error) {
-    console.warn(`[HLTB] Library search failed for "${gameTitle}", attempting fallback.`, error instanceof Error ? error.message : error);
+    // Expected to fail in many cloud environments due to 403
+    // console.warn(`[HLTB] Library search failed for "${gameTitle}"`);
   }
 
-  // 2. Fallback: DuckDuckGo Site Search -> Page Scrape
+  // 2. Fallback: Brave Search -> Page Scrape
+  // Brave is currently more permissive than Google/DDG for scraping
   try {
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-    const ddgUrl = `https://duckduckgo.com/html/?q=site:howlongtobeat.com/game+${encodeURIComponent(gameTitle)}`;
+    const query = `site:howlongtobeat.com "${gameTitle}"`;
+    const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(query)}`;
 
-    const ddgRes = await axios.get(ddgUrl, {
-      headers: { 'User-Agent': ua }
+    const searchRes = await axios.get(searchUrl, {
+      headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html'
+      }
     });
 
-    const $ddg = cheerio.load(ddgRes.data);
+    const $search = cheerio.load(searchRes.data);
     let gameId = '';
 
-    // Find the first link that matches howlongtobeat.com/game/NUMBER
-    $ddg('a.result__a').each((i, el) => {
+    // Look for links to howlongtobeat.com/game/NUMBER
+    $search('a').each((i, el) => {
       if (gameId) return;
-      const href = $ddg(el).attr('href');
+      const href = $search(el).attr('href');
       if (href) {
-        const match = href.match(/howlongtobeat\.com\/game\/(\d+)/);
+        // We prefer canonical links (ending in digit) over subpages
+        const match = href.match(/howlongtobeat\.com\/game\/(\d+)$/);
         if (match) {
             gameId = match[1];
         } else {
-             const urlParams = new URLSearchParams(href.split('?')[1]);
-             const q = urlParams.get('uddg');
-             if (q) {
-                 const qMatch = q.match(/howlongtobeat\.com\/game\/(\d+)/);
-                 if (qMatch) gameId = qMatch[1];
-             }
+            // Fallback to any game link if canonical not found first (e.g. /reviews)
+            // But usually the main link appears first or second
+            const matchLoose = href.match(/howlongtobeat\.com\/game\/(\d+)/);
+            if (matchLoose && !gameId) {
+                gameId = matchLoose[1];
+            }
         }
       }
     });
@@ -133,6 +137,7 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
       // Verify Title Match
       const dist = levenshtein(pageTitle.toLowerCase(), normalizedTitle);
       const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.3));
+
       if (dist <= threshold) {
           const pageText = $game('body').text().replace(/\s+/g, ' ');
 
@@ -155,38 +160,11 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
           console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
       }
     } else {
-        console.warn(`[HLTB] Fallback: No ID found via DDG for "${gameTitle}"`);
+        console.warn(`[HLTB] Fallback: No ID found via Brave for "${gameTitle}"`);
     }
 
   } catch (err) {
     console.error(`[HLTB] Fallback error for "${gameTitle}":`, err instanceof Error ? err.message : err);
-  }
-
-  // 3. Fallback: IGDB API (Most Robust)
-  try {
-      console.log(`[HLTB] Attempting IGDB fallback for "${gameTitle}"`);
-      const igdbResults = await searchIgdbGames(gameTitle, 1);
-
-      if (igdbResults.length > 0) {
-          const bestIgdb = igdbResults[0];
-          // Check match distance just in case
-          const dist = levenshtein(bestIgdb.name.toLowerCase(), normalizedTitle);
-          const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.4)); // Slightly looser for IGDB as names are usually good
-
-          if (dist <= threshold) {
-               const timeData = await getIgdbTimeToBeat(bestIgdb.id);
-               if (timeData) {
-                   // Convert Seconds to Minutes
-                   return {
-                       main: Math.round((timeData.normally || 0) / 60),
-                       extra: Math.round((timeData.normally || 0) / 60), // IGDB 'normally' is roughly 'Main + Extra' or 'Main'
-                       completionist: Math.round((timeData.completely || 0) / 60)
-                   };
-               }
-          }
-      }
-  } catch (err) {
-      console.error(`[HLTB] IGDB Fallback error for "${gameTitle}":`, err instanceof Error ? err.message : err);
   }
 
   return null;
