@@ -106,7 +106,7 @@ async function main() {
                                 where: { id: game.id },
                                 data: updateData
                             });
-                            console.log(`   📝 Updated Stats: ${stats.scoreDesc} (${stats.percentPositive}%)`);
+                            console.log(`   📝 ${game.title}: Updated Stats - ${stats.scoreDesc} (${stats.percentPositive}%)`);
                             updatedCount++;
                         }
 
