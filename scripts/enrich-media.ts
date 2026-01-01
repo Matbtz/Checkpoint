@@ -2,14 +2,89 @@ import './env-loader';
 import { PrismaClient } from '@prisma/client';
 import { findBestGameArt } from '../lib/enrichment';
 import { searchIgdbGames, getIgdbImageUrl, getIgdbTimeToBeat, IgdbGame, EnrichedIgdbGame } from '../lib/igdb';
+import { searchHowLongToBeat } from '../lib/hltb';
 
 const prisma = new PrismaClient();
-const DELAY_MS = 1000;
+const DELAY_MS = 5000;
 
-async function main() {
+interface HltbResultRow {
+    Title: string;
+    Status: string;
+    Main: string;
+    Extra: string;
+    Complete: string;
+}
+
+async function runHltbOnly() {
+    console.log("⏱️  HLTB Enrichment Only Mode...");
+
+    const games = await prisma.game.findMany({
+        where: {
+            OR: [
+                { hltbMain: null },
+                { hltbMain: 0 }
+            ]
+        },
+        take: 20,
+        orderBy: { updatedAt: 'desc' }
+    });
+
+    if (games.length === 0) {
+        console.log("No games found needing HLTB update.");
+        return;
+    }
+
+    console.log(`Checking ${games.length} games for HLTB data...`);
+    const tableData: HltbResultRow[] = [];
+
+    for (const game of games) {
+        console.log(`\n🔍 Searching: ${game.title}`);
+        try {
+            const hltb = await searchHowLongToBeat(game.title);
+
+            if (hltb) {
+                console.log(`   ✅ Found: ${hltb.main}m / ${hltb.extra}m / ${hltb.completionist}m`);
+
+                await prisma.game.update({
+                    where: { id: game.id },
+                    data: {
+                        hltbMain: hltb.main,
+                        hltbExtra: hltb.extra,
+                        hltbCompletionist: hltb.completionist
+                    }
+                });
+
+                tableData.push({
+                    Title: game.title,
+                    Status: 'Updated',
+                    Main: `${hltb.main} min`,
+                    Extra: `${hltb.extra} min`,
+                    Complete: `${hltb.completionist} min`
+                });
+
+            } else {
+                console.log(`   ❌ Not found.`);
+                tableData.push({
+                    Title: game.title,
+                    Status: 'Not Found',
+                    Main: '-',
+                    Extra: '-',
+                    Complete: '-'
+                });
+            }
+        } catch (error) {
+            console.error(`   ⚠️ Error processing ${game.title}:`, error);
+        }
+        await new Promise(r => setTimeout(r, DELAY_MS)); // 5s delay for HLTB safety
+    }
+
+    console.log("\n\n📊 Enrichment Results:");
+    console.table(tableData);
+}
+
+async function runFullEnrichment() {
     console.log("🎨 Enrichissement Avancé (Media + Métadonnées)...");
 
-    // On cible les jeux avec des données manquantes
     const games = await prisma.game.findMany({
         where: {
             OR: [
@@ -28,15 +103,11 @@ async function main() {
 
         console.log(`\n🔍 ${game.title} (${releaseYear || '?'})`);
 
-        // 1. Récupération des images (Art)
-        // Appel de la nouvelle fonction "Best Match"
         const art = await findBestGameArt(game.title, releaseYear);
-
         let igdbData: EnrichedIgdbGame | IgdbGame | null = null;
 
         if (art) {
             console.log(`   ✅ Images trouvées via [${art.source.toUpperCase()}]`);
-            // Si la source est IGDB, on a déjà les données via findBestGameArt qui retourne originalData
             if (art.source === 'igdb' && art.originalData) {
                 igdbData = art.originalData as EnrichedIgdbGame;
             }
@@ -44,17 +115,12 @@ async function main() {
             console.log(`   ❌ Aucun match strict trouvé pour les images.`);
         }
 
-        // 2. Si on n'a pas encore les données IGDB (parce que la source était Steam/RAWG ou pas de match),
-        // on cherche explicitement sur IGDB pour récupérer les métadonnées manquantes
         if (!igdbData) {
             try {
-                // On limite à 1 résultat pour trouver le meilleur match
                 const igdbResults = await searchIgdbGames(game.title, 1);
                 if (igdbResults.length > 0) {
                     const candidate = igdbResults[0];
                     const candidateYear = candidate.first_release_date ? new Date(candidate.first_release_date * 1000).getFullYear() : null;
-
-                    // Tolérance d'année si disponible
                     if (!releaseYear || !candidateYear || Math.abs(releaseYear - candidateYear) <= 1) {
                         igdbData = candidate;
                         console.log(`   ✅ Données IGDB trouvées séparément.`);
@@ -65,28 +131,20 @@ async function main() {
             }
         }
 
-        // 3. Préparation des données à mettre à jour
         const updateData: any = {};
 
-        // Images (Priorité Art)
         if (art) {
             if (!game.coverImage && art.cover) updateData.coverImage = art.cover;
             if (!game.backgroundImage && art.background) updateData.backgroundImage = art.background;
         }
 
-        // Données IGDB (Complément)
         if (igdbData) {
-            // Description
             if ((!game.description || game.description === "") && igdbData.summary) {
                 updateData.description = igdbData.summary;
             }
 
-            // IGDB ID
-            // IGDB ID
             if (!game.igdbId) {
                 const newIgdbId = String(igdbData.id);
-                // Check if ID is already taken by another game
-                // Note: This adds a query but prevents crashing on duplicates
                 const existing = await prisma.game.findUnique({
                     where: { igdbId: newIgdbId },
                     select: { id: true, title: true }
@@ -94,39 +152,30 @@ async function main() {
 
                 if (existing && existing.id !== game.id) {
                     console.warn(`   ⚠️ IGDB ID collision: ${newIgdbId} used by "${existing.title}". Skipping ID update.`);
-                    // We can still update other fields like description/images
                 } else {
                     updateData.igdbId = newIgdbId;
                 }
             }
 
-            // IGDB Score
-            // Utilise total_rating (Critic + User) ou aggregated_rating (Critic)
             const score = igdbData.total_rating || igdbData.aggregated_rating;
             if (!game.igdbScore && score) {
                 updateData.igdbScore = Math.round(score);
             }
 
-            // IGDB URL
             if (!game.igdbUrl && igdbData.url) {
                 updateData.igdbUrl = igdbData.url;
             }
 
-            // Screenshots
             if (igdbData.screenshots && igdbData.screenshots.length > 0) {
-                // On écrase les screenshots existants pour avoir ceux de haute qualité IGDB
                 const screens = igdbData.screenshots.map(s => getIgdbImageUrl(s.image_id, '1080p'));
                 updateData.screenshots = screens;
             }
 
-            // Videos (Trailers)
             if (igdbData.videos && igdbData.videos.length > 0) {
                 const videos = igdbData.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`);
                 updateData.videos = videos;
             }
 
-            // Time To Beat (IGDB Time)
-            // On fait un appel supplémentaire si on a l'ID IGDB
             try {
                 const timeData = await getIgdbTimeToBeat(igdbData.id);
                 if (timeData) {
@@ -142,9 +191,8 @@ async function main() {
             }
         }
 
-        // 4. Update DB if there is data
         if (Object.keys(updateData).length > 0) {
-            updateData.dataFetched = true; // Mark as fetched
+            updateData.dataFetched = true;
             await prisma.game.update({
                 where: { id: game.id },
                 data: updateData
@@ -155,6 +203,15 @@ async function main() {
         }
 
         await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+}
+
+async function main() {
+    const args = process.argv.slice(2);
+    if (args.includes('--hltb-only')) {
+        await runHltbOnly();
+    } else {
+        await runFullEnrichment();
     }
 }
 

@@ -9,10 +9,10 @@ import { AddGameWizardDialog } from './AddGameWizardDialog';
 import SteamImportModal from './SteamImportModal';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Trash2, X, CheckSquare, Square } from 'lucide-react';
+import { Plus, Search, Trash2, X, CheckSquare, Square, Pencil, MoreHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { AnimatePresence, motion } from 'framer-motion';
-import { removeGamesFromLibrary } from '@/actions/library';
+import { removeGamesFromLibrary, updateGamesStatus } from '@/actions/library';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from '@/components/ui/label';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
@@ -57,14 +70,20 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
   const [selectedGame, setSelectedGame] = useState<GameWithLibrary | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Delete Mode State
-  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  // Edit Mode State (formerly Delete Mode)
+  const [isEditMode, setIsEditMode] = useState(false);
   const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(new Set());
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
-  const toggleDeleteMode = () => {
-    setIsDeleteMode(!isDeleteMode);
+  // Bulk Edit States
+  const [isBulkStatusOpen, setIsBulkStatusOpen] = useState(false);
+  const [targetStatus, setTargetStatus] = useState<string>('Backlog');
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+
+  const toggleEditMode = () => {
+    setIsEditMode(!isEditMode);
     setSelectedGameIds(new Set());
+    setIsActionsOpen(false);
   };
 
   const toggleSelection = (gameId: string) => {
@@ -96,12 +115,35 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
           await removeGamesFromLibrary(idsToDelete);
 
           setIsDeleteConfirmOpen(false);
-          setIsDeleteMode(false);
+          setIsEditMode(false);
           setSelectedGameIds(new Set());
       } catch (error) {
           console.error("Failed to delete games", error);
-          // Revert on error could be implemented here by reloading the page or fetching data
-          // But for now, we rely on the initial state being correct if we didn't mutate it destructively (we filtered a new array)
+          // Revert on error could be implemented here
+      }
+  };
+
+  const handleBulkStatusChange = async () => {
+      if (selectedGameIds.size === 0) return;
+
+      try {
+          const idsToUpdate = Array.from(selectedGameIds);
+
+          // Optimistic update
+          setLibrary(prev => prev.map(item => {
+              if (selectedGameIds.has(item.gameId)) {
+                  return { ...item, status: targetStatus };
+              }
+              return item;
+          }));
+
+          await updateGamesStatus(idsToUpdate, targetStatus);
+
+          setIsBulkStatusOpen(false);
+          setIsEditMode(false);
+          setSelectedGameIds(new Set());
+      } catch (error) {
+          console.error("Failed to update status", error);
       }
   };
 
@@ -181,25 +223,54 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                   <span className="hidden md:inline">Add Game</span>
               </Button>
 
-              {isDeleteMode ? (
+              {isEditMode ? (
                   <>
-                    <Button variant="outline" onClick={toggleDeleteMode} size="icon" className="shrink-0">
+                    <Button variant="outline" onClick={toggleEditMode} size="icon" className="shrink-0">
                         <X className="h-4 w-4" />
                     </Button>
-                    <Button variant="destructive" onClick={() => setIsDeleteConfirmOpen(true)} disabled={selectedGameIds.size === 0} className="whitespace-nowrap">
-                        <Trash2 className="h-4 w-4 md:mr-2" />
-                        <span className="hidden md:inline">Delete ({selectedGameIds.size})</span>
-                    </Button>
+
+                    <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="default" disabled={selectedGameIds.size === 0} className="whitespace-nowrap gap-2">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="hidden md:inline">Actions ({selectedGameIds.size})</span>
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-2" align="end">
+                            <div className="flex flex-col gap-1">
+                                <Button
+                                    variant="ghost"
+                                    className="justify-start w-full"
+                                    onClick={() => {
+                                        setIsActionsOpen(false);
+                                        setIsBulkStatusOpen(true);
+                                    }}
+                                >
+                                    Change Status
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    className="justify-start w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => {
+                                        setIsActionsOpen(false);
+                                        setIsDeleteConfirmOpen(true);
+                                    }}
+                                >
+                                    Delete Games
+                                </Button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                   </>
               ) : (
-                  <Button variant="secondary" size="icon" onClick={toggleDeleteMode} className="shrink-0">
-                      <Trash2 className="h-4 w-4" />
+                  <Button variant="secondary" size="icon" onClick={toggleEditMode} className="shrink-0">
+                      <Pencil className="h-4 w-4" />
                   </Button>
               )}
           </div>
       </div>
 
-      {isDeleteMode && (
+      {isEditMode && (
           <div className="flex justify-end -mt-2 mb-2">
               <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
                   {selectedGameIds.size === filteredLibrary.length && filteredLibrary.length > 0 ? (
@@ -250,7 +321,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                         item={item}
                         paceFactor={userPaceFactor}
                         onClick={() => handleGameClick(item)}
-                        isDeleteMode={isDeleteMode}
+                        isDeleteMode={isEditMode}
                         isSelected={selectedGameIds.has(item.gameId)}
                         onToggleSelect={() => toggleSelection(item.gameId)}
                     />
@@ -275,6 +346,44 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
             </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Status Dialog */}
+      <Dialog open={isBulkStatusOpen} onOpenChange={setIsBulkStatusOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+                <DialogTitle>Change Status</DialogTitle>
+                <DialogDescription>
+                    Select the new status for {selectedGameIds.size} game{selectedGameIds.size !== 1 && 's'}.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="status" className="text-right">
+                        Status
+                    </Label>
+                    <div className="col-span-3">
+                        <Select value={targetStatus} onValueChange={setTargetStatus}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Backlog">Backlog</SelectItem>
+                                <SelectItem value="Playing">Playing</SelectItem>
+                                <SelectItem value="Completed">Completed</SelectItem>
+                                <SelectItem value="Abandoned">Abandoned</SelectItem>
+                                <SelectItem value="Wishlist">Wishlist</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsBulkStatusOpen(false)}>Cancel</Button>
+                <Button onClick={handleBulkStatusChange}>Update Status</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* <AddGameModal isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} /> */}
       <AddGameWizardDialog isOpen={isAddGameOpen} onClose={() => setIsAddGameOpen(false)} />
 
