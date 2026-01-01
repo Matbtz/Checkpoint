@@ -168,11 +168,29 @@ export async function searchAndAddGame(query: string) {
     });
 
     if (!existingEntry) {
+        // Task 4: Default status based on release date
+        // If release date is in the future, set to WISHLIST, else BACKLOG
+        let status = 'BACKLOG';
+
+        // Ensure we compare purely on date part if possible, or just standard comparison.
+        // Also handle cases where releaseDate might be today (treated as released).
+        if (game.releaseDate) {
+            const now = new Date();
+            const release = new Date(game.releaseDate);
+            // Reset time components to compare only dates
+            now.setHours(0,0,0,0);
+            release.setHours(0,0,0,0);
+
+            if (release > now) {
+                status = 'WISHLIST';
+            }
+        }
+
         await prisma.userLibrary.create({
             data: {
                 userId: session.user.id,
                 gameId: game.id,
-                status: 'Backlog',
+                status: status,
             }
         });
     }
@@ -203,11 +221,29 @@ export async function addGameToLibrary(gameId: string) {
     });
 
     if (!existingEntry) {
+        // Task 4: Default status based on release date
+        // If release date is in the future, set to WISHLIST, else BACKLOG
+        let status = 'BACKLOG';
+
+        // Ensure we compare purely on date part if possible, or just standard comparison.
+        // Also handle cases where releaseDate might be today (treated as released).
+        if (game.releaseDate) {
+            const now = new Date();
+            const release = new Date(game.releaseDate);
+            // Reset time components to compare only dates
+            now.setHours(0,0,0,0);
+            release.setHours(0,0,0,0);
+
+            if (release > now) {
+                status = 'WISHLIST';
+            }
+        }
+
         await prisma.userLibrary.create({
             data: {
                 userId: session.user.id,
                 gameId: game.id,
-                status: 'BACKLOG',
+                status: status,
             }
         });
     }

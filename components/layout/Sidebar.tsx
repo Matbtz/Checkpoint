@@ -24,7 +24,7 @@ export function Sidebar({ className, collapsed, toggleCollapse }: SidebarProps) 
     { href: "/library", label: "Library", icon: Library },
     { href: "/statistics", label: "Statistics", icon: PieChart },
     { href: "/search", label: "Search", icon: Search },
-    { href: "/settings", label: "Profile", icon: User },
+    { href: "/profile", label: "Profile", icon: User },
   ]
 
   const unauthenticatedLinks = [
