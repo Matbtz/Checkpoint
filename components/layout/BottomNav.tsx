@@ -15,7 +15,7 @@ export function BottomNav() {
     { href: "/", label: "Home", icon: Home },
     { href: "/library", label: "Library", icon: Library },
     { href: "/search", label: "Search", icon: Search },
-    { href: "/settings", label: "Profile", icon: User },
+    { href: "/profile", label: "Profile", icon: User },
   ]
 
   const unauthenticatedLinks = [
