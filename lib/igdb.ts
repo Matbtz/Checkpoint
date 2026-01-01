@@ -98,6 +98,17 @@ export interface IgdbGame {
     videos?: IgdbVideo[];
     genres?: { id: number; name: string }[];
     platforms?: { id: number; name: string }[];
+    hypes?: number;
+    category?: number; // 0=Main, 1=DLC, 2=Expansion...
+    game_type?: number; // User suggested this might replace category
+    parent_game?: { id: number; name: string };
+    status?: number;
+    storyline?: string;
+    dlcs?: { id: number; name: string }[];
+    expansions?: { id: number; name: string }[];
+    expanded_games?: { id: number; name: string }[];
+    remakes?: { id: number; name: string }[];
+    remasters?: { id: number; name: string }[];
 }
 
 export interface EnrichedIgdbGame extends IgdbGame {
@@ -151,6 +162,9 @@ export async function fetchIgdb<T>(endpoint: string, query: string, retrying = f
             },
             body: query,
         });
+
+        // DEBUG LOG
+        // console.log(`[IGDB DEBUG] POST ${endpoint} body: ${query.replace(/\n/g, ' ')}`);
 
         if (!response.ok) {
             // Si le token est invalide (401), on le vide et on réessaie une fois
@@ -226,7 +240,7 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
         }
 
         if (filters.minScore !== undefined) {
-             conditions.push(`aggregated_rating >= ${filters.minScore}`);
+            conditions.push(`aggregated_rating >= ${filters.minScore}`);
         }
 
         if (filters.releaseYear !== undefined) {
@@ -339,8 +353,8 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
                 break;
         }
     } else if (!query) {
-         // Default sort if no query and no explicit sort
-         sortClause = 'sort aggregated_rating desc;';
+        // Default sort if no query and no explicit sort
+        sortClause = 'sort aggregated_rating desc;';
     }
 
     const body = `
@@ -368,22 +382,22 @@ export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number =
 
     switch (type) {
         case 'UPCOMING':
-            whereClause = `where first_release_date > ${now} & category = (0, 8, 9)`;
+            whereClause = `where first_release_date > ${now}`;
             sortClause = 'sort first_release_date asc';
             break;
 
         case 'RECENT':
-            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo} & category = (0, 8, 9)`;
+            whereClause = `where first_release_date < ${now} & first_release_date > ${oneMonthAgo}`;
             sortClause = 'sort first_release_date desc';
             break;
 
         case 'POPULAR':
-            whereClause = `where total_rating_count > 50 & total_rating > 70 & category = (0, 8, 9)`;
+            whereClause = `where total_rating_count > 50 & total_rating > 70`;
             sortClause = 'sort total_rating_count desc';
             break;
 
         case 'ANTICIPATED':
-            whereClause = `where first_release_date > ${now} & hypes > 0 & category = (0, 8, 9)`;
+            whereClause = `where first_release_date > ${now} & hypes > 0`;
             sortClause = 'sort hypes desc';
             break;
     }
@@ -407,7 +421,14 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
     const body = `
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
+                category, game_type, status, storyline,
+                parent_game.name, parent_game.id,
+                dlcs.name, dlcs.id, 
+                expansions.name, expansions.id, 
+                expanded_games.name, expanded_games.id,
+                remakes.name, remakes.id, 
+                remasters.name, remasters.id;
         where id = ${gameId};
     `;
 
@@ -415,6 +436,7 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
 
     if (results.length === 0) return null;
     const game = results[0];
+    // console.log(`[IGDB DEBUG] ID ${gameId} Raw:`, JSON.stringify(game));
 
     const covers: string[] = [];
     const backgrounds: string[] = [];

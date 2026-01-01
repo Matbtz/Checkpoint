@@ -174,7 +174,8 @@ async function main() {
       const res = await fetch(url, {
         headers: {
           'X-RapidAPI-Key': RAPIDAPI_KEY,
-          'X-RapidAPI-Host': 'opencritic-api.p.rapidapi.com'
+          'X-RapidAPI-Host': 'opencritic-api.p.rapidapi.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
       });
 
@@ -186,6 +187,50 @@ async function main() {
 
       for (const apiGame of apiGames) {
         if (!apiGame.name) continue;
+        // DLC / Expansion Handling
+        const lowerTitle = apiGame.name.toLowerCase();
+
+        // 1. HARD SKIP: Junk we never want (Soundtracks, Season Passes, Skin Packs, etc)
+        if (lowerTitle.match(/(soundtrack|season pass|costume|skin|currency|virtual currency|points block|credits)/i)) {
+          continue; // Skip junk
+        }
+        // Skip "Pack" unless it's an "Expansion Pack"
+        if (lowerTitle.includes("pack") && !lowerTitle.includes("expansion pack")) {
+          continue; // Skip generic packs (weapons, costumes)
+        }
+
+        // 2. IDENTIFY DLC: Mark as DLC if "DLC" or "Expansion" is in title
+        let isDlc = false;
+        let parentId: string | null = null;
+
+        if (lowerTitle.match(/\b(dlc|expansion)\b/i) || lowerTitle.includes(" - ") || lowerTitle.includes(": ")) {
+          // Note: ":" or " - " often implies DLC (e.g. "Game: Episode 1").
+          // We check against known expansion terms or just structural indicators if we want to be aggressive.
+          // For now, let's trust the "Expansion" keyword OR generic subtitle structure if it looks like an episode.
+          if (lowerTitle.match(/\b(dlc|expansion|episode|content)\b/i) || lowerTitle.includes(":")) {
+            isDlc = true;
+
+            // 3. TRY TO FIND PARENT
+            // Pattern: "Base Game: DLC Name" or "Base Game - DLC Name"
+            const separatorRegex = /(:| - )/g;
+            if (apiGame.name.match(separatorRegex)) {
+              // Try to extract base title
+              const parts = apiGame.name.split(separatorRegex);
+              if (parts.length > 0) {
+                const baseTitleCandidate = parts[0].trim();
+                // Look up base game in DB
+                const parent = await prisma.game.findFirst({
+                  where: { title: baseTitleCandidate },
+                  select: { id: true }
+                });
+                if (parent) {
+                  parentId = parent.id;
+                  // console.log(`   🔗 Linked DLC "${apiGame.name}" to Parent "${baseTitleCandidate}"`);
+                }
+              }
+            }
+          }
+        }
 
         // On nettoie le titre OpenCritic
         const cleanTitle = apiGame.name.trim();
@@ -196,10 +241,15 @@ async function main() {
 
         if (match) {
           // UPDATE (Maintenance)
-          const newScore = apiGame.topCriticScore ? Math.round(apiGame.topCriticScore) : null;
-          // Update if score differs
-          if (newScore && match.opencriticScore !== newScore) {
-            console.log(`   🔄 UPDATING: "${match.title}" (Score: ${newScore})`);
+          const newScore = (apiGame.topCriticScore && apiGame.topCriticScore !== -1) ? Math.round(apiGame.topCriticScore) : null;
+
+          // Update if score differs (but protect existing valid scores from being nulled unless they are -1)
+          const shouldUpdate =
+            (newScore !== null && match.opencriticScore !== newScore) ||
+            (newScore === null && match.opencriticScore === -1);
+
+          if (shouldUpdate) {
+            console.log(`   🔄 UPDATING: "${match.title}" (Score: ${newScore ?? 'null'})`);
             await prisma.game.update({
               where: { id: match.id },
               data: {
@@ -262,8 +312,13 @@ async function main() {
             console.log(`      ⚠️ Game exists by IGDB ID (${existingByIgdb.title}). Merging/Skipping.`);
 
             // Optional: Update matching OpenCritic data if connected
-            const newScore = apiGame.topCriticScore ? Math.round(apiGame.topCriticScore) : null;
-            if (newScore && existingByIgdb.opencriticScore !== newScore) {
+            const newScore = (apiGame.topCriticScore && apiGame.topCriticScore !== -1) ? Math.round(apiGame.topCriticScore) : null;
+
+            const shouldUpdate =
+              (newScore !== null && existingByIgdb.opencriticScore !== newScore) ||
+              (newScore === null && existingByIgdb.opencriticScore === -1);
+
+            if (shouldUpdate) {
               await prisma.game.update({
                 where: { id: existingByIgdb.id },
                 data: { opencriticScore: newScore }
@@ -301,7 +356,7 @@ async function main() {
             }
           }
 
-          const opencriticScore = apiGame.topCriticScore ? Math.round(apiGame.topCriticScore) : null;
+          const opencriticScore = (apiGame.topCriticScore && apiGame.topCriticScore !== -1) ? Math.round(apiGame.topCriticScore) : null;
 
           // 3. Insertion en base
           await prisma.game.create({
@@ -324,6 +379,8 @@ async function main() {
               platforms: meta.platforms, // Object/Array for Json type
 
               // Flags
+              isDlc: isDlc,
+              parentId: parentId,
               dataFetched: true,
               updatedAt: new Date(),
 
@@ -339,6 +396,9 @@ async function main() {
             opencriticScore: opencriticScore,
             releaseDate: releaseDate
           });
+
+          // Rate Limit Protection for dependent APIs (RAWG/IGDB called in findBestGameArt)
+          await new Promise(r => setTimeout(r, 1000));
         }
       }
 

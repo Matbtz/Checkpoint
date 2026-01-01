@@ -89,14 +89,20 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
   // 2. Fallback: Brave Search -> Page Scrape
   // Brave is currently more permissive than Google/DDG for scraping
   try {
-    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
+    const USER_AGENTS = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+    ];
+    const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
     const query = `site:howlongtobeat.com "${gameTitle}"`;
     const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(query)}`;
 
     const searchRes = await axios.get(searchUrl, {
       headers: {
-          'User-Agent': ua,
-          'Accept': 'text/html'
+        'User-Agent': ua,
+        'Accept': 'text/html'
       }
     });
 
@@ -111,14 +117,14 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
         // We prefer canonical links (ending in digit) over subpages
         const match = href.match(/howlongtobeat\.com\/game\/(\d+)$/);
         if (match) {
-            gameId = match[1];
+          gameId = match[1];
         } else {
-            // Fallback to any game link if canonical not found first (e.g. /reviews)
-            // But usually the main link appears first or second
-            const matchLoose = href.match(/howlongtobeat\.com\/game\/(\d+)/);
-            if (matchLoose && !gameId) {
-                gameId = matchLoose[1];
-            }
+          // Fallback to any game link if canonical not found first (e.g. /reviews)
+          // But usually the main link appears first or second
+          const matchLoose = href.match(/howlongtobeat\.com\/game\/(\d+)/);
+          if (matchLoose && !gameId) {
+            gameId = matchLoose[1];
+          }
         }
       }
     });
@@ -132,38 +138,41 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
 
       const $game = cheerio.load(gameRes.data);
       const pageTitle = $game('div[class*="GameHeader_profile_header__"]').first().text().trim() ||
-                        $game('title').text().replace('How long is', '').replace('| HowLongToBeat', '').trim();
+        $game('title').text().replace('How long is', '').replace('| HowLongToBeat', '').trim();
 
       // Verify Title Match
       const dist = levenshtein(pageTitle.toLowerCase(), normalizedTitle);
       const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.3));
 
       if (dist <= threshold) {
-          const pageText = $game('body').text().replace(/\s+/g, ' ');
+        const pageText = $game('body').text().replace(/\s+/g, ' ');
 
-          const extractTime = (labelRegex: RegExp) => {
-              const match = pageText.match(labelRegex);
-              return match ? parseTime(match[1]) : 0;
-          };
+        const extractTime = (labelRegex: RegExp) => {
+          const match = pageText.match(labelRegex);
+          return match ? parseTime(match[1]) : 0;
+        };
 
-          const main = extractTime(/Main Story\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
-                       extractTime(/Main Story\s*([\d½\.]+)/i);
+        const main = extractTime(/Main Story\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
+          extractTime(/Main Story\s*([\d½\.]+)/i);
 
-          const extra = extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
-                        extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+)/i);
+        const extra = extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
+          extractTime(/Main \+ (?:Sides|Extras?)\s*([\d½\.]+)/i);
 
-          const completionist = extractTime(/Completionist\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
-                                extractTime(/Completionist\s*([\d½\.]+)/i);
+        const completionist = extractTime(/Completionist\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
+          extractTime(/Completionist\s*([\d½\.]+)/i);
 
-          return { main, extra, completionist };
+        return { main, extra, completionist };
       } else {
-          console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
+        console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
       }
     } else {
-        console.warn(`[HLTB] Fallback: No ID found via Brave for "${gameTitle}"`);
+      console.warn(`[HLTB] Fallback: No ID found via Brave for "${gameTitle}"`);
     }
 
-  } catch (err) {
+  } catch (err: any) {
+    if (axios.isAxiosError(err) && err.response?.status === 429) {
+      throw new Error('429 Rate Limit Exceeded');
+    }
     console.error(`[HLTB] Fallback error for "${gameTitle}":`, err instanceof Error ? err.message : err);
   }
 

@@ -107,9 +107,20 @@ model Game {
   studio    String? // Nom du studio/développeur
   genres    String? // JSON string
   platforms Json? // Structure: [{ name: "Switch", date: "2017-10-27" }]
+  
+  // DLC Hierarchy
+  parentId  String?
+  parent    Game?   @relation("GameToDLC", fields: [parentId], references: [id])
+  dlcs      Game[]  @relation("GameToDLC")
 
   // Playtime Data
   igdbTime       Json? // { storyline, completionist }
+
+  // New Metadata (IGDB)
+  storyline      String? @db.Text
+  status         Int?    // IGDB Game Status
+  gameType       Int?    // IGDB Game Type
+  relatedGames   Json?   // { dlcs, expansions, remakes, remasters, expanded_games } (IDs & Names)
 
   dataMissing Boolean   @default(false)
   dataFetched Boolean   @default(false)
