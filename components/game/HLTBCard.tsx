@@ -17,7 +17,7 @@ export function HLTBCard({ hltbMain, hltbExtra, hltbCompletionist, userPlaytime 
 
   // Calculate percentage of main story completed (capped at 100)
   const progressPercent = hltbMain
-    ? Math.min(100, (userHours / hltbMain) * 100)
+    ? Math.min(100, (userHours / (hltbMain / 60)) * 100)
     : 0;
 
   return (
@@ -32,15 +32,15 @@ export function HLTBCard({ hltbMain, hltbExtra, hltbCompletionist, userPlaytime 
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="flex flex-col gap-1 p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800/50">
             <span className="text-xs text-zinc-500 font-medium uppercase">Main</span>
-            <span className="font-bold text-lg">{hltbMain || "--"}h</span>
+            <span className="font-bold text-lg">{hltbMain ? Math.round(hltbMain / 60) : "--"}h</span>
           </div>
           <div className="flex flex-col gap-1 p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800/50">
             <span className="text-xs text-zinc-500 font-medium uppercase">Extra</span>
-            <span className="font-bold text-lg">{hltbExtra || "--"}h</span>
+            <span className="font-bold text-lg">{hltbExtra ? Math.round(hltbExtra / 60) : "--"}h</span>
           </div>
           <div className="flex flex-col gap-1 p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800/50">
             <span className="text-xs text-zinc-500 font-medium uppercase">100%</span>
-            <span className="font-bold text-lg">{hltbCompletionist || "--"}h</span>
+            <span className="font-bold text-lg">{hltbCompletionist ? Math.round(hltbCompletionist / 60) : "--"}h</span>
           </div>
         </div>
 

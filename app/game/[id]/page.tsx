@@ -191,21 +191,30 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                             </div>
 
                             {/* Genres & Platforms Badges */}
-                            <div className="flex flex-wrap gap-2 mb-4">
-                                {genres.map((g) => (
-                                    <Link key={g} href={`/search?genre=${encodeURIComponent(g)}`}>
-                                        <Badge variant="secondary" className="cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700">
-                                            {g}
-                                        </Badge>
-                                    </Link>
-                                ))}
-                                {platforms.map((p, i) => (
-                                    <Link key={i} href={`/search?platform=${encodeURIComponent(p.name)}`}>
-                                        <Badge variant="outline" className="bg-zinc-50 dark:bg-zinc-900 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800">
-                                            {p.name}
-                                        </Badge>
-                                    </Link>
-                                ))}
+                            <div className="space-y-3 mb-4">
+                                {genres.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {genres.map((g) => (
+                                            <Link key={g} href={`/search?genre=${encodeURIComponent(g)}`}>
+                                                <Badge variant="secondary" className="cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700">
+                                                    {g}
+                                                </Badge>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {platforms.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {platforms.map((p, i) => (
+                                            <Link key={i} href={`/search?platform=${encodeURIComponent(p.name)}`}>
+                                                <Badge variant="outline" className="bg-zinc-50 dark:bg-zinc-900 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs text-zinc-500 border-zinc-300 dark:border-zinc-700">
+                                                    {p.name}
+                                                </Badge>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="prose dark:prose-invert max-w-none text-zinc-600 dark:text-zinc-300 leading-relaxed">

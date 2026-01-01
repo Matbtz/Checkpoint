@@ -61,12 +61,26 @@ export const getCachedDiscoveryGames = unstable_cache(
                     return localGames;
 
                 case 'TOP_RATED':
+                    // Jan & Feb: Show Top Rated of PREVIOUS Year
+                    // Mar -> Dec: Show Top Rated of CURRENT Year
+                    let startOfRatingPeriod = startOfYear;
+                    let endOfRatingPeriod = now;
+
+                    if (now.getMonth() < 2) {
+                        const prevYear = currentYear - 1;
+                        startOfRatingPeriod = new Date(prevYear, 0, 1);
+                        endOfRatingPeriod = new Date(prevYear, 11, 31, 23, 59, 59);
+                        console.log(`[Discovery] Top Rated: Using Previous Year (${prevYear})`);
+                    } else {
+                        console.log(`[Discovery] Top Rated: Using Current Year (${currentYear})`);
+                    }
+
                     // Increase the limit to 100 to ensure we have enough candidates for client-side platform filtering
                     localGames = await prisma.game.findMany({
                         where: {
                             releaseDate: {
-                                gte: startOfYear,
-                                lte: now
+                                gte: startOfRatingPeriod,
+                                lte: endOfRatingPeriod
                             },
                             opencriticScore: {
                                 not: null

@@ -58,7 +58,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
     const progress = item.progressManual ?? calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
     const playedHours = Math.round(playedMinutes / 60);
     const timeToBeat = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main'];
-    const totalHours = timeToBeat ? Math.round(timeToBeat) : null;
+    const totalHours = timeToBeat ? Math.round(timeToBeat / 60) : null;
     const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
     const developer = extendedGame.studio || "Unknown Studio";
     const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
