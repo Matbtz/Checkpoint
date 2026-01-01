@@ -211,5 +211,10 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         dataFetched: false,
         videos: [],
         screenshots: [],
+        storyline: igdbGame.storyline || null,
+        status: igdbGame.status || null,
+        gameType: igdbGame.game_type || igdbGame.category || null,
+        relatedGames: null, // Since we don't have this in EnrichedIgdbGame in discovery usually, or we can map it if we did.
+        parentId: null
     };
 }
