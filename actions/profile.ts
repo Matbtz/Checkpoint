@@ -122,15 +122,27 @@ export async function getUserProfileData() {
   });
 
   // 4. Upcoming Games (Wishlist + future release date)
+  // We include games with future release dates OR no release date (TBA) that are in wishlist.
+  // Actually, let's just show all Wishlist items sorted by release date (asc), filtering those in the past in memory if needed,
+  // or just relying on the status 'WISHLIST' being the source of truth for "Planned/Upcoming".
   const upcomingLibrary = await prisma.userLibrary.findMany({
     where: {
       userId: userId,
       status: "WISHLIST",
-      game: {
-        releaseDate: {
-            gt: new Date(), // Future only
+      OR: [
+        {
+          game: {
+            releaseDate: {
+              gt: new Date(),
+            },
+          }
         },
-      },
+        {
+          game: {
+            releaseDate: null
+          }
+        }
+      ]
     },
     include: {
       game: true,
