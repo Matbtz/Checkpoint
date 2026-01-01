@@ -48,9 +48,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
     const game = await prisma.game.findUnique({
         where: { id },
         include: {
-            users: {
-                where: { userId: userId ?? "" }, // Prevent fetching all users if not logged in
-            },
+
             // We might want to fetch parent if it exists to show link?
             // parent: { select: { id: true, title: true } } 
         },
@@ -60,7 +58,19 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
         notFound();
     }
 
-    const userLibrary = (game as any).users?.[0] || null;
+    // Fetch User Library Entry explicitly to ensure fresh data and correct user association
+    // (Instead of relying on nested include which can be tricky with auth states)
+    let userLibrary = null;
+    if (userId) {
+        userLibrary = await prisma.userLibrary.findUnique({
+            where: {
+                userId_gameId: {
+                    userId: userId,
+                    gameId: id
+                }
+            }
+        });
+    }
 
     // Parse platforms if they are stored as JSON
     let platforms: { name: string }[] = [];

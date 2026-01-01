@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { User as ProfileUser, PlaySession, UpcomingGame, FriendActivity } from "@/types/profile";
 import { differenceInMinutes } from "date-fns";
+import { revalidatePath } from "next/cache";
 
 export async function getUserProfileData() {
   const session = await auth();
@@ -61,9 +62,9 @@ export async function getUserProfileData() {
   let backgroundUrl = fallbackBackground;
 
   if (user.library.length > 0 && user.library[0].game.backgroundImage) {
-      backgroundUrl = user.library[0].game.backgroundImage;
+    backgroundUrl = user.library[0].game.backgroundImage;
   } else if (user.library.length > 0 && user.library[0].game.screenshots.length > 0) {
-      backgroundUrl = user.library[0].game.screenshots[0];
+    backgroundUrl = user.library[0].game.screenshots[0];
   }
 
   const profileUser: ProfileUser = {
@@ -85,7 +86,7 @@ export async function getUserProfileData() {
       game: true,
     },
     orderBy: {
-      createdAt: "desc", // Use createdAt since updatedAt is missing on UserLibrary
+      lastPlayed: "desc",
     },
     take: 10,
   });
@@ -116,7 +117,7 @@ export async function getUserProfileData() {
         slug: entry.game.title.toLowerCase().replace(/ /g, "-"), // simplified slug
       },
       progressPercent: progress,
-      lastPlayedAt: entry.createdAt.toISOString(), // Use createdAt
+      lastPlayedAt: entry.lastPlayed ? entry.lastPlayed.toISOString() : entry.createdAt.toISOString(), // Use lastPlayed if available
       sessionDuration: duration, // Total duration actually, but labels might differ
     };
   });
@@ -174,20 +175,20 @@ export async function getUserProfileData() {
       const log = friend.activityLogs[0];
       // Only include if we have game data
       if (log.game) {
-          friendActivities.push({
-            friend: {
-                id: friend.id,
-                username: friend.name || "Friend",
-                avatarUrl: friend.image || "",
-                profileBackgroundUrl: "", // not needed for small card
-            },
-            game: {
-                id: log.game.id,
-                title: log.game.title,
-                coverUrl: log.game.coverImage || "",
-                slug: log.game.title.toLowerCase().replace(/ /g, "-"),
-            },
-          });
+        friendActivities.push({
+          friend: {
+            id: friend.id,
+            username: friend.name || "Friend",
+            avatarUrl: friend.image || "",
+            profileBackgroundUrl: "", // not needed for small card
+          },
+          game: {
+            id: log.game.id,
+            title: log.game.title,
+            coverUrl: log.game.coverImage || "",
+            slug: log.game.title.toLowerCase().replace(/ /g, "-"),
+          },
+        });
       }
     }
   });
@@ -198,4 +199,24 @@ export async function getUserProfileData() {
     upcomingGames,
     friendActivities,
   };
+}
+
+export async function updateUserProfile(data: { avatarUrl?: string; backgroundUrl?: string }) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const userId = session.user.id;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      image: data.avatarUrl,
+      profileBackgroundUrl: data.backgroundUrl,
+    },
+  });
+
+  // Revalidate profile page
+  await revalidatePath("/profile");
 }

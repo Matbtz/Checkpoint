@@ -4,6 +4,8 @@ import { AppShell } from "@/components/layout/AppShell";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import "./globals.css";
 
+import { SteamSyncListener } from '@/components/dashboard/SteamSyncListener';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -43,9 +45,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} antialiased bg-background text-foreground`}
       >
         <SessionProvider>
-            <AppShell>
-                {children}
-            </AppShell>
+          <SteamSyncListener />
+          <AppShell>
+            {children}
+          </AppShell>
         </SessionProvider>
       </body>
     </html>

@@ -6,51 +6,52 @@ import { prisma } from '@/lib/db';
 import { searchIgdbGames } from '@/lib/igdb';
 import { extractDominantColors } from '@/lib/color-utils';
 import { findBestGameArt } from '@/lib/enrichment';
+import { revalidatePath } from 'next/cache';
 
 export async function fetchSteamGames() {
-  const session = await auth();
-  const userId = session?.user?.id;
+    const session = await auth();
+    const userId = session?.user?.id;
 
-  if (!userId) {
-    throw new Error('Not authenticated');
-  }
-
-  // Get steamId from user
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { accounts: true },
-  });
-
-  let steamId = user?.steamId;
-
-  // If not in user table, check accounts
-  if (!steamId && user?.accounts) {
-    const steamAccount = user.accounts.find(acc => acc.provider === 'steam');
-    if (steamAccount) {
-      steamId = steamAccount.providerAccountId;
+    if (!userId) {
+        throw new Error('Not authenticated');
     }
-  }
 
-  if (!steamId) {
-    throw new Error('Steam account not linked');
-  }
+    // Get steamId from user
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { accounts: true },
+    });
 
-  try {
-     const games = await getOwnedGames(steamId);
-     return games;
-  } catch (e) {
-      console.error(e);
-      // Mock data for development if API fails or not set
-      if (process.env.NODE_ENV === 'development') {
-          return [
-              { appid: 10, name: 'Counter-Strike', playtime_forever: 3000, img_icon_url: '' },
-              { appid: 20, name: 'Team Fortress Classic', playtime_forever: 100, img_icon_url: '' },
-              { appid: 70, name: 'Half-Life', playtime_forever: 500, img_icon_url: '' },
-              { appid: 400, name: 'Portal', playtime_forever: 0, img_icon_url: '' }
-          ] as unknown as SteamGame[];
-      }
-      throw e;
-  }
+    let steamId = user?.steamId;
+
+    // If not in user table, check accounts
+    if (!steamId && user?.accounts) {
+        const steamAccount = user.accounts.find(acc => acc.provider === 'steam');
+        if (steamAccount) {
+            steamId = steamAccount.providerAccountId;
+        }
+    }
+
+    if (!steamId) {
+        throw new Error('Steam account not linked');
+    }
+
+    try {
+        const games = await getOwnedGames(steamId);
+        return games;
+    } catch (e) {
+        console.error(e);
+        // Mock data for development if API fails or not set
+        if (process.env.NODE_ENV === 'development') {
+            return [
+                { appid: 10, name: 'Counter-Strike', playtime_forever: 3000, img_icon_url: '' },
+                { appid: 20, name: 'Team Fortress Classic', playtime_forever: 100, img_icon_url: '' },
+                { appid: 70, name: 'Half-Life', playtime_forever: 500, img_icon_url: '' },
+                { appid: 400, name: 'Portal', playtime_forever: 0, img_icon_url: '' }
+            ] as unknown as SteamGame[];
+        }
+        throw e;
+    }
 }
 
 export async function getSteamImportCandidates() {
@@ -119,7 +120,7 @@ export async function importGames(games: SteamGame[]) {
                     }
                 }
             } catch (e) {
-                 // Ignore color extraction errors
+                // Ignore color extraction errors
             }
 
             // Enrich with IGDB
@@ -223,4 +224,84 @@ export async function importGames(games: SteamGame[]) {
     }
 
     return { success: true, count: importedCount };
+}
+
+export async function syncSteamPlaytime(options?: { activeOnly?: boolean }) {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        throw new Error('Not authenticated');
+    }
+
+    // 1. Fetch all steam games (lightweight API call)
+    const steamGames = await fetchSteamGames();
+    const steamGameMap = new Map(steamGames.map(g => [g.appid.toString(), g]));
+
+    // 2. Fetch user library games to update
+    const whereCondition: any = { userId: userId };
+
+    // If activeOnly, filter by status
+    if (options?.activeOnly) {
+        whereCondition.status = { in: ['PLAYING', 'BACKLOG'] };
+    }
+
+    const userLibrary = await prisma.userLibrary.findMany({
+        where: whereCondition,
+        select: {
+            gameId: true,
+            playtimeSteam: true,
+            lastPlayed: true,
+            game: {
+                select: {
+                    // We might need to match by steamAppId if available, or just fallback to ID
+                    // The import logic uses gameId = appid, so defaulting to that is safe for imported games.
+                    // But if we have manually added games with steamAppId, we should check that too?
+                    // For now simplicity: assume ID match for imported games.
+                    id: true
+                }
+            }
+        }
+    });
+
+    let updatedCount = 0;
+
+    // 3. Iterate and Update
+    for (const entry of userLibrary) {
+        const steamGame = steamGameMap.get(entry.gameId);
+
+        if (steamGame) {
+            // Check if data changed
+            const newPlaytime = steamGame.playtime_forever;
+            const newLastPlayed = steamGame.rtime_last_played ? new Date(steamGame.rtime_last_played * 1000) : null;
+
+            const timeChanged = newPlaytime !== entry.playtimeSteam;
+            // Compare dates safely
+            const dateChanged = (!entry.lastPlayed && newLastPlayed) ||
+                (entry.lastPlayed && newLastPlayed && entry.lastPlayed.getTime() !== newLastPlayed.getTime());
+
+            if (timeChanged || dateChanged) {
+                await prisma.userLibrary.update({
+                    where: {
+                        userId_gameId: {
+                            userId: userId,
+                            gameId: entry.gameId
+                        }
+                    },
+                    data: {
+                        playtimeSteam: newPlaytime,
+                        lastPlayed: newLastPlayed
+                    }
+                });
+                updatedCount++;
+            }
+        }
+    }
+
+    if (updatedCount > 0) {
+        revalidatePath('/dashboard');
+        revalidatePath('/profile');
+    }
+
+    return { success: true, updatedCount };
 }

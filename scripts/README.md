@@ -20,8 +20,15 @@ npx tsx scripts/enrich-library.ts [options]
 - `--metadata`: Updates missing Descriptions, IGDB IDs, Genres, etc.
 - `--steam` / `--reviews`: Enriches Steam IDs, URLs, and Review Scores.
 - `--hltb`: Enriches "HowLongToBeat" times (Use with caution, slower/rate-limited).
-- `--refresh-recent`: Forces a refresh of data for games released in the last 3 months.
-- `--scan-dlc`: Special mode that scans games with known IGDB IDs to verify if they are DLCs, Expansions, or Main games, and links them to parent games if found.
+- `--refresh-recent`: Forces update for games released in the last 3 months.
+- `--scan-dlc`: Special mode to check IGDB for DLC/Expansion status and link parents.
+- `--resume-from=N`: Skips the first N-1 games. Useful for resuming a long job if it crashed or was stopped. Example: `--resume-from=2041`.
+
+### Examples
+```bash
+# Full enrichment (slow, comprehensive)
+npx tsx scripts/enrich-library.ts --full
+```
 
 ### `sync-opencritic-catalog.ts`
 Crawls the OpenCritic API to populate the database with games. This is often the primary source of truth for "Released" games and Review Scores.

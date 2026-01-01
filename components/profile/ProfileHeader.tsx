@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Settings } from 'lucide-react';
 
+import { EditProfileDialog } from '@/components/profile/EditProfileDialog';
+
 interface ProfileHeaderProps {
   user: User;
   isOwnProfile?: boolean;
@@ -17,24 +19,20 @@ export function ProfileHeader({ user, isOwnProfile = false }: ProfileHeaderProps
       <img
         src={user.profileBackgroundUrl}
         alt="Profile Background"
-        className="h-full w-full object-cover"
+        className="h-full w-full object-cover text-transparent"
       />
 
       {/* Gradient Overlay */}
       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-background to-transparent" />
 
-      {/* Settings Link */}
+      {/* Edit Profile Button */}
       {isOwnProfile && (
-        <Link href="/settings" className="absolute right-4 top-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="bg-background/50 backdrop-blur-sm hover:bg-background/80 text-foreground"
-            title="Settings"
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
-        </Link>
+        <div className="absolute right-4 top-4 z-10">
+          <EditProfileDialog
+            currentAvatarUrl={user.avatarUrl}
+            currentBackgroundUrl={user.profileBackgroundUrl || ""}
+          />
+        </div>
       )}
 
       {/* Avatar */}

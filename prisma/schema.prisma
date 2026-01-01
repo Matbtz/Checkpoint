@@ -57,6 +57,7 @@ model User {
   steamId       String?   @unique
   preferences   String? // JSON string
   isPublic      Boolean   @default(false)
+  profileBackgroundUrl String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -146,6 +147,7 @@ model UserLibrary {
   playtimeManual         Int? // Override
   progressManual         Int? // Percentage 0-100 manual override
   targetedCompletionType String   @default("MAIN")
+  lastPlayed             DateTime? // Synced from Steam rtime_last_played
 
   customCoverImage String?
   primaryColor     String?

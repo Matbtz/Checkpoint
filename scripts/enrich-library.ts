@@ -61,9 +61,13 @@ async function main() {
         scanDlc: args.includes('--scan-dlc') // New Flag
     };
 
+    const resumeFromArg = args.find(a => a.startsWith('--resume-from='));
+    const resumeFrom = resumeFromArg ? parseInt(resumeFromArg.split('=')[1]) : 1;
+
     console.log("🎮 Master Library Enricher");
     console.log("-----------------------");
     console.log(`Modes active: ${Object.keys(options).filter(k => options[k as keyof EnrichmentOptions]).join(', ')}`);
+    if (resumeFrom > 1) console.log(`⏩ Resuming from index: ${resumeFrom}`);
 
     // 1. Select Games
     let whereClause: any = {};
@@ -107,6 +111,12 @@ async function main() {
     let updated = 0;
 
     for (const game of games) {
+        // Check resume
+        if (processed + 1 < resumeFrom) {
+            processed++;
+            continue;
+        }
+
         process.stdout.write(`\n[${processed + 1}/${games.length}] ${game.title} `);
         const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
         if (releaseYear) process.stdout.write(`(${releaseYear})`);
