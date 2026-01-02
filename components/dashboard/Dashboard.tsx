@@ -150,7 +150,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
     // Filter Logic
     const filteredLibrary = library.filter(item => {
         // Status
-        if (statusFilter !== 'All' && item.status !== statusFilter) return false;
+        if (statusFilter !== 'All' && item.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
 
         // Search
         if (searchQuery) {
