@@ -11,14 +11,16 @@ export default async function SettingsPage() {
 
     let accounts: { provider: string; providerAccountId: string }[] = [];
     let userSteamId: string | null | undefined = null;
+    let userPlatforms: string[] = [];
 
     if (session?.user?.id) {
-        // Fetch User to get steamId
+        // Fetch User to get steamId and platforms
         const user = await prisma.user.findUnique({
             where: { id: session.user.id },
-            select: { steamId: true }
+            select: { steamId: true, platforms: true }
         });
         userSteamId = user?.steamId;
+        userPlatforms = user?.platforms || [];
 
         // Fetch Accounts
         accounts = await prisma.account.findMany({
@@ -33,6 +35,7 @@ export default async function SettingsPage() {
             initialTags={tags}
             initialAccounts={accounts}
             userSteamId={userSteamId}
+            initialPlatforms={userPlatforms}
         />
     );
 }

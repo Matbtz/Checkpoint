@@ -33,10 +33,10 @@ export const getCachedDiscoveryGames = unstable_cache(
                         orderBy: {
                             releaseDate: 'asc'
                         },
-                        take: 10
+                        take: 50 // Fetch more for filtering
                     });
                     if (localGames.length < 5) {
-                        const igdbGames = await getDiscoveryGamesIgdb('UPCOMING', 10);
+                        const igdbGames = await getDiscoveryGamesIgdb('UPCOMING', 20); // Fetch a bit more from IGDB too
                         return igdbGames.map(mapIgdbToPrismaGame);
                     }
                     return localGames;
@@ -52,10 +52,10 @@ export const getCachedDiscoveryGames = unstable_cache(
                         orderBy: {
                             releaseDate: 'desc'
                         },
-                        take: 10
+                        take: 50 // Fetch more for filtering
                     });
                     if (localGames.length < 5) {
-                        const igdbGames = await getDiscoveryGamesIgdb('RECENT', 10);
+                        const igdbGames = await getDiscoveryGamesIgdb('RECENT', 20);
                         return igdbGames.map(mapIgdbToPrismaGame);
                     }
                     return localGames;

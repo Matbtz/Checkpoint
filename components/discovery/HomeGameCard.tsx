@@ -57,21 +57,22 @@ export function HomeGameCard({ game, rank }: HomeGameCardProps) {
                 #{rank}
               </div>
             )}
+          </div>
 
-            <div className="flex flex-col px-1">
-              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" title={game.title}>
-                {game.title}
-              </h3>
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                {displayDate && <span>{displayDate}</span>}
-                {game.studio && (
-                  <>
-                    <span>•</span>
-                    <span className="truncate max-w-[80px]">{game.studio}</span>
-                  </>
-                )}
-              </div>
+          <div className="flex flex-col px-1">
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" title={game.title}>
+              {game.title}
+            </h3>
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              {displayDate && <span>{displayDate}</span>}
+              {game.studio && (
+                <>
+                  <span>•</span>
+                  <span className="truncate max-w-[80px]">{game.studio}</span>
+                </>
+              )}
             </div>
+          </div>
         </motion.div>
       </Link>
     </div>
