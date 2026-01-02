@@ -229,6 +229,7 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         status: igdbGame.status || null,
         gameType: igdbGame.game_type || igdbGame.category || null,
         relatedGames: null, // Since we don't have this in EnrichedIgdbGame in discovery usually, or we can map it if we did.
+        imageStatus: 'OK',
         parentId: null
     };
 }

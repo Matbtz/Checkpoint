@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { updateUserPace } from '@/actions/user';
+import { updateUserPace, updateUserPlatforms } from '@/actions/user';
 import { createTag, deleteTag } from '@/actions/tag';
 import { disconnectAccount } from '@/actions/settings';
 import { Button } from '@/components/ui/button';
@@ -22,19 +22,32 @@ import { Tag } from '@prisma/client';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
+const PLATFORMS = [
+    "PC",
+    "PlayStation 5",
+    "PlayStation 4",
+    "Xbox Series",
+    "Xbox One",
+    "Nintendo Switch"
+];
+
 interface SettingsProps {
     initialPace: number;
     initialTags: Tag[];
     initialAccounts: { provider: string; providerAccountId: string }[];
     userSteamId?: string | null;
+    initialPlatforms: string[];
 }
 
-export default function SettingsClient({ initialPace, initialTags, initialAccounts, userSteamId }: SettingsProps) {
+export default function SettingsClient({ initialPace, initialTags, initialAccounts, userSteamId, initialPlatforms }: SettingsProps) {
     const router = useRouter();
     const [pace, setPace] = useState(initialPace);
     const [tags, setTags] = useState<Tag[]>(initialTags);
     const [newTagName, setNewTagName] = useState('');
     const [isSavingPace, setIsSavingPace] = useState(false);
+
+    const [platforms, setPlatforms] = useState<string[]>(initialPlatforms || []);
+    const [isSavingPlatforms, setIsSavingPlatforms] = useState(false);
 
     // Connection State
     // Identify Steam account either from Accounts list or User.steamId
@@ -58,6 +71,25 @@ export default function SettingsClient({ initialPace, initialTags, initialAccoun
         setIsSavingPace(true);
         await updateUserPace(pace);
         setIsSavingPace(false);
+    };
+
+    const handlePlatformToggle = (platform: string, checked: boolean) => {
+        if (checked) {
+            setPlatforms(prev => [...prev, platform]);
+        } else {
+            setPlatforms(prev => prev.filter(p => p !== platform));
+        }
+    };
+
+    const savePlatforms = async () => {
+        setIsSavingPlatforms(true);
+        try {
+            await updateUserPlatforms(platforms);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSavingPlatforms(false);
+        }
     };
 
     const handleCreateTag = async () => {

@@ -20,7 +20,8 @@ export default async function Home() {
         topRatedGames,
         recentReleases,
         upcomingGames,
-        mostAnticipatedGames
+        mostAnticipatedGames,
+        userPlatforms
     ] = await Promise.all([
         getCachedDiscoveryGames('TOP_RATED'),
         getCachedDiscoveryGames('RECENT'),
@@ -173,7 +174,7 @@ export default async function Home() {
                 <section>
                     <DiscoverySection
                         title="Recent Releases"
-                        games={recentReleases}
+                        games={filteredRecent}
                         viewMoreHref="/search?releaseDateModifier=last_2_months&sortBy=release"
                     />
                 </section>
@@ -181,7 +182,7 @@ export default async function Home() {
                 <section>
                     <DiscoverySection
                         title="Upcoming Games"
-                        games={upcomingGames}
+                        games={filteredUpcoming}
                         viewMoreHref="/search?releaseDateModifier=next_2_months&sortBy=release_asc"
                     />
                 </section>
@@ -189,7 +190,7 @@ export default async function Home() {
                 <section>
                     <DiscoverySection
                         title="Most Anticipated"
-                        games={mostAnticipatedGames}
+                        games={filteredAnticipated}
                         viewMoreHref="/search?releaseDateModifier=next_year&sortBy=popularity"
                     />
                 </section>
