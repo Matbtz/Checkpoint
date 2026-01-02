@@ -133,17 +133,18 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
                             </Button>
                         </div>
                     )}
+                </div>
 
-                    {/* Details */}
-                    <div className="p-3 flex flex-col gap-1">
-                        <h3 className="font-semibold text-sm line-clamp-1" title={game.title}>
-                            {game.title}
-                        </h3>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
-                            <span className="line-clamp-1 max-w-[50%] text-right">{game.studio}</span>
-                        </div>
+                {/* Details */}
+                <div className="p-3 flex flex-col gap-1">
+                    <h3 className="font-semibold text-sm line-clamp-1" title={game.title}>
+                        {game.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
+                        <span className="line-clamp-1 max-w-[50%] text-right">{game.studio}</span>
                     </div>
+                </div>
             </Link>
         </div>
     );
