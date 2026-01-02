@@ -3,23 +3,52 @@
 import { useState } from 'react';
 import { updateUserPace } from '@/actions/user';
 import { createTag, deleteTag } from '@/actions/tag';
+import { disconnectAccount } from '@/actions/settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
-import { Trash2 } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Trash2, Unplug } from 'lucide-react';
 import { Tag } from '@prisma/client';
 import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface SettingsProps {
   initialPace: number;
   initialTags: Tag[];
+  initialAccounts: { provider: string; providerAccountId: string }[];
+  userSteamId?: string | null;
 }
 
-export default function SettingsPage({ initialPace, initialTags }: SettingsProps) {
+export default function SettingsClient({ initialPace, initialTags, initialAccounts, userSteamId }: SettingsProps) {
+  const router = useRouter();
   const [pace, setPace] = useState(initialPace);
   const [tags, setTags] = useState<Tag[]>(initialTags);
   const [newTagName, setNewTagName] = useState('');
   const [isSavingPace, setIsSavingPace] = useState(false);
+
+  // Connection State
+  // Identify Steam account either from Accounts list or User.steamId
+  const steamAccount = initialAccounts.find(a => a.provider === 'steam' || a.provider === 'steamcommunity');
+
+  // Is Connected if we found an account OR we have a steamId on the user record
+  const isSteamConnected = !!steamAccount || !!userSteamId;
+
+  // Determine the display ID
+  const displaySteamId = steamAccount?.providerAccountId || userSteamId;
+
+  const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false);
+  const [deleteImportedGames, setDeleteImportedGames] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   const handlePaceChange = (val: number[]) => {
       setPace(val[0]);
@@ -44,6 +73,27 @@ export default function SettingsPage({ initialPace, initialTags }: SettingsProps
       const res = await deleteTag(id);
       if (res.success) {
           setTags(tags.filter(t => t.id !== id));
+      }
+  };
+
+  const handleDisconnect = async () => {
+      setIsDisconnecting(true);
+      try {
+          // Pass the provider name found, or default to 'steam'
+          const providerToDisconnect = steamAccount?.provider || 'steam';
+          const res = await disconnectAccount(providerToDisconnect, deleteImportedGames);
+          if (res.success) {
+              setIsDisconnectDialogOpen(false);
+              setDeleteImportedGames(false);
+              router.refresh();
+          } else {
+              // Handle error (maybe toast)
+              console.error(res.error);
+          }
+      } catch (error) {
+          console.error(error);
+      } finally {
+          setIsDisconnecting(false);
       }
   };
 
@@ -119,14 +169,52 @@ export default function SettingsPage({ initialPace, initialTags }: SettingsProps
                        <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M11.979 0C5.678 0 .511 5.166.021 11.488l3.966 5.86c.667-1.391 2.086-2.35 3.729-2.35.26 0 .515.025.764.07l2.883-4.22a5.57 5.57 0 0 1-.368-1.992c0-3.097 2.51-5.607 5.607-5.607 3.097 0 5.607 2.51 5.607 5.607s-2.51 5.607-5.607 5.607c-2.07 0-3.869-1.119-4.87-2.786l-4.426 1.494a5.275 5.275 0 0 1-2.32 3.837L.344 24c2.812 3.193 6.941 5.23 11.635 5.23C18.595 29.23 24 23.825 24 17.209 24 10.595 18.595 5.19 11.979 5.19zM16.6 20.377a3.17 3.17 0 1 1 0-6.339 3.17 3.17 0 0 1 0 6.339zm-8.84-2.835a1.868 1.868 0 1 1 0-3.737 1.868 1.868 0 0 1 0 3.737zm10.749-3.414c-.93 0-1.685.755-1.685 1.685 0 .93.755 1.685 1.685 1.685.93 0 1.685-.755 1.685-1.685 0-.93-.755-1.685-1.685-1.685z" transform="scale(.82) translate(3,3)"/>
                        </svg>
-                       <span className="font-medium">Steam</span>
+                       <div className="flex flex-col">
+                           <span className="font-medium">Steam</span>
+                           {isSteamConnected && <span className="text-xs text-zinc-500">ID: {displaySteamId}</span>}
+                       </div>
                   </div>
-                  <Button onClick={() => signIn('steam', { callbackUrl: '/dashboard' })}>
-                      Lier mon compte Steam
-                  </Button>
+
+                  {isSteamConnected ? (
+                      <Button variant="destructive" onClick={() => setIsDisconnectDialogOpen(true)}>
+                          <Unplug className="mr-2 h-4 w-4" />
+                          Déconnecter
+                      </Button>
+                  ) : (
+                      <Button onClick={() => signIn('steam', { callbackUrl: '/dashboard' })}>
+                          Lier mon compte Steam
+                      </Button>
+                  )}
               </div>
           </div>
       </section>
+
+      <Dialog open={isDisconnectDialogOpen} onOpenChange={setIsDisconnectDialogOpen}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Déconnecter Steam ?</DialogTitle>
+                  <DialogDescription>
+                      Cette action supprimera le lien entre votre compte et Steam.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center space-x-2 py-4">
+                  <Checkbox
+                    id="delete-games"
+                    checked={deleteImportedGames}
+                    onCheckedChange={(c) => setDeleteImportedGames(!!c)}
+                  />
+                  <Label htmlFor="delete-games">
+                      Supprimer tous les jeux importés via Steam
+                  </Label>
+              </div>
+              <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDisconnectDialogOpen(false)}>Annuler</Button>
+                  <Button variant="destructive" onClick={handleDisconnect} disabled={isDisconnecting}>
+                      {isDisconnecting ? 'Déconnexion...' : 'Confirmer la déconnexion'}
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }
