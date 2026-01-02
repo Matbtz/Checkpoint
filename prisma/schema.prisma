@@ -133,6 +133,8 @@ model Game {
   primaryColor   String?
   secondaryColor String?
 
+  imageStatus    String        @default("OK") // OK, BROKEN
+
   updatedAt    DateTime      @updatedAt
   users        UserLibrary[]
   activityLogs ActivityLog[]

@@ -77,21 +77,47 @@ export async function getUserProfileData() {
   // 3. Recent Plays (Based on UserLibrary status=PLAYING or recently updated)
   // Since ActivityLog isn't fully reliable for history yet, we use UserLibrary 'PLAYING' status
   // sorted by updatedAt.
-  const recentLibrary = await prisma.userLibrary.findMany({
-    where: {
-      userId: userId,
-      status: "PLAYING",
-    },
-    include: {
-      game: true,
-    },
-    orderBy: {
-      lastPlayed: "desc",
-    },
-    take: 10,
+  // 3. Recent Plays (Based on UserLibrary status=PLAYING or with recent lastPlayed)
+  // We fetch two sets to ensure we don't miss:
+  // A. Games with actual recent play history (Steam or manual logs)
+  // B. Games marked as PLAYING but maybe without history yet (recently added)
+  const [playedGames, runningGames] = await prisma.$transaction([
+    prisma.userLibrary.findMany({
+      where: { userId, lastPlayed: { not: null } },
+      include: { game: true },
+      orderBy: { lastPlayed: "desc" },
+      take: 10,
+    }),
+    prisma.userLibrary.findMany({
+      where: { userId, status: "PLAYING" }, // Fetch "PLAYING" games even if no history
+      include: { game: true },
+      orderBy: { createdAt: "desc" }, // Use creation time as fallback proxy for relevance
+      take: 10,
+    })
+  ]);
+
+  // Merge and Dedupe
+  const combinedMap = new Map();
+
+  [...playedGames, ...runningGames].forEach(item => {
+    if (!combinedMap.has(item.gameId)) {
+      combinedMap.set(item.gameId, item);
+    }
   });
 
-  const recentPlays: PlaySession[] = recentLibrary.map((entry) => {
+  const recentLibrary = Array.from(combinedMap.values());
+
+  // Sort by execution time (lastPlayed > createdAt)
+  recentLibrary.sort((a, b) => {
+    const timeA = a.lastPlayed ? a.lastPlayed.getTime() : a.createdAt.getTime();
+    const timeB = b.lastPlayed ? b.lastPlayed.getTime() : b.createdAt.getTime();
+    return timeB - timeA;
+  });
+
+  // Take top 10 after sort
+  const topRecent = recentLibrary.slice(0, 10);
+
+  const recentPlays: PlaySession[] = topRecent.map((entry) => {
     // Calculate progress (simplified)
     // progressManual or steam vs HLTB
     let progress = 0;

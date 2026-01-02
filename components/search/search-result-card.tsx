@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
+import { SafeImage } from '@/components/ui/safe-image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Plus, Check, Loader2 } from 'lucide-react';
@@ -88,19 +88,20 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
             <Link href={`/game/${game.id}`} className="flex-1">
                 {/* Image Wrapper */}
                 <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
-                    {game.availableCovers?.[0] ? (
-                        <Image
-                            src={game.availableCovers[0]}
-                            alt={game.title}
-                            fill
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
-                            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"
-                        />
-                    ) : (
-                        <div className="flex h-full items-center justify-center text-muted-foreground text-xs p-4 text-center">
-                            No Image
-                        </div>
-                    )}
+                    <SafeImage
+                        src={game.availableCovers?.[0] || ''}
+                        alt={game.title}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 20vw"
+                        gameId={game.id}
+                        imageType="COVER"
+                        fallback={
+                            <div className="flex h-full items-center justify-center text-muted-foreground text-xs p-4 text-center">
+                                No Image
+                            </div>
+                        }
+                    />
 
                     {/* Score Badge */}
                     {game.opencriticScore !== null && (
@@ -132,18 +133,17 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
                             </Button>
                         </div>
                     )}
-                </div>
 
-                {/* Details */}
-                <div className="p-3 flex flex-col gap-1">
-                    <h3 className="font-semibold text-sm line-clamp-1" title={game.title}>
-                        {game.title}
-                    </h3>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
-                        <span className="line-clamp-1 max-w-[50%] text-right">{game.studio}</span>
+                    {/* Details */}
+                    <div className="p-3 flex flex-col gap-1">
+                        <h3 className="font-semibold text-sm line-clamp-1" title={game.title}>
+                            {game.title}
+                        </h3>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{game.releaseDate ? new Date(game.releaseDate).getFullYear() : 'TBA'}</span>
+                            <span className="line-clamp-1 max-w-[50%] text-right">{game.studio}</span>
+                        </div>
                     </div>
-                </div>
             </Link>
         </div>
     );
