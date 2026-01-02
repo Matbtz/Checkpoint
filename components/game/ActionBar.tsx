@@ -21,9 +21,9 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn }: ActionBarProps) {
 
   useEffect(() => {
     if (userLibrary?.playtimeManual) {
-        setPlaytime((userLibrary.playtimeManual / 60).toString());
+      setPlaytime((userLibrary.playtimeManual / 60).toString());
     } else {
-        setPlaytime("");
+      setPlaytime("");
     }
   }, [userLibrary]);
 
@@ -40,15 +40,16 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn }: ActionBarProps) {
   }
 
   const handleAddToLibrary = async () => {
-      setAdding(true);
-      try {
-          await addGameToLibrary(gameId);
-          toast.success("Game added to library");
-      } catch (error) {
-          toast.error("Failed to add game");
-      } finally {
-          setAdding(false);
-      }
+    setAdding(true);
+    try {
+      await addGameToLibrary(gameId);
+      toast.success("Game added to library");
+      router.refresh();
+    } catch (error) {
+      toast.error("Failed to add game");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handlePlaytimeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,29 +58,29 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn }: ActionBarProps) {
   };
 
   const savePlaytime = async () => {
-      if (!playtime) return;
-      const hours = parseFloat(playtime);
-      if (isNaN(hours)) return;
+    if (!playtime) return;
+    const hours = parseFloat(playtime);
+    if (isNaN(hours)) return;
 
-      try {
-          await updateManualPlayTime(gameId, Math.round(hours * 60));
-          toast.success("Playtime updated");
-      } catch (error) {
-          toast.error("Failed to update playtime");
-      }
+    try {
+      await updateManualPlayTime(gameId, Math.round(hours * 60));
+      toast.success("Playtime updated");
+    } catch (error) {
+      toast.error("Failed to update playtime");
+    }
   };
 
   if (!userLibrary) {
-       return (
-           <Button
-            variant="secondary"
-            onClick={handleAddToLibrary}
-            disabled={adding}
-            className="bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md"
-           >
-               {adding ? "Adding..." : "Add to Library"}
-           </Button>
-       )
+    return (
+      <Button
+        variant="secondary"
+        onClick={handleAddToLibrary}
+        disabled={adding}
+        className="bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md"
+      >
+        {adding ? "Adding..." : "Add to Library"}
+      </Button>
+    )
   }
 
   return (

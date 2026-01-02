@@ -15,8 +15,8 @@ export function SectionCarousel({ title, viewMoreLink, children, action }: Secti
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold">{title}</h2>
-            {action}
+          <h2 className="text-2xl font-bold">{title}</h2>
+          {action}
         </div>
         {viewMoreLink && (
           <Link
@@ -29,15 +29,12 @@ export function SectionCarousel({ title, viewMoreLink, children, action }: Secti
       </div>
 
       <div className="relative">
-        {/* Using native flex with overflow for robust carousel behavior */}
-        <div className="flex space-x-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide">
-             {/* Wrapper to ensure children have correct spacing */}
-             {React.Children.map(children, (child) => (
-               <div className="snap-start shrink-0">
-                 {child}
-               </div>
-             ))}
-        </div>
+        <ScrollArea className="w-full whitespace-nowrap pb-4">
+          <div className="flex space-x-4 p-1">
+            {children}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </div>
     </div>
   );

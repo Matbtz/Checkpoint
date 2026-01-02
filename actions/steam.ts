@@ -1,7 +1,7 @@
 'use server';
 
 import { auth } from '@/auth';
-import { getOwnedGames, SteamGame } from '@/lib/steam';
+import { getOwnedGames, getRecentlyPlayedGames, SteamGame } from '@/lib/steam';
 import { prisma } from '@/lib/db';
 import { searchIgdbGames } from '@/lib/igdb';
 import { extractDominantColors } from '@/lib/color-utils';
@@ -234,8 +234,45 @@ export async function syncSteamPlaytime(options?: { activeOnly?: boolean }) {
         throw new Error('Not authenticated');
     }
 
-    // 1. Fetch all steam games (lightweight API call)
-    const steamGames = await fetchSteamGames();
+    // 1. Fetch all steam games AND recent games
+    const [steamGames, recentGames] = await Promise.all([
+        fetchSteamGames(),
+        getRecentlyPlayedGames(userId).catch(e => {
+            console.error("Failed to fetch recently played:", e);
+            return [] as SteamGame[];
+        }) // We need the steamId normally, but fetchSteamGames extracts it. getRecentlyPlayedGames asks for it.
+        // Wait, fetchSteamGames logic extracts steamId. We need that logic or we need to extract it again.
+        // Let's refactor slightly to get SteamID.
+    ]);
+
+    // RE-FETCH STEAM ID for usage (copied logic from fetchSteamGames temporarily or refactor? 
+    // fetchSteamGames is exported. Let's just fix the call below by extracting ID first)
+    // Actually, to avoid code duplication, I'll rely on fetchSteamGames to get owned. 
+    // But for recent, I need the ID. 
+
+    // Quick fetching of steamId again:
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { accounts: true } });
+    let steamId = user?.steamId;
+    if (!steamId && user?.accounts) {
+        const steamAccount = user.accounts.find(acc => acc.provider === 'steam');
+        if (steamAccount) steamId = steamAccount.providerAccountId;
+    }
+
+    let recentGameMap = new Map<string, number>();
+    if (steamId) {
+        try {
+            // We can't use 'userId' as steamId argument, we need the actual steamId
+            // Importing getRecentlyPlayedGames requires importing it first.
+            // Implemented below.
+            const recents = await import('@/lib/steam').then(m => m.getRecentlyPlayedGames(steamId!));
+            recents.forEach(g => {
+                recentGameMap.set(g.appid.toString(), g.playtime_2weeks || 0);
+            });
+        } catch (e) {
+            console.error("Failed to fetch recents", e);
+        }
+    }
+
     const steamGameMap = new Map(steamGames.map(g => [g.appid.toString(), g]));
 
     // 2. Fetch user library games to update
@@ -251,13 +288,10 @@ export async function syncSteamPlaytime(options?: { activeOnly?: boolean }) {
         select: {
             gameId: true,
             playtimeSteam: true,
+            playtime2weeks: true,
             lastPlayed: true,
             game: {
                 select: {
-                    // We might need to match by steamAppId if available, or just fallback to ID
-                    // The import logic uses gameId = appid, so defaulting to that is safe for imported games.
-                    // But if we have manually added games with steamAppId, we should check that too?
-                    // For now simplicity: assume ID match for imported games.
                     id: true
                 }
             }
@@ -269,18 +303,24 @@ export async function syncSteamPlaytime(options?: { activeOnly?: boolean }) {
     // 3. Iterate and Update
     for (const entry of userLibrary) {
         const steamGame = steamGameMap.get(entry.gameId);
+        const recentPlaytime = recentGameMap.get(entry.gameId) || 0;
 
         if (steamGame) {
             // Check if data changed
             const newPlaytime = steamGame.playtime_forever;
             const newLastPlayed = steamGame.rtime_last_played ? new Date(steamGame.rtime_last_played * 1000) : null;
 
+            // Allow 2 weeks playtime update
+            const currentRecent = entry.playtime2weeks ?? 0;
+
             const timeChanged = newPlaytime !== entry.playtimeSteam;
+            const recentChanged = recentPlaytime !== currentRecent;
+
             // Compare dates safely
             const dateChanged = (!entry.lastPlayed && newLastPlayed) ||
                 (entry.lastPlayed && newLastPlayed && entry.lastPlayed.getTime() !== newLastPlayed.getTime());
 
-            if (timeChanged || dateChanged) {
+            if (timeChanged || dateChanged || recentChanged) {
                 await prisma.userLibrary.update({
                     where: {
                         userId_gameId: {
@@ -290,6 +330,7 @@ export async function syncSteamPlaytime(options?: { activeOnly?: boolean }) {
                     },
                     data: {
                         playtimeSteam: newPlaytime,
+                        playtime2weeks: recentPlaytime,
                         lastPlayed: newLastPlayed
                     }
                 });

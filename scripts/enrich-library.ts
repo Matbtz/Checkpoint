@@ -1,5 +1,7 @@
 
 import './env-loader';
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { findBestGameArt } from '../lib/enrichment';
 import { searchIgdbGames, getIgdbImageUrl, getIgdbTimeToBeat, getIgdbGameDetails, IgdbGame, EnrichedIgdbGame } from '../lib/igdb';
@@ -61,12 +63,36 @@ async function main() {
         scanDlc: args.includes('--scan-dlc') // New Flag
     };
 
+    const isContinue = args.includes('--continue');
+    const STATE_FILE = path.resolve(process.cwd(), 'scripts/sync-state-hltb.json');
+
+    // Load State if Continuing
+    let processedIds: string[] = [];
+    if (isContinue && fs.existsSync(STATE_FILE)) {
+        try {
+            const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+            if (Array.isArray(state.processedIds)) {
+                processedIds = state.processedIds;
+                console.log(`⏩ CONTINUE MODE: Found ${processedIds.length} previously processed games in state file.`);
+            }
+        } catch (e) {
+            console.error("⚠️ Failed to load state file, starting fresh.");
+        }
+    } else if (!isContinue) {
+        // If not continuing, maybe clear the file? Or just overwrite on save?
+        // User might want to "accumulate" runs manually, but usually new run = fresh start unless --continue
+        if (fs.existsSync(STATE_FILE)) {
+            try { fs.unlinkSync(STATE_FILE); } catch (e) { /* ignore */ }
+        }
+    }
+
     const resumeFromArg = args.find(a => a.startsWith('--resume-from='));
     const resumeFrom = resumeFromArg ? parseInt(resumeFromArg.split('=')[1]) : 1;
 
     console.log("🎮 Master Library Enricher");
     console.log("-----------------------");
     console.log(`Modes active: ${Object.keys(options).filter(k => options[k as keyof EnrichmentOptions]).join(', ')}`);
+    if (isContinue) console.log(`⏩ Skipping ${processedIds.length} games from state file.`);
     if (resumeFrom > 1) console.log(`⏩ Resuming from index: ${resumeFrom}`);
 
     // 1. Select Games
@@ -112,7 +138,15 @@ async function main() {
 
     for (const game of games) {
         // Check resume
+        // Check resume
         if (processed + 1 < resumeFrom) {
+            processed++;
+            continue;
+        }
+
+        // Check Continue State
+        if (isContinue && processedIds.includes(game.id)) {
+            // console.log(`   ⏩ Skipped (Already Processed): ${game.title}`);
             processed++;
             continue;
         }
@@ -397,6 +431,17 @@ async function main() {
             updated++;
         } else {
             console.log("   ⏺️ No relevant updates found.");
+        }
+
+        // Update State
+        if (!processedIds.includes(game.id)) {
+            processedIds.push(game.id);
+            // Save state periodically or every time? Every time is safer for "crash proofing"
+            try {
+                fs.writeFileSync(STATE_FILE, JSON.stringify({ processedIds, lastUpdated: new Date().toISOString() }, null, 2));
+            } catch (e) {
+                // ignore write error
+            }
         }
 
         // Dynamic Delay

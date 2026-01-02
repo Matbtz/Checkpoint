@@ -131,9 +131,26 @@ export async function getUserProfileData() {
     }
 
     // Format duration
-    const minutes = entry.playtimeManual ?? entry.playtimeSteam;
-    let duration = `${minutes}m`;
-    if (minutes > 60) duration = `${Math.round(minutes / 60)}h`;
+    const recentMinutes = entry.playtime2weeks ?? 0;
+    const totalMinutes = entry.playtimeManual ?? entry.playtimeSteam;
+
+    let duration = "";
+
+    if (recentMinutes > 0) {
+      // Show recent steam activity
+      if (recentMinutes < 60) {
+        duration = `${recentMinutes}m (2 weeks)`;
+      } else {
+        duration = `${Math.round(recentMinutes / 60)}h (2 weeks)`;
+      }
+    } else {
+      // Fallback to total
+      if (totalMinutes < 60) {
+        duration = `Total: ${totalMinutes}m`;
+      } else {
+        duration = `Total: ${Math.round(totalMinutes / 60)}h`;
+      }
+    }
 
     return {
       game: {
@@ -144,7 +161,7 @@ export async function getUserProfileData() {
       },
       progressPercent: progress,
       lastPlayedAt: entry.lastPlayed ? entry.lastPlayed.toISOString() : entry.createdAt.toISOString(), // Use lastPlayed if available
-      sessionDuration: duration, // Total duration actually, but labels might differ
+      sessionDuration: duration,
     };
   });
 

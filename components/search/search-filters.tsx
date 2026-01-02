@@ -55,9 +55,16 @@ export function SearchFilters({
 }: SearchFiltersProps) {
     const [isOpen, setIsOpen] = React.useState(true);
 
+    React.useEffect(() => {
+        // Fold by default on mobile
+        if (window.innerWidth < 768) {
+            setIsOpen(false);
+        }
+    }, []);
+
     return (
         <div className="border rounded-lg bg-card/50 backdrop-blur-sm overflow-hidden">
-             <div
+            <div
                 className="flex items-center justify-between p-4 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
                 onClick={() => setIsOpen(!isOpen)}
             >
@@ -66,7 +73,7 @@ export function SearchFilters({
                     {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                 </h3>
                 {(selectedGenres.length > 0 || selectedPlatforms.length > 0 || minScore > 0 || releaseYear) && (
-                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onReset(); }} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onReset(); }} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
                         Reset
                     </Button>
                 )}
@@ -140,7 +147,7 @@ export function SearchFilters({
                     {/* Platforms Multi-Select */}
                     <div className="space-y-2">
                         <Label className="text-xs text-muted-foreground">Platforms</Label>
-                         <Popover>
+                        <Popover>
                             <PopoverTrigger asChild>
                                 <Button
                                     variant="outline"
@@ -182,8 +189,8 @@ export function SearchFilters({
 
                     {/* Release Range */}
                     <div className="space-y-2">
-                         <Label className="text-xs text-muted-foreground">Release Range</Label>
-                         <Select
+                        <Label className="text-xs text-muted-foreground">Release Range</Label>
+                        <Select
                             value={releaseDateModifier || "any"}
                             onValueChange={(val) => onReleaseDateModifierChange(val === "any" ? "" : val)}
                         >
@@ -207,8 +214,8 @@ export function SearchFilters({
 
                     {/* Specific Year */}
                     <div className="space-y-2">
-                         <Label className="text-xs text-muted-foreground">Specific Year</Label>
-                         <Input
+                        <Label className="text-xs text-muted-foreground">Specific Year</Label>
+                        <Input
                             type="number"
                             placeholder="e.g. 2023"
                             className="h-9 text-xs"
@@ -219,14 +226,14 @@ export function SearchFilters({
                                 const val = parseInt(e.target.value);
                                 onReleaseYearChange(isNaN(val) ? undefined : val);
                             }}
-                         />
+                        />
                     </div>
 
                     {/* Score */}
                     <div className="space-y-2">
                         <div className="flex justify-between items-center h-[24px]">
-                             <Label className="text-xs text-muted-foreground">Min Score</Label>
-                             <span className="text-xs font-mono">{minScore > 0 ? minScore : 'Any'}</span>
+                            <Label className="text-xs text-muted-foreground">Min Score</Label>
+                            <span className="text-xs font-mono">{minScore > 0 ? minScore : 'Any'}</span>
                         </div>
                         <Slider
                             value={[minScore]}
@@ -255,7 +262,7 @@ export function SearchFilters({
                             <X className="w-3 h-3 cursor-pointer hover:text-primary/70" onClick={() => onPlatformChange(p)} />
                         </div>
                     ))}
-                     {releaseYear && (
+                    {releaseYear && (
                         <div className="bg-primary/10 text-primary text-[10px] px-2 py-1 rounded-full flex items-center gap-1 border border-primary/20">
                             Year: {releaseYear}
                             <X className="w-3 h-3 cursor-pointer hover:text-primary/70" onClick={() => onReleaseYearChange(undefined)} />

@@ -147,6 +147,7 @@ model UserLibrary {
   gameId                 String
   status                 String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
   playtimeSteam          Int      @default(0) // En minutes
+  playtime2weeks         Int      @default(0) // En minutes (Steam Recent)
   playtimeManual         Int? // Override
   progressManual         Int? // Percentage 0-100 manual override
   targetedCompletionType String   @default("MAIN")

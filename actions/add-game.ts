@@ -1,11 +1,15 @@
 'use server';
 
+
+
 import { searchIgdbGames, getIgdbImageUrl } from '@/lib/igdb';
 import { getOpenCriticScore } from '@/lib/opencritic';
 import { prisma } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { extractDominantColors } from '@/lib/color-utils';
+
+type Game = Awaited<ReturnType<typeof prisma.game.findMany>>[number];
 
 // --- UTILITAIRE : FETCH OPENCRITIC ON DEMAND ---
 export async function fetchOpenCriticAction(title: string) {
@@ -42,7 +46,7 @@ export async function searchLocalGamesAction(query: string) {
 
     console.log(`[searchLocalGamesAction] Query: "${query}", Sanitized: "${sanitizedQuery}", Terms: ${terms.length}`);
 
-    return games.map(g => {
+    return games.map((g: Game) => {
         let parsedGenres: string[] = [];
         try {
             parsedGenres = g.genres ? JSON.parse(g.genres as string) : [];
@@ -100,7 +104,7 @@ export async function searchOnlineGamesAction(query: string) {
     });
 
     return igdbResults.map(game => {
-        const existing = existingGames.find(e => e.id === String(game.id));
+        const existing = existingGames.find((e: { id: string; opencriticScore: number | null }) => e.id === String(game.id));
 
         return {
             id: String(game.id),
@@ -177,7 +181,9 @@ export async function addGameExtended(payload: any) {
                 opencriticScore: openCriticScore,
                 opencriticUrl: openCriticUrl,
                 genres: payload.genres, // Stringified JSON
-                platforms: payload.platforms, // Array/Json
+                platforms: Array.isArray(payload.platforms)
+                    ? payload.platforms.map((p: any) => typeof p === 'string' ? { name: p } : p)
+                    : [], // Ensure structure matches schema expectations [{ name: "Switch" }]
                 description: payload.description,
                 primaryColor,
                 secondaryColor,
@@ -201,7 +207,9 @@ export async function addGameExtended(payload: any) {
                 ...(openCriticScore !== undefined && { opencriticScore: openCriticScore }),
                 ...(openCriticUrl !== undefined && { opencriticUrl: openCriticUrl }),
                 genres: payload.genres,
-                platforms: payload.platforms, // Array/Json
+                platforms: Array.isArray(payload.platforms)
+                    ? payload.platforms.map((p: any) => typeof p === 'string' ? { name: p } : p)
+                    : [],
                 description: payload.description,
                 primaryColor,
                 secondaryColor,
