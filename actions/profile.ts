@@ -164,6 +164,20 @@ export async function getUserProfileData() {
     where: {
       userId: userId,
       status: "WISHLIST",
+      OR: [
+        {
+          game: {
+            releaseDate: {
+              gt: new Date(),
+            },
+          }
+        },
+        {
+          game: {
+            releaseDate: null
+          }
+        }
+      ]
     },
     include: {
       game: true,

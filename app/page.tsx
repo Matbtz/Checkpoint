@@ -21,12 +21,14 @@ export default async function Home() {
         recentReleases,
         upcomingGames,
         mostAnticipatedGames,
+        recentlyReviewedGames,
         userPlatforms
     ] = await Promise.all([
         getCachedDiscoveryGames('TOP_RATED'),
         getCachedDiscoveryGames('RECENT'),
         getCachedDiscoveryGames('UPCOMING'),
         getMostAnticipatedGames(),
+        getCachedDiscoveryGames('RECENTLY_REVIEWED'),
         getUserPlatforms()
     ]);
 
@@ -59,6 +61,7 @@ export default async function Home() {
     const filteredRecent = filterGamesByPlatform(recentReleases);
     const filteredUpcoming = filterGamesByPlatform(upcomingGames);
     const filteredAnticipated = filterGamesByPlatform(mostAnticipatedGames);
+    const filteredRecentlyReviewed = filterGamesByPlatform(recentlyReviewedGames);
 
     // Determine Hero Game (Use #1 Top Rated or fallback)
     const isTopRated = topRatedGames.length > 0;
@@ -168,6 +171,15 @@ export default async function Home() {
                 {/* Top Rated Section (with Client Filter) */}
                 <section>
                     <TopRatedGames games={topRatedGames} />
+                </section>
+
+                {/* Recently Reviewed */}
+                <section>
+                    <DiscoverySection
+                        title="Recently Reviewed"
+                        games={filteredRecentlyReviewed}
+                        viewMoreHref="/search?minScore=80&sortBy=release"
+                    />
                 </section>
 
                 {/* Other Sections */}
