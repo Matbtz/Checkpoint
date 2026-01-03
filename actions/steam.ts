@@ -189,8 +189,8 @@ export async function importGames(games: SteamGame[]) {
             });
 
             // Upsert UserLibrary
-            // Use Title Case for Status ("Backlog", "Playing") and "Main" for completion
-            const status = game.playtime_forever > 0 ? 'Playing' : 'Backlog';
+            // Use Uppercase for Status ("BACKLOG", "PLAYING") and "Main" for completion
+            const status = game.playtime_forever > 0 ? 'PLAYING' : 'BACKLOG';
 
             try {
                 await prisma.userLibrary.create({
