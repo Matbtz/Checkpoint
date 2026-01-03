@@ -1,7 +1,6 @@
 
 import { getDailyRecommendations } from '@/actions/recommendations';
-import { Sparkles } from 'lucide-react';
-import { SectionCarousel } from '@/components/game/SectionCarousel';
+import { DiscoverySection } from '@/components/discovery/DiscoverySection';
 
 export async function RecommendationSection() {
   const recommendation = await getDailyRecommendations();
@@ -21,11 +20,15 @@ export async function RecommendationSection() {
   const viewMoreHref = genre ? `/search?genre=${encodeURIComponent(genre)}&sortBy=rating` : '/search?sortBy=rating';
 
   return (
-    <SectionCarousel
-        title="Recommandation du jour"
-        icon={<Sparkles className="w-5 h-5 text-indigo-400" />}
-        games={recommendation.games}
-        viewMoreHref={viewMoreHref}
-    />
+    <section className="mb-8 w-full">
+        <DiscoverySection
+            title="Recommandation du jour"
+            games={recommendation.games}
+            viewMoreHref={viewMoreHref}
+        />
+        <p className="text-sm text-zinc-400 px-1 mt-1">
+            {recommendation.reason}
+        </p>
+    </section>
   );
 }
