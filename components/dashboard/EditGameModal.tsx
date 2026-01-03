@@ -337,12 +337,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                             <Select value={status} onValueChange={setStatus}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Wishlist">Wishlist</SelectItem>
-                                    <SelectItem value="Backlog">Backlog</SelectItem>
-                                    <SelectItem value="Up Next">Up Next</SelectItem>
-                                    <SelectItem value="Playing">Playing</SelectItem>
-                                    <SelectItem value="Completed">Completed</SelectItem>
-                                    <SelectItem value="Abandoned">Abandoned</SelectItem>
+                                    <SelectItem value="WISHLIST">Wishlist</SelectItem>
+                                    <SelectItem value="BACKLOG">Backlog</SelectItem>
+                                    <SelectItem value="PLAYING">Playing</SelectItem>
+                                    <SelectItem value="COMPLETED">Completed</SelectItem>
+                                    <SelectItem value="ABANDONED">Abandoned</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
