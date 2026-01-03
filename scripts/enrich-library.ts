@@ -48,6 +48,8 @@ interface EnrichmentOptions {
     hltb: boolean;      // TimeToBeat (from HLTB scraper)
     refresh: boolean;   // Force update for recent/upcoming games
     scanDlc: boolean;   // Force check IGDB for DLC status
+    sortScore: boolean; // Sort by OpenCritic Score (desc)
+    sortRecent: boolean;// Sort by Release Date (desc)
 }
 
 async function main() {
@@ -60,7 +62,9 @@ async function main() {
         steam: args.includes('--full') || args.includes('--reviews') || args.includes('--steam') || args.includes('--refresh-recent') || (!args.length),
         hltb: args.includes('--hltb'),
         refresh: args.includes('--refresh-recent'),
-        scanDlc: args.includes('--scan-dlc') // New Flag
+        scanDlc: args.includes('--scan-dlc'), // New Flag
+        sortScore: args.includes('--sort-score'),
+        sortRecent: args.includes('--sort-recent')
     };
 
     const isContinue = args.includes('--continue');
@@ -127,17 +131,22 @@ async function main() {
         if (conditions.length > 0) whereClause = { OR: conditions };
     }
 
+    let orderBy: any = { updatedAt: 'asc' };
+    if (options.sortScore) orderBy = { opencriticScore: 'desc' };
+    if (options.sortRecent) orderBy = { releaseDate: 'desc' };
+
     const games = await prisma.game.findMany({
         where: whereClause,
-        orderBy: { updatedAt: 'asc' }
+        orderBy: orderBy
     });
 
     console.log(`🎯 Targets identified: ${games.length} games.`);
     let processed = 0;
     let updated = 0;
 
+    let currentPause = 180000; // Start with 3 minutes
+
     for (const game of games) {
-        // Check resume
         // Check resume
         if (processed + 1 < resumeFrom) {
             processed++;
@@ -158,6 +167,8 @@ async function main() {
 
         const updateData: any = {}; // Typed specifically in your codebase usually
         let dataFound = false;
+
+        let hltbRequestMade = false;
 
         // --- A. IGDB & ART ENRICHMENT ---
         if (options.art || options.metadata || options.scanDlc) {
@@ -388,21 +399,28 @@ async function main() {
         if (options.hltb) {
             // Only fetch if missing or refresh
             if (!game.hltbMain || options.refresh) {
+                hltbRequestMade = true;
                 try {
                     const hltbResult = await searchHowLongToBeat(game.title);
                     if (hltbResult) {
                         updateData.hltbMain = hltbResult.main;
                         updateData.hltbExtra = hltbResult.extra;
                         updateData.hltbCompletionist = hltbResult.completionist;
+                        if (hltbResult.url) {
+                            updateData.hltbUrl = hltbResult.url;
+                        }
+
                         // URL is not returned by current scraper, but we could infer or update lib/hltb to return it
                         // For now we just save times
                         dataFound = true;
                         console.log(`   ⏱️ HLTB: Main ${Math.round(hltbResult.main / 60)}h | Extra ${Math.round(hltbResult.extra / 60)}h`);
+                        currentPause = 180000; // Reset backoff on success
                     }
                 } catch (e: any) {
                     if (e.message && e.message.includes('429')) {
-                        console.warn(`   🛑 Rate Limit (429) hit. Pausing for 60s...`);
-                        await new Promise(r => setTimeout(r, 60000));
+                        console.warn(`   🛑 Rate Limit (429) hit. Pausing for ${Math.round(currentPause / 1000)}s...`);
+                        await new Promise(r => setTimeout(r, currentPause));
+                        currentPause += 120000; // Add 2 minutes for next time if it fails again
                     } else {
                         console.error(`   ⚠️ Error fetching HLTB:`, e.message || e);
                     }
@@ -446,8 +464,8 @@ async function main() {
 
         // Dynamic Delay
         let delay = DELAY_MS;
-        if (options.hltb) {
-            delay = 6000 + Math.random() * 2000; // 6-8s for scraping
+        if (options.hltb && hltbRequestMade) {
+            delay = 10000 + Math.random() * 3000; // 10-13s for scraping
         }
 
         processed++;

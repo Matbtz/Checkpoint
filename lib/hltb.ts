@@ -53,7 +53,7 @@ function parseTime(text: string): number {
   return isNaN(val) ? 0 : Math.round(val * 60);
 }
 
-export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: number; extra: number; completionist: number } | null> {
+export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: number; extra: number; completionist: number; url: string | null } | null> {
   const normalizedTitle = gameTitle.toLowerCase().trim();
 
   // 1. Try the Official Library
@@ -77,7 +77,8 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
         return {
           main: Math.round(best.item.gameplayMain * 60),
           extra: Math.round(best.item.gameplayMainExtra * 60),
-          completionist: Math.round(best.item.gameplayCompletionist * 60)
+          completionist: Math.round(best.item.gameplayCompletionist * 60),
+          url: `https://howlongtobeat.com/game/${best.item.id}`
         };
       }
     }
@@ -161,7 +162,7 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
         const completionist = extractTime(/Completionist\s*([\d½\.]+\s*(?:Hours?|Mins?))/i) ||
           extractTime(/Completionist\s*([\d½\.]+)/i);
 
-        return { main, extra, completionist };
+        return { main, extra, completionist, url: gameUrl };
       } else {
         console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
       }
