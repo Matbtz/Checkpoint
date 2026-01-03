@@ -161,27 +161,16 @@ export async function getDailyRecommendations(): Promise<DailyRecommendation | n
   }
 
   // 2. Deterministic Rotation
-  const topGenres = preferences.genres.slice(0, 5); // Take top 5
+  const topGenres = preferences.genres.slice(0, 10); // Take top 10 for more variety
   if (topGenres.length === 0) return null;
 
   const dayIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
   const selectedGenreObj = topGenres[dayIndex % topGenres.length];
   const selectedGenre = selectedGenreObj.name;
 
-  // 3. Prisma Query
-  // Find 10 games containing this genre, not in user library.
-  // Must satisfy ONE of:
-  // - High OpenCritic Score (>= 80)
-  // - High IGDB Score (>= 80) as proxy for popularity if pure popularity missing
-  // - High Steam Review Count (>= 1000) proxy for user gallery/popularity
-  // - (Optional) Check users relation count if possible? Not directly in where.
-
-  // Note: "que beaucoup d'utilisateurs ont dans leur gallerie de jeux" (that many users have in their gallery)
-  // Since we cannot filter by relation count in standard Prisma `where` easily without grouping,
-  // we rely on Steam Review Count as a strong proxy for global popularity,
-  // and IGDB Score/OpenCritic as quality metrics.
-
-  const games = await prisma.game.findMany({
+  // 3. Primary Strategy: Average of OpenCritic + Steam Review Percent
+  // We fetch a pool of candidates (top 50 by OpenCritic) to sort in memory
+  let games = await prisma.game.findMany({
     where: {
       genres: {
         contains: selectedGenre,
@@ -191,20 +180,60 @@ export async function getDailyRecommendations(): Promise<DailyRecommendation | n
           userId: userId,
         },
       },
-      OR: [
-        { opencriticScore: { gte: 80 } },
-        { igdbScore: { gte: 80 } },
-        { steamReviewCount: { gte: 1000 } }
-      ]
+      opencriticScore: { not: null },
+      steamReviewPercent: { not: null },
     },
     orderBy: {
       opencriticScore: 'desc',
     },
+    take: 50,
+  });
+
+  if (games.length > 0) {
+    // Sort by average score
+    games.sort((a, b) => {
+      const scoreA = ((a.opencriticScore ?? 0) + (a.steamReviewPercent ?? 0)) / 2;
+      const scoreB = ((b.opencriticScore ?? 0) + (b.steamReviewPercent ?? 0)) / 2;
+      return scoreB - scoreA;
+    });
+
+    // Return top 10
+    return {
+      games: games.slice(0, 10),
+      reason: `Recommandé pour vous (Genre : ${selectedGenre})`,
+    };
+  }
+
+  // 4. Fallback Strategy: IGDB Score
+  // Exclude games with "Mixed" or worse Steam reviews if Steam data is present (Steam Review Percent < 70)
+  games = await prisma.game.findMany({
+    where: {
+      genres: {
+        contains: selectedGenre,
+      },
+      users: {
+        none: {
+          userId: userId,
+        },
+      },
+      igdbScore: { not: null },
+      OR: [
+        { steamReviewPercent: { gte: 70 } },
+        { steamReviewPercent: null }
+      ]
+    },
+    orderBy: {
+      igdbScore: 'desc',
+    },
     take: 10,
   });
 
-  return {
-    games,
-    reason: `Parce que vous aimez le genre ${selectedGenre}`,
-  };
+  if (games.length > 0) {
+    return {
+      games,
+      reason: `Recommandé pour vous (Genre : ${selectedGenre})`,
+    };
+  }
+
+  return null;
 }

@@ -122,10 +122,41 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
     const query = normalize(title);
 
     // Helper for fuzzy matching
-    // Using simple substring strategy + new Levenshtein strictness
+    // Using strict rules for Steam matching to avoid DLC/Bundles
+    const isSteamMatch = (candidateTitle: string, candidateYear?: number | null) => {
+        const nCandidate = normalize(candidateTitle);
+
+        // 1. Block forbidden keywords if query doesn't have them
+        const forbidden = ['soundtrack', 'dlc', 'pack', 'bundle', 'bonus', 'season pass'];
+        const hasForbidden = forbidden.some(word => nCandidate.includes(word) && !query.includes(word));
+        if (hasForbidden) return false;
+
+        // 2. Strict Year Match (Required if both present)
+        if (releaseYear && candidateYear) {
+            if (Math.abs(releaseYear - candidateYear) > 1) return false;
+        }
+
+        // 3. Exact Match Priority
+        if (nCandidate === query) return true;
+
+        // 4. Strict Similarity
+        const sim = stringSimilarity(nCandidate, query);
+        // Require high similarity OR query is contained in title (but check length diff)
+        // If "Grand Theft Auto V" is query, "Grand Theft Auto V - Starter Pack" contains it but length diff is huge.
+
+        // If substring match, ensure length difference isn't massive (e.g. > 50% longer)
+        if (nCandidate.includes(query) || query.includes(nCandidate)) {
+            const lengthDiff = Math.abs(nCandidate.length - query.length);
+            if (lengthDiff > query.length * 0.5) return false; // Too much junk added
+            return true;
+        }
+
+        return sim >= 0.9; // Very strict Levenshtein
+    };
+
+    // Generic match for other providers (less strict as they usually return games not DLCs first)
     const isMatch = (candidateTitle: string, candidateYear?: number | null) => {
         const sim = stringSimilarity(normalize(candidateTitle), query);
-        // High threshold (0.85) for safety, or substring match
         const titleMatch = sim >= 0.85 || normalize(candidateTitle).includes(query) || query.includes(normalize(candidateTitle));
         const yearMatch = releaseYear && candidateYear ? Math.abs(releaseYear - candidateYear) <= 1 : true;
         return titleMatch && yearMatch;
@@ -135,9 +166,27 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
     if (!excludedSources.includes('steam')) {
         try {
             const steamResults = await searchSteamStore(title);
-            const steamMatch = steamResults.find(g => isMatch(g.name, g.releaseYear));
 
-            if (steamMatch) {
+            // Filter and Sort Steam Results
+            // Sort by:
+            // 1. Exact match
+            // 2. Shortest length (closer to query usually means main game)
+            const matches = steamResults.filter(g => isSteamMatch(g.name, g.releaseYear));
+
+            matches.sort((a, b) => {
+                const nA = normalize(a.name);
+                const nB = normalize(b.name);
+                const exactA = nA === query;
+                const exactB = nB === query;
+
+                if (exactA && !exactB) return -1;
+                if (!exactA && exactB) return 1;
+
+                return nA.length - nB.length; // Prefer shorter titles
+            });
+
+            if (matches.length > 0) {
+                const steamMatch = matches[0];
                 return {
                     cover: steamMatch.library_cover,
                     background: steamMatch.library_hero,
