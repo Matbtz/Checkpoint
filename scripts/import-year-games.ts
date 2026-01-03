@@ -132,6 +132,11 @@ async function main() {
                         hltbMain: parseIntSafe(getCol('hltbMain')),
                         hltbExtra: parseIntSafe(getCol('hltbExtra')),
                         hltbCompletionist: parseIntSafe(getCol('hltbCompletionist')),
+                        storyline: getCol('storyline') || null,
+                        status: parseIntSafe(getCol('status')),
+                        gameType: parseIntSafe(getCol('gameType')),
+                        parentId: getCol('parentId') || null,
+                        relatedGames: getCol('relatedGames') ? JSON.parse(getCol('relatedGames')) : null,
                     };
 
                     // Check if game exists

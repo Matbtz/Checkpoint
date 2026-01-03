@@ -45,24 +45,113 @@ interface EnrichmentOptions {
     art: boolean;       // Covers (from Media)
     metadata: boolean;  // Desc, Genres, IGDB ID (from Media)
     steam: boolean;     // Steam ID, Reviews, URL (from Steam)
+    opencritic: boolean; // OpenCritic Score (from OpenCritic)
     hltb: boolean;      // TimeToBeat (from HLTB scraper)
     refresh: boolean;   // Force update for recent/upcoming games
     scanDlc: boolean;   // Force check IGDB for DLC status
+    csv: boolean;       // Export to CSV instead of DB update
+    input?: string;     // Read from CSV input
     sortScore: boolean; // Sort by OpenCritic Score (desc)
     sortRecent: boolean;// Sort by Release Date (desc)
 }
 
+function parseCsvLine(line: string, delimiter: string): string[] {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === delimiter && !inQuotes) {
+            values.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    values.push(current);
+    return values;
+}
+
+function readCsv(filePath: string): any[] {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return [];
+
+    // Detect delimiter from header
+    const headerLine = lines[0];
+    const delimiter = headerLine.includes('|') ? '|' : ',';
+
+    const headers = parseCsvLine(headerLine, delimiter).map(h => h.trim());
+
+    const data: any[] = [];
+    for (let i = 1; i < lines.length; i++) {
+        // Handle multiline quotes? Rough handling: assume one line per record for now as per our writers
+        // If robust needed, we'd need state machine across lines. 
+        // Given 'fetch-year-games' replaces newlines, we assume safe.
+        const values = parseCsvLine(lines[i], delimiter);
+        const row: any = {};
+        headers.forEach((h, idx) => {
+            let val: any = values[idx] || null;
+            if (val === '') val = null;
+
+            // Auto-parse JSON columns
+            if (val && (h === 'platforms' || h === 'genres' || h === 'screenshots' || h === 'videos' || h === 'relatedGames' || h === 'igdbTime')) {
+                try {
+                    if (val.startsWith('[') || val.startsWith('{')) val = JSON.parse(val);
+                } catch (e) { }
+            }
+            // Parse Dates
+            if (val && (h === 'releaseDate' || h === 'updatedAt')) {
+                const d = new Date(val);
+                if (!isNaN(d.getTime())) val = d;
+            }
+            // Parse Numbers
+            if (val && (h === 'opencriticScore' || h === 'igdbScore' || h === 'steamReviewCount' || h === 'hltbMain')) {
+                if (!isNaN(Number(val))) val = Number(val);
+            }
+            // Booleans
+            if (val && (h === 'isDlc' || h === 'dataFetched' || h === 'dataMissing')) {
+                val = val === 'true' || val === true;
+            }
+
+            row[h] = val;
+        });
+
+        // Ensure minimal Game fields ID/Title
+        if (row.id && row.title) {
+            data.push(row);
+        }
+    }
+    return data;
+}
+
 async function main() {
     const args = process.argv.slice(2);
+
+    // Parse Input
+    const inputArg = args.find(a => a.startsWith('--input='));
+    const inputPath = inputArg ? inputArg.split('=')[1] : undefined;
 
     // Parse Arguments
     const options: EnrichmentOptions = {
         art: args.includes('--full') || args.includes('--quick') || args.includes('--art') || args.includes('--refresh-recent') || (!args.length),
         metadata: args.includes('--full') || args.includes('--metadata') || args.includes('--refresh-recent') || (!args.length),
         steam: args.includes('--full') || args.includes('--reviews') || args.includes('--steam') || args.includes('--refresh-recent') || (!args.length),
+        opencritic: args.includes('--full') || args.includes('--opencritic') || args.includes('--refresh-recent'),
         hltb: args.includes('--hltb'),
+        csv: args.includes('--csv') || !!inputPath, // Force CSV export if input is CSV
+        input: inputPath,
         refresh: args.includes('--refresh-recent'),
-        scanDlc: args.includes('--scan-dlc'), // New Flag
+        scanDlc: args.includes('--scan-dlc'),
         sortScore: args.includes('--sort-score'),
         sortRecent: args.includes('--sort-recent')
     };
@@ -99,46 +188,105 @@ async function main() {
     if (isContinue) console.log(`⏩ Skipping ${processedIds.length} games from state file.`);
     if (resumeFrom > 1) console.log(`⏩ Resuming from index: ${resumeFrom}`);
 
-    // 1. Select Games
-    let whereClause: any = {};
+    // --- 1. Select Games & Determine Headers ---
+    let games: any[] = [];
+    let outputHeaders: string[] = [
+        "id", "title", "coverImage", "backgroundImage", "releaseDate", "description",
+        "screenshots", "videos", "steamUrl", "opencriticUrl", "igdbUrl", "hltbUrl",
+        "opencriticScore", "igdbScore", "steamAppId", "steamReviewScore", "steamReviewCount",
+        "steamReviewPercent", "isDlc", "igdbId", "studio", "genres", "platforms",
+        "igdbTime", "dataMissing", "dataFetched", "hltbMain", "hltbExtra", "hltbCompletionist",
+        "storyline", "status", "gameType", "parentId", "relatedGames"
+    ];
 
-    if (options.scanDlc) {
-        // Scan DLC: Check all games that have an IGDB ID (so we can check category)
-        // We could limit to those without parentId, but maybe we want to re-verify everything?
-        // Let's target ones with IGDB ID to be efficient.
-        whereClause = {
-            igdbId: { not: null },
-            // parentId: null // Optional: Only check if not already linked? User said "check all".
+    // --- CSV SETUP ---
+    let csvStream: fs.WriteStream | null = null;
+    if (options.csv) {
+        const csvPath = path.join(process.cwd(), 'scripts', 'csv', 'enrich_results.csv');
+        // Ensure dir
+        if (!fs.existsSync(path.dirname(csvPath))) fs.mkdirSync(path.dirname(csvPath), { recursive: true });
+
+        csvStream = fs.createWriteStream(csvPath);
+
+        const escapeCsv = (field: any): string => {
+            if (field === null || field === undefined) return '';
+            let str = String(field);
+            str = str.replace(/[\r\n]+/g, ' ');
+            str = str.replace(/"/g, '""');
+            if (str.includes('|') || str.includes('"')) return `"${str}"`;
+            return str;
         };
-        console.log("🔍 DLC Scan Mode: Checking games with IGDB ID for DLC status...");
-    } else if (options.refresh) {
-        // ... previous refresh logic ...
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-        whereClause = { releaseDate: { gte: threeMonthsAgo } };
-        console.log(`🔄 Refresh Mode: Targeting games released after ${threeMonthsAgo.toISOString().split('T')[0]}`);
-    } else {
-        // ... previous default logic ...
-        const conditions = [];
-        if (options.art) conditions.push({ coverImage: null }, { backgroundImage: null });
-        if (options.metadata) conditions.push({ description: null }, { description: "" }, { igdbId: null });
-        if (options.steam) conditions.push({ steamAppId: null }, { steamReviewScore: null });
-        if (options.hltb) {
-            const oneYearAgo = new Date();
-            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-            conditions.push({ hltbMain: null }, { releaseDate: { gte: oneYearAgo } });
-        }
-        if (conditions.length > 0) whereClause = { OR: conditions };
+
+        csvStream.write(outputHeaders.map(h => escapeCsv(h)).join('|') + '\n');
+        console.log(`📝 CSV Export enabled: ${csvPath}`);
     }
 
-    let orderBy: any = { updatedAt: 'asc' };
-    if (options.sortScore) orderBy = { opencriticScore: 'desc' };
-    if (options.sortRecent) orderBy = { releaseDate: 'desc' };
+    if (options.input) {
+        // Read from CSV
+        const fullPath = path.resolve(process.cwd(), options.input);
+        if (!fs.existsSync(fullPath)) {
+            console.error(`❌ Input file not found: ${fullPath}`);
+            return;
+        }
+        console.log(`📂 Reading input CSV: ${fullPath}`);
+        games = readCsv(fullPath);
+        // Apply Filters roughly? Or process all?
+        // EnrichedLibrary usually processes all unless resume/continue skipping
+        // We can apply whereClause filters in memory if needed, but usually we want to process the file provided.
+        // Let's filter slightly based on mode to save time if needed?
+        // No, let's process all in the file for now.
+    } else {
+        // DB Fetch
+        // 1. Select Games
+        let whereClause: any = {};
 
-    const games = await prisma.game.findMany({
-        where: whereClause,
-        orderBy: orderBy
-    });
+        if (options.scanDlc) {
+            whereClause = { igdbId: { not: null } };
+            console.log("🔍 DLC Scan Mode: Checking games with IGDB ID for DLC status...");
+        } else if (options.refresh) {
+            const threeMonthsAgo = new Date();
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+            whereClause = { releaseDate: { gte: threeMonthsAgo } };
+            console.log(`🔄 Refresh Mode: Targeting games released after ${threeMonthsAgo.toISOString().split('T')[0]}`);
+        } else {
+            const conditions = [];
+            if (options.art) conditions.push({ coverImage: null }, { backgroundImage: null });
+            if (options.metadata) conditions.push({ description: null }, { description: "" }, { igdbId: null });
+            if (options.steam) conditions.push({ steamAppId: null }, { steamReviewScore: null });
+            if (options.hltb) {
+                if (options.refresh) {
+                    const oneYearAgo = new Date();
+                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                    conditions.push({ hltbMain: null }, { releaseDate: { gte: oneYearAgo } });
+                } else {
+                    conditions.push({ hltbMain: null });
+                }
+            }
+            if (conditions.length > 0) whereClause = { OR: conditions };
+        }
+
+        // Global Filter: Exclude Unreleased Games
+        whereClause = {
+            AND: [
+                whereClause,
+                {
+                    OR: [
+                        { releaseDate: null },
+                        { releaseDate: { lte: new Date() } }
+                    ]
+                }
+            ]
+        };
+
+        let orderBy: any = { updatedAt: 'asc' };
+        if (options.sortScore) orderBy = { opencriticScore: { sort: 'desc', nulls: 'last' } };
+        if (options.sortRecent) orderBy = { releaseDate: { sort: 'desc', nulls: 'last' } };
+
+        games = await prisma.game.findMany({
+            where: whereClause,
+            orderBy: orderBy
+        });
+    }
 
     console.log(`🎯 Targets identified: ${games.length} games.`);
     let processed = 0;
@@ -395,10 +543,38 @@ async function main() {
             }
         }
 
+        // --- B2. OPENCRITIC ENRICHMENT ---
+        if (options.opencritic) {
+            // Only fetch if missing or refresh
+            if (game.opencriticScore === null || options.refresh) {
+                try {
+                    const { getOpenCriticScore } = require('../lib/opencritic'); // Lazy load
+                    const ocData = await getOpenCriticScore(game.title);
+
+                    if (ocData && ocData.score !== null) {
+                        updateData.opencriticScore = ocData.score;
+                        if (ocData.url && !game.opencriticUrl) {
+                            updateData.opencriticUrl = ocData.url;
+                        }
+                        dataFound = true;
+                        console.log(`   🏆 OpenCritic: ${ocData.score}`);
+                    }
+                } catch (e: any) {
+                    console.error(`   ⚠️ Error fetching OpenCritic:`, e.message || e);
+                }
+            }
+        }
+
         // --- C. HLTB ENRICHMENT ---
         if (options.hltb) {
-            // Only fetch if missing or refresh
-            if (!game.hltbMain || options.refresh) {
+            // Check if game is unreleased
+            const isUnreleased = game.releaseDate && game.releaseDate > new Date();
+
+            if (isUnreleased) {
+                // console.log(`   ⏳ Skipping unreleased: ${game.title}`);
+            }
+            // Only fetch if missing or refresh and RELEASED
+            else if (!game.hltbMain || options.refresh) {
                 hltbRequestMade = true;
                 try {
                     const hltbResult = await searchHowLongToBeat(game.title);
@@ -428,8 +604,27 @@ async function main() {
             }
         }
 
-        // --- SAVE TO DB ---
-        if (Object.keys(updateData).length > 0) {
+        // --- MERGE FOR CSV ---
+        const finalGameData: any = { ...game, ...updateData };
+
+        // --- SAVE TO DB OR CSV ---
+        if (options.csv && csvStream) {
+            const escapeCsv = (field: any): string => {
+                if (field === null || field === undefined) return '';
+                let str = String(field);
+                if (typeof field === 'object') str = JSON.stringify(field); // For JSON fields
+                str = str.replace(/[\r\n]+/g, ' ');
+                str = str.replace(/"/g, '""');
+                if (str.includes('|') || str.includes('"')) return `"${str}"`;
+                return str;
+            };
+
+            // Map finalGameData to row using OUTPUT HEADERS
+            // Note: finalGameData contains ALL merged fields (input + updates)
+            const row = outputHeaders.map(h => finalGameData[h]);
+            csvStream.write(row.map(r => escapeCsv(r)).join('|') + '\n');
+            // console.log(`   📝 Written to CSV.`);
+        } else if (Object.keys(updateData).length > 0) {
             await prisma.game.update({
                 where: { id: game.id },
                 data: {

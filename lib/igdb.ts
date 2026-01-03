@@ -421,14 +421,15 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
     const body = `
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
+                screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
                 category, game_type, status, storyline,
                 parent_game.name, parent_game.id,
                 dlcs.name, dlcs.id, 
                 expansions.name, expansions.id, 
                 expanded_games.name, expanded_games.id,
                 remakes.name, remakes.id, 
-                remasters.name, remasters.id;
+                remasters.name, remasters.id,
+                release_dates.platform.name, release_dates.date, release_dates.region;
         where id = ${gameId};
     `;
 

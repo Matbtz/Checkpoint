@@ -53,6 +53,47 @@ function parseTime(text: string): number {
   return isNaN(val) ? 0 : Math.round(val * 60);
 }
 
+function normalize(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+}
+
+function checkTitleMatch(query: string, candidate: string): boolean {
+  const q = normalize(query);
+  const c = normalize(candidate);
+
+  // 1. Exact Match
+  if (q === c) return true;
+
+  // 2. Containment (Handle "Game: Edition" vs "Game")
+  if (c.includes(q) || q.includes(c)) {
+    // Safety Check: Ensure the "extra" part looks like an edition/version, not a distinct DLC title.
+    // We calculate the difference in length.
+    const diff = Math.abs(c.length - q.length);
+
+    // If very short difference (e.g. "Game VR" vs "Game"), allow it.
+    if (diff <= 3) return true;
+
+    // Check for "Edition" keywords in the longer string
+    const longer = c.length > q.length ? c : q;
+    const keywords = [
+      'edition', 'remaster', 'complete', 'definitive', 'goty',
+      'version', 'cut', 'director', 'collection', 'bundle', 'final',
+      'reloaded', 'royal', 'redux', 'enhanced', 'port', 'switch',
+      'ps4', 'ps5', 'xbox', 'pc', 'steam'
+    ];
+
+    if (keywords.some(k => longer.includes(k))) return true;
+
+    // If perfectly contained but NO edition keyword, it's risky (e.g. "Cyberpunk 2077: Phantom Liberty").
+    // We reject unless the Levenshtein distance is still very close (typos).
+  }
+
+  // 3. Levenshtein (Typo tolerance)
+  const dist = levenshtein(q, c);
+  const threshold = Math.max(5, Math.ceil(Math.min(q.length, c.length) * 0.3));
+  return dist <= threshold;
+}
+
 export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: number; extra: number; completionist: number; url: string | null } | null> {
   const normalizedTitle = gameTitle.toLowerCase().trim();
 
@@ -71,9 +112,9 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
       })).sort((a, b) => a.dist - b.dist);
 
       const best = sorted[0];
-      const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.2));
 
-      if (best.dist <= threshold) {
+      // Use Robust Check on the best result
+      if (checkTitleMatch(normalizedTitle, best.item.name)) {
         return {
           main: Math.round(best.item.gameplayMain * 60),
           extra: Math.round(best.item.gameplayMainExtra * 60),
@@ -141,11 +182,8 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
       const pageTitle = $game('div[class*="GameHeader_profile_header__"]').first().text().trim() ||
         $game('title').text().replace('How long is', '').replace('| HowLongToBeat', '').trim();
 
-      // Verify Title Match
-      const dist = levenshtein(pageTitle.toLowerCase(), normalizedTitle);
-      const threshold = Math.max(5, Math.ceil(normalizedTitle.length * 0.3));
-
-      if (dist <= threshold) {
+      // Verify Title Match using Robust Check
+      if (checkTitleMatch(normalizedTitle, pageTitle)) {
         const pageText = $game('body').text().replace(/\s+/g, ' ');
 
         const extractTime = (labelRegex: RegExp) => {
@@ -164,7 +202,8 @@ export async function searchHowLongToBeat(gameTitle: string): Promise<{ main: nu
 
         return { main, extra, completionist, url: gameUrl };
       } else {
-        console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${dist})`);
+        const d = levenshtein(normalize(pageTitle), normalizedTitle);
+        console.warn(`[HLTB] Fallback: Page title "${pageTitle}" too far from "${gameTitle}" (dist: ${d})`);
       }
     } else {
       console.warn(`[HLTB] Fallback: No ID found via Brave for "${gameTitle}"`);

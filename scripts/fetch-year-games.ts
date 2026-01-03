@@ -69,7 +69,8 @@ async function main() {
         "screenshots", "videos", "steamUrl", "opencriticUrl", "igdbUrl", "hltbUrl",
         "opencriticScore", "igdbScore", "steamAppId", "steamReviewScore", "steamReviewCount",
         "steamReviewPercent", "isDlc", "igdbId", "studio", "genres", "platforms",
-        "igdbTime", "dataMissing", "dataFetched", "hltbMain", "hltbExtra", "hltbCompletionist"
+        "igdbTime", "dataMissing", "dataFetched", "hltbMain", "hltbExtra", "hltbCompletionist",
+        "storyline", "status", "gameType", "parentId", "relatedGames"
     ];
 
     const csvPath = path.join(OUTPUT_DIR, `games_${year}.csv`);
@@ -88,11 +89,15 @@ async function main() {
         // Fetch filtered games (popularity/rating filter)
         // Filter: Ratings >= 5 OR Hypes >= 2
         // This removes ~95% of junk/shovelware while keeping obscure but rated games and hyped upcoming titles.
+
+        // UPGRADE: Added storyline, status, category, parent_game, release_dates
         const query = `
-            fields name, slug, url, category, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count, hypes,
+            fields name, slug, url, category, cover.image_id, first_release_date, summary, storyline, status, parent_game,
+                   aggregated_rating, total_rating, total_rating_count, hypes,
                    involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                    screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
-                   websites.url, websites.category, external_games.uid, external_games.category;
+                   websites.url, websites.category, external_games.uid, external_games.category,
+                   release_dates.platform.name, release_dates.date, release_dates.region;
             where first_release_date >= ${startDate} & first_release_date < ${endDate} & (total_rating_count >= 5 | hypes >= 2);
             limit ${BATCH_SIZE};
             offset ${offset};
@@ -101,10 +106,14 @@ async function main() {
 
         const games = await fetchIgdb<IgdbGame & {
             category?: number,
+            status?: number,
+            storyline?: string,
+            parent_game?: number,
             websites?: { category: number, url: string }[],
             external_games?: { category: number, uid: string }[],
             total_rating_count?: number,
-            hypes?: number
+            hypes?: number,
+            release_dates?: { platform?: { name: string }, date?: number, region?: number }[]
         }>('games', query);
 
         if (games.length === 0) {
@@ -216,9 +225,40 @@ async function main() {
             // Studio
             const studio = game.involved_companies?.find(c => c.developer)?.company.name || game.involved_companies?.[0]?.company.name || '';
 
-            // Genres & Platforms
+            // Genres
             const genres = game.genres ? JSON.stringify(game.genres.map(g => g.name)) : '[]';
-            const platforms = game.platforms ? JSON.stringify(game.platforms.map(p => ({ name: p.name }))) : '[]';
+
+            // --- PLATFORMS with DATES ---
+            const platformMap = new Map<string, string | null>();
+
+            // 1. Populate from Release Dates (Best data)
+            game.release_dates?.forEach(rd => {
+                if (rd.platform && rd.date) {
+                    const d = new Date(rd.date * 1000).toISOString();
+                    // Keep earliest date for platform if multiple? Or specific region?
+                    // Typically we want earliest global date, or regional?
+                    // Let's just store the first one we find or overwrite, usually they are close.
+                    // Ideally we'd filter for 'Worldwide' or 'North America' region but simpler is ok.
+                    if (!platformMap.has(rd.platform.name)) {
+                        platformMap.set(rd.platform.name, d);
+                    } else {
+                        // Optimization: Keep EARLIEST date
+                        const existing = platformMap.get(rd.platform.name);
+                        if (existing && d < existing) platformMap.set(rd.platform.name, d);
+                    }
+                }
+            });
+
+            // 2. Add remaining platforms (without dates)
+            game.platforms?.forEach(p => {
+                if (!platformMap.has(p.name)) {
+                    platformMap.set(p.name, null);
+                }
+            });
+
+            // 3. Serialize
+            const platforms = JSON.stringify(Array.from(platformMap.entries()).map(([name, date]) => ({ name, releaseDate: date })));
+
 
             // Playtime
             const ttb = timeToBeatMap[game.id];
@@ -236,12 +276,24 @@ async function main() {
             const cat = game.category ?? 0;
             const isDlc = (cat === 1 || cat === 2 || cat === 4) ? 'true' : 'false';
 
+            // New Mapped Fields
+            const storyline = game.storyline || '';
+            const status = game.status !== undefined ? game.status.toString() : '';
+            const gameType = game.category !== undefined ? game.category.toString() : '';
+
+            // Parent ID: Store as just the number (or igdb-{id} format?)
+            // Schema expects String. If we want to link Relations later, we should probably stick to `igdb-{id}` format if that's how we seed.
+            // But CSV usually stores raw data. Let's store raw IGDB ID, script importing CSV handles relation connection.
+            const parentId = game.parent_game ? game.parent_game.toString() : '';
+            const relatedGames = ''; // We didn't fetch full related games, keeping empty for now to save query cost
+
             const row = [
                 id, title, coverImage, backgroundImage, releaseDate, description,
                 screenshots, videos, steamUrl, opencriticUrl, igdbUrl, hltbUrl,
                 opencriticScore, igdbScore, steamAppId, '', '', '', isDlc,
                 game.id.toString(), studio, genres, platforms, igdbTime,
-                dataMissing, dataFetched, hltbMain, hltbExtra, hltbCompletionist
+                dataMissing, dataFetched, hltbMain, hltbExtra, hltbCompletionist,
+                storyline, status, gameType, parentId, relatedGames
             ];
 
             writeStream.write(row.map(r => escapeCsv(r)).join('|') + '\n');
