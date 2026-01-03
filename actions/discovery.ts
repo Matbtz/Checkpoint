@@ -10,7 +10,7 @@ import { getDiscoveryGamesIgdb, EnrichedIgdbGame } from '@/lib/igdb';
  * Revalidates every 12 hours.
  */
 export const getCachedDiscoveryGames = unstable_cache(
-    async (type: 'UPCOMING' | 'POPULAR' | 'RECENT' | 'TOP_RATED' | 'HYPED') => {
+    async (type: 'UPCOMING' | 'POPULAR' | 'RECENT' | 'TOP_RATED' | 'HYPED' | 'RECENTLY_REVIEWED') => {
         console.log(`[Discovery] Fetching fresh data for ${type} from Local DB...`);
 
         const now = new Date();
@@ -96,6 +96,26 @@ export const getCachedDiscoveryGames = unstable_cache(
                         const igdbGames = await getDiscoveryGamesIgdb('POPULAR', 10);
                         return igdbGames.map(mapIgdbToPrismaGame);
                     }
+                    return localGames;
+
+                case 'RECENTLY_REVIEWED':
+                    // High scoring games (>80) ordered by release date (newest first)
+                    localGames = await prisma.game.findMany({
+                        where: {
+                            opencriticScore: {
+                                gte: 80
+                            },
+                            releaseDate: {
+                                lte: now
+                            }
+                        },
+                        orderBy: {
+                            releaseDate: 'desc'
+                        },
+                        take: 20
+                    });
+
+                    // No fallback for this specific filtered view as it depends on scores
                     return localGames;
 
                 case 'POPULAR':

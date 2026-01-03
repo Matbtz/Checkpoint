@@ -132,24 +132,15 @@ export async function getUserProfileData() {
 
     // Format duration
     const recentMinutes = entry.playtime2weeks ?? 0;
-    const totalMinutes = entry.playtimeManual ?? entry.playtimeSteam;
+    // const totalMinutes = entry.playtimeManual ?? entry.playtimeSteam;
 
     let duration = "";
 
-    if (recentMinutes > 0) {
-      // Show recent steam activity
-      if (recentMinutes < 60) {
-        duration = `${recentMinutes}m (2 weeks)`;
-      } else {
-        duration = `${Math.round(recentMinutes / 60)}h (2 weeks)`;
-      }
+    // Always show recent playtime (Last 2 weeks)
+    if (recentMinutes < 60) {
+      duration = `Recent playtime: ${recentMinutes}m`;
     } else {
-      // Fallback to total
-      if (totalMinutes < 60) {
-        duration = `Total: ${totalMinutes}m`;
-      } else {
-        duration = `Total: ${Math.round(totalMinutes / 60)}h`;
-      }
+      duration = `Recent playtime: ${Math.round(recentMinutes / 60)}h`;
     }
 
     return {

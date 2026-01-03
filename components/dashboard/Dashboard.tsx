@@ -43,14 +43,14 @@ interface DashboardProps {
 }
 
 type SortOption = 'dateAdded' | 'progress' | 'releaseDate';
-type StatusFilter = 'All' | 'Playing' | 'Backlog' | 'Completed' | 'Wishlist' | 'Abandoned';
+type StatusFilter = 'All' | 'PLAYING' | 'BACKLOG' | 'COMPLETED' | 'WISHLIST' | 'ABANDONED';
 
 const STATUS_FILTERS: { id: StatusFilter; label: string }[] = [
-    { id: 'Wishlist', label: 'Wishlist' },
-    { id: 'Backlog', label: 'Backlog' },
-    { id: 'Playing', label: 'Playing' },
-    { id: 'Completed', label: 'Completed' },
-    { id: 'Abandoned', label: 'Abandoned' },
+    { id: 'WISHLIST', label: 'Wishlist' },
+    { id: 'BACKLOG', label: 'Backlog' },
+    { id: 'PLAYING', label: 'Playing' },
+    { id: 'COMPLETED', label: 'Completed' },
+    { id: 'ABANDONED', label: 'Abandoned' },
     { id: 'All', label: 'All Games' },
 ];
 
@@ -61,7 +61,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
         setLibrary(initialLibrary);
     }, [initialLibrary]);
 
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('Playing');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('PLAYING');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<SortOption>('dateAdded');
 
@@ -77,7 +77,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
 
     // Bulk Edit States
     const [isBulkStatusOpen, setIsBulkStatusOpen] = useState(false);
-    const [targetStatus, setTargetStatus] = useState<string>('Backlog');
+    const [targetStatus, setTargetStatus] = useState<string>('BACKLOG');
     const [isActionsOpen, setIsActionsOpen] = useState(false);
 
     const toggleEditMode = () => {
@@ -150,7 +150,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
     // Filter Logic
     const filteredLibrary = library.filter(item => {
         // Status
-        if (statusFilter !== 'All' && item.status !== statusFilter) return false;
+        if (statusFilter !== 'All' && item.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
 
         // Search
         if (searchQuery) {
@@ -367,11 +367,11 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Backlog">Backlog</SelectItem>
-                                        <SelectItem value="Playing">Playing</SelectItem>
-                                        <SelectItem value="Completed">Completed</SelectItem>
-                                        <SelectItem value="Abandoned">Abandoned</SelectItem>
-                                        <SelectItem value="Wishlist">Wishlist</SelectItem>
+                                        <SelectItem value="BACKLOG">Backlog</SelectItem>
+                                        <SelectItem value="PLAYING">Playing</SelectItem>
+                                        <SelectItem value="COMPLETED">Completed</SelectItem>
+                                        <SelectItem value="ABANDONED">Abandoned</SelectItem>
+                                        <SelectItem value="WISHLIST">Wishlist</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
