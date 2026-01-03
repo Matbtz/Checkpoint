@@ -8,6 +8,7 @@ import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Gamepad2, Monitor, Check } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 type ExtendedGame = Game & {
     studio?: string | null;
@@ -63,6 +64,7 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
     const developer = extendedGame.studio || "Unknown Studio";
     const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
     const isCompleted = progress >= 100;
+    const status = item.status; // 'BACKLOG', 'PLAYING', 'COMPLETED', 'ABANDONED', 'WISHLIST'
 
     const defaultPrimaryColor = '#27272a'; // Zinc-800
     const defaultSecondaryColor = '#09090b'; // Zinc-950
@@ -144,6 +146,13 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
 
             {/* Layer 2: Content Grid */}
             <div className="relative z-20 grid h-full grid-cols-[100px_1fr] gap-4 p-3.5">
+
+                 {/* Status Badge (Absolute Top Right) */}
+                 <div className="absolute top-3.5 right-3.5 z-30">
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold uppercase tracking-wider bg-black/40 backdrop-blur-md border border-white/10 text-white/90 shadow-sm hover:bg-black/60">
+                        {status}
+                    </Badge>
+                 </div>
 
                 {/* Column 1: Cover Art */}
                 <div className="relative aspect-[2/3] w-full shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10 group-hover:scale-[1.02] transition-transform duration-500">
