@@ -197,9 +197,10 @@ export async function getDailyRecommendations(): Promise<DailyRecommendation | n
       return scoreB - scoreA;
     });
 
+    // Return top 10
     return {
-      games: [games[0]],
-      reason: `Parce que vous aimez le genre ${selectedGenre}`,
+      games: games.slice(0, 10),
+      reason: `Recommandé pour vous (Genre : ${selectedGenre})`,
     };
   }
 
@@ -224,13 +225,13 @@ export async function getDailyRecommendations(): Promise<DailyRecommendation | n
     orderBy: {
       igdbScore: 'desc',
     },
-    take: 1,
+    take: 10,
   });
 
   if (games.length > 0) {
     return {
       games,
-      reason: `Parce que vous aimez le genre ${selectedGenre}`,
+      reason: `Recommandé pour vous (Genre : ${selectedGenre})`,
     };
   }
 
