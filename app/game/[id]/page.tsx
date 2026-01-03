@@ -75,7 +75,11 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
     // Parse platforms if they are stored as JSON
     let platforms: { name: string }[] = [];
     if (game.platforms && Array.isArray(game.platforms)) {
-        platforms = (game.platforms as { name: string }[]).filter(p => p.name && p.name.trim().length > 0);
+        platforms = (game.platforms as any[]).map(p => {
+            if (typeof p === 'string') return { name: p };
+            if (typeof p === 'object' && p !== null && p.name) return p;
+            return null;
+        }).filter((p): p is { name: string } => p !== null && p.name && p.name.trim().length > 0);
     }
 
     // Parse genres if they are stored as JSON string
