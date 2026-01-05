@@ -250,6 +250,28 @@ function mapIgdbToPrismaGame(igdbGame: EnrichedIgdbGame): Game {
         gameType: igdbGame.game_type || igdbGame.category || null,
         relatedGames: null, // Since we don't have this in EnrichedIgdbGame in discovery usually, or we can map it if we did.
         imageStatus: 'OK',
-        parentId: null
+        parentId: null,
+
+        // Missing fields added to satisfy Prisma Game type
+        predictedMain: null,
+        predictedExtra: null,
+        predictedCompletionist: null,
+
+        usersMain: null,
+        usersMainCount: null,
+        usersExtra: null,
+        usersExtraCount: null,
+        usersCompletionist: null,
+        usersCompletionistCount: null,
+
+        franchise: null,
+        hypes: igdbGame.hypes || null,
+        summary: null,
+        keywords: [],
+        themes: [],
+
+        ports: null,
+        remakes: null,
+        remasters: null
     };
 }

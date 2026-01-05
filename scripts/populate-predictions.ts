@@ -14,12 +14,19 @@ async function main() {
         process.exit(1);
     }
 
+    interface PredictionRecord {
+        id: string;
+        predicted_main: string;
+        predicted_extra: string;
+        predicted_completionist: string;
+    }
+
     console.log('Reading predictions from CSV...');
     const fileContent = fs.readFileSync(csvPath, 'utf-8');
     const records = parse(fileContent, {
         columns: true,
         skip_empty_lines: true,
-    });
+    }) as PredictionRecord[];
 
     console.log(`Found ${records.length} predictions to process.`);
 
