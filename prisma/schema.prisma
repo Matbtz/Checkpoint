@@ -131,10 +131,27 @@ model Game {
   hltbExtra         Int?
   hltbCompletionist Int?
 
+  // Predicted Data (Model)
+  predictedMain          Float? // En heures (précision décimale utile)
+  predictedExtra         Float?
+  predictedCompletionist Float?
+
   primaryColor   String?
   secondaryColor String?
 
   imageStatus    String        @default("OK") // OK, BROKEN
+
+  // Extended Metadata
+  franchise      String?
+  hypes          Int?
+  summary        String?       @db.Text // Distinct from description?
+  keywords       String[]      // Array of strings
+  themes         String[]      // Array of strings (IGDB Themes specific)
+  
+  // JSON lists for explicit tracking if not using Relations
+  ports          Json?         // [{ id, name }]
+  remakes        Json?
+  remasters      Json?
 
   updatedAt    DateTime      @updatedAt
   users        UserLibrary[]

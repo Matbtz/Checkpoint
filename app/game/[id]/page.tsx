@@ -263,6 +263,9 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                             hltbExtra={game.hltbExtra}
                             hltbCompletionist={game.hltbCompletionist}
                             userPlaytime={userLibrary?.playtimeManual || userLibrary?.playtimeSteam}
+                            predictedMain={game.predictedMain}
+                            predictedExtra={game.predictedExtra}
+                            predictedCompletionist={game.predictedCompletionist}
                         />
 
                         {/* Ratings Section */}

@@ -1,22 +1,22 @@
 
 interface OpenCriticSearchResult {
-    id: number;
-    name: string;
-    dist: number;
+  id: number;
+  name: string;
+  dist: number;
 }
 
 interface OpenCriticGameDetails {
-    id: number;
-    name: string;
-    topCriticScore: number;
-    tier: string;
-    percentRecommended: number;
-    url?: string; // API might return it, but we can also construct it
+  id: number;
+  name: string;
+  topCriticScore: number;
+  tier: string;
+  percentRecommended: number;
+  url?: string; // API might return it, but we can also construct it
 }
 
 export interface OpenCriticResult {
-    score: number | null;
-    url: string | null;
+  score: number | null;
+  url: string | null;
 }
 
 export async function getOpenCriticScore(gameTitle: string): Promise<OpenCriticResult> {
@@ -46,9 +46,7 @@ export async function getOpenCriticScore(gameTitle: string): Promise<OpenCriticR
     });
 
     if (searchResponse.status === 429) {
-        console.warn('OpenCritic API Rate Limit Exceeded (429) during search.');
-        clearTimeout(timeoutId);
-        return { score: null, url: null };
+      throw new Error('429: Rate Limit Exceeded');
     }
 
     if (!searchResponse.ok) {
@@ -71,34 +69,33 @@ export async function getOpenCriticScore(gameTitle: string): Promise<OpenCriticR
     const normalizedResult = firstResult.name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     if (!normalizedResult.includes(normalizedQuery) && !normalizedQuery.includes(normalizedResult)) {
-        console.warn(`OpenCritic Mismatch: Searched "${gameTitle}" (norm: ${normalizedQuery}), found "${firstResult.name}" (norm: ${normalizedResult}). Rejecting.`);
-        clearTimeout(timeoutId);
-        return { score: null, url: null };
+      console.warn(`OpenCritic Mismatch: Searched "${gameTitle}" (norm: ${normalizedQuery}), found "${firstResult.name}" (norm: ${normalizedResult}). Rejecting.`);
+      clearTimeout(timeoutId);
+      return { score: null, url: null };
     }
 
     // 2. Fetch game details using the ID
     const detailsUrl = `https://opencritic-api.p.rapidapi.com/game/${firstResult.id}`;
 
     const detailsResponse = await fetch(detailsUrl, {
-        method: 'GET',
-        headers: {
-            'X-RapidAPI-Key': rapidApiKey,
-            'X-RapidAPI-Host': 'opencritic-api.p.rapidapi.com'
-        },
-        cache: 'no-store',
-        signal: controller.signal
+      method: 'GET',
+      headers: {
+        'X-RapidAPI-Key': rapidApiKey,
+        'X-RapidAPI-Host': 'opencritic-api.p.rapidapi.com'
+      },
+      cache: 'no-store',
+      signal: controller.signal
     });
 
     clearTimeout(timeoutId);
 
     if (detailsResponse.status === 429) {
-         console.warn('OpenCritic API Rate Limit Exceeded (429) during details fetch.');
-         return { score: null, url: null };
+      throw new Error('429: Rate Limit Exceeded');
     }
 
     if (!detailsResponse.ok) {
-        console.error(`OpenCritic Details API error: ${detailsResponse.status} ${detailsResponse.statusText}`);
-        return { score: null, url: null };
+      console.error(`OpenCritic Details API error: ${detailsResponse.status} ${detailsResponse.statusText}`);
+      return { score: null, url: null };
     }
 
     const detailsData = await detailsResponse.json() as OpenCriticGameDetails;
@@ -107,17 +104,17 @@ export async function getOpenCriticScore(gameTitle: string): Promise<OpenCriticR
 
     let score: number | null = null;
     if (typeof detailsData.topCriticScore === 'number') {
-        score = Math.round(detailsData.topCriticScore);
+      score = Math.round(detailsData.topCriticScore);
     }
 
     // Construct URL if not provided (it's usually not in the details endpoint we are using via RapidAPI wrapper likely)
     // URL format: https://opencritic.com/game/{id}/{slug}
     let url = detailsData.url || null;
     if (!url) {
-        const slug = detailsData.name.toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
-            .replace(/(^-|-$)+/g, '');   // Trim leading/trailing hyphens
-        url = `https://opencritic.com/game/${firstResult.id}/${slug}`;
+      const slug = detailsData.name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+        .replace(/(^-|-$)+/g, '');   // Trim leading/trailing hyphens
+      url = `https://opencritic.com/game/${firstResult.id}/${slug}`;
     }
 
     return { score, url };
@@ -125,8 +122,8 @@ export async function getOpenCriticScore(gameTitle: string): Promise<OpenCriticR
   } catch (error: unknown) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === 'AbortError') {
-         console.warn(`OpenCritic API timed out for game: ${gameTitle}`);
-         return { score: null, url: null };
+      console.warn(`OpenCritic API timed out for game: ${gameTitle}`);
+      return { score: null, url: null };
     }
     console.error('Error fetching OpenCritic score:', error);
     return { score: null, url: null };

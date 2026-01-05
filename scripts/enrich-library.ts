@@ -5,6 +5,7 @@ import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { findBestGameArt } from '../lib/enrichment';
 import { searchIgdbGames, getIgdbImageUrl, getIgdbTimeToBeat, getIgdbGameDetails, IgdbGame, EnrichedIgdbGame } from '../lib/igdb';
+import { searchRawgGames, getRawgGameDetails, RawgGame } from '../lib/rawg';
 import { searchSteamStore, getSteamReviewStats } from '../lib/steam-store';
 import { searchHowLongToBeat } from '../lib/hltb';
 import { stringSimilarity } from '../lib/utils';
@@ -111,8 +112,11 @@ function readCsv(filePath: string): any[] {
             }
             // Parse Dates
             if (val && (h === 'releaseDate' || h === 'updatedAt')) {
-                const d = new Date(val);
+                // Fix: Handle truncated ISO strings by taking just YYYY-MM-DD
+                const datePart = typeof val === 'string' && val.includes('T') ? val.split('T')[0] : val;
+                const d = new Date(datePart);
                 if (!isNaN(d.getTime())) val = d;
+                else val = null;
             }
             // Parse Numbers
             if (val && (h === 'opencriticScore' || h === 'igdbScore' || h === 'steamReviewCount' || h === 'hltbMain')) {
@@ -134,12 +138,22 @@ function readCsv(filePath: string): any[] {
     return data;
 }
 
+// Helper to normalize genres (e.g. "Role-Playing Game" -> "RPG")
+function normalizeGenre(g: string): string {
+    const lower = g.toLowerCase().trim();
+    if (lower === 'role-playing game' || lower === 'role playing game' || lower === 'rpg') return 'RPG';
+    if (lower === 'sci-fi' || lower === 'science fiction') return 'Sci-Fi';
+    if (lower === 'beat \'em up' || lower === 'beat em up') return 'Beat \'em up';
+    if (lower === 'shoot \'em up' || lower === 'shoot em up' || lower === 'shmup') return 'Shoot \'em up';
+    return g; // Keep original casing if no match, or capitalize? IGDB/RAWG usually good casing.
+}
+
 async function main() {
     const args = process.argv.slice(2);
 
     // Parse Input
     const inputArg = args.find(a => a.startsWith('--input='));
-    const inputPath = inputArg ? inputArg.split('=')[1] : undefined;
+    const inputPath = inputArg ? inputArg.split('=')[1] : (args.includes('--csv') ? 'scripts/csv/deduplicated_games.csv' : undefined);
 
     // Parse Arguments
     const options: EnrichmentOptions = {
@@ -155,23 +169,57 @@ async function main() {
         sortScore: args.includes('--sort-score'),
         sortRecent: args.includes('--sort-recent')
     };
+    const useRawg = options.metadata || args.includes('--rawg');
 
     const isContinue = args.includes('--continue');
     const STATE_FILE = path.resolve(process.cwd(), 'scripts/sync-state-hltb.json');
 
     // Load State if Continuing
+    // Load State if Continuing
     let processedIds: string[] = [];
-    if (isContinue && fs.existsSync(STATE_FILE)) {
+
+    // Format helper to extract IDs from CSV
+    const loadCsvIds = (filePath: string): string[] => {
         try {
-            const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-            if (Array.isArray(state.processedIds)) {
-                processedIds = state.processedIds;
-                console.log(`⏩ CONTINUE MODE: Found ${processedIds.length} previously processed games in state file.`);
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const lines = content.split('\n');
+            // Skip header if present (assuming ID is first column)
+            // Header: id|title|...
+            const ids: string[] = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                // Split by pipe (or whatever separator logic, but usually pipe for us)
+                // We handle quotes? Simple split is risky if ID has pipe, but IDs shouldn't.
+                // Assuming ID is first and usually safe.
+                const firstCol = line.split('|')[0];
+                if (firstCol) ids.push(firstCol.replace(/"/g, '')); // Remove quotes if any
             }
-        } catch (e) {
-            console.error("⚠️ Failed to load state file, starting fresh.");
+            return ids;
+        } catch (e) { return []; }
+    };
+
+    if (isContinue) {
+        // Priority 1: Check CSV Output if in CSV mode
+        const csvOutPath = path.join(process.cwd(), 'scripts', 'csv', 'enriched_all_games.csv');
+        if (options.csv && fs.existsSync(csvOutPath)) {
+            console.log(`📂 Reading existing output CSV to resume: ${csvOutPath}`);
+            processedIds = loadCsvIds(csvOutPath);
+            console.log(`⏩ Found ${processedIds.length} already processed games.`);
         }
-    } else if (!isContinue) {
+        // Priority 2: State File (Fallback or legacy)
+        else if (fs.existsSync(STATE_FILE)) {
+            try {
+                const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+                if (Array.isArray(state.processedIds)) {
+                    processedIds = state.processedIds;
+                    console.log(`⏩ CONTINUE MODE: Found ${processedIds.length} previously processed games in state file.`);
+                }
+            } catch (e) {
+                console.error("⚠️ Failed to load state file, starting fresh.");
+            }
+        }
+    } else {
         // If not continuing, maybe clear the file? Or just overwrite on save?
         // User might want to "accumulate" runs manually, but usually new run = fresh start unless --continue
         if (fs.existsSync(STATE_FILE)) {
@@ -188,6 +236,11 @@ async function main() {
     if (isContinue) console.log(`⏩ Skipping ${processedIds.length} games from state file.`);
     if (resumeFrom > 1) console.log(`⏩ Resuming from index: ${resumeFrom}`);
 
+    // --- Circuit Breakers ---
+    let skipRawg = false;
+    let skipOpenCritic = false;
+    let skipHltb = false; // Optional, might as well add it? No user asked for Rawg/OC.
+
     // --- 1. Select Games & Determine Headers ---
     let games: any[] = [];
     let outputHeaders: string[] = [
@@ -196,17 +249,19 @@ async function main() {
         "opencriticScore", "igdbScore", "steamAppId", "steamReviewScore", "steamReviewCount",
         "steamReviewPercent", "isDlc", "igdbId", "studio", "genres", "platforms",
         "igdbTime", "dataMissing", "dataFetched", "hltbMain", "hltbExtra", "hltbCompletionist",
-        "storyline", "status", "gameType", "parentId", "relatedGames"
+        "storyline", "summary", "status", "gameType", "parentId", "relatedGames", "franchise",
+        "hypes", "keywords", "themes", "dlcs", "ports", "remakes", "remasters"
     ];
 
     // --- CSV SETUP ---
     let csvStream: fs.WriteStream | null = null;
     if (options.csv) {
-        const csvPath = path.join(process.cwd(), 'scripts', 'csv', 'enrich_results.csv');
+        const csvPath = path.join(process.cwd(), 'scripts', 'csv', 'enriched_all_games.csv');
         // Ensure dir
         if (!fs.existsSync(path.dirname(csvPath))) fs.mkdirSync(path.dirname(csvPath), { recursive: true });
 
-        csvStream = fs.createWriteStream(csvPath);
+        const flags = (isContinue && fs.existsSync(csvPath)) ? 'a' : 'w';
+        csvStream = fs.createWriteStream(csvPath, { flags });
 
         const escapeCsv = (field: any): string => {
             if (field === null || field === undefined) return '';
@@ -217,8 +272,11 @@ async function main() {
             return str;
         };
 
-        csvStream.write(outputHeaders.map(h => escapeCsv(h)).join('|') + '\n');
-        console.log(`📝 CSV Export enabled: ${csvPath}`);
+        // Write header only if NOT appending
+        if (flags === 'w') {
+            csvStream.write(outputHeaders.map(h => escapeCsv(h)).join('|') + '\n');
+        }
+        console.log(`📝 CSV Export enabled: ${csvPath} (Mode: ${flags === 'a' ? 'Append' : 'Overwrite'})`);
     }
 
     if (options.input) {
@@ -295,376 +353,521 @@ async function main() {
     let currentPause = 180000; // Start with 3 minutes
 
     for (const game of games) {
-        // Check resume
-        if (processed + 1 < resumeFrom) {
-            processed++;
-            continue;
-        }
+        try {
+            // Check resume
+            if (processed + 1 < resumeFrom) {
+                processed++;
+                continue;
+            }
 
-        // Check Continue State
-        if (isContinue && processedIds.includes(game.id)) {
-            // console.log(`   ⏩ Skipped (Already Processed): ${game.title}`);
-            processed++;
-            continue;
-        }
+            // Check Continue State
+            if (isContinue && processedIds.includes(game.id)) {
+                processed++;
+                continue;
+            }
 
-        process.stdout.write(`\n[${processed + 1}/${games.length}] ${game.title} `);
-        const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
-        if (releaseYear) process.stdout.write(`(${releaseYear})`);
-        console.log("");
+            process.stdout.write(`\n[${processed + 1}/${games.length}] ${game.title} `);
+            const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
+            if (releaseYear) process.stdout.write(`(${releaseYear})`);
+            console.log("");
 
-        const updateData: any = {}; // Typed specifically in your codebase usually
-        let dataFound = false;
+            const updateData: any = {};
+            const updatesLog: string[] = []; // Track what changed
+            let dataFound = false;
 
-        let hltbRequestMade = false;
+            let hltbRequestMade = false;
+            let rawgRequestMade = false;
 
-        // --- A. IGDB & ART ENRICHMENT ---
-        if (options.art || options.metadata || options.scanDlc) {
-            try {
-                // ... art finding logic ...
-                const art = !options.scanDlc ? await findBestGameArt(game.title, releaseYear) : null;
-                // Skip art search in DLC scan mode to be faster? Or keep it?
-                // User said "enrich-library", implying standard behavior.
-                // But for DLC scan we mainly want IGDB Data. 
-                // Let's keep art logic if flags are on, but if strictly --scan-dlc we might skip if we only want DLC check.
-                // Actually, let's just make art optional in the variable assignment above.
+            // --- A. IGDB & ART ENRICHMENT ---
+            if (options.art || options.metadata || options.scanDlc) {
+                try {
+                    const art = !options.scanDlc ? await findBestGameArt(game.title, releaseYear) : null;
 
-                if (art) {
-                    // ... apply art ...
-                    if (options.art) {
-                        if (!game.coverImage || options.refresh) {
-                            if (art.cover) { updateData.coverImage = art.cover; dataFound = true; }
-                        }
-                        if (!game.backgroundImage || options.refresh) {
-                            if (art.background) { updateData.backgroundImage = art.background; dataFound = true; }
+                    if (art) {
+                        if (options.art) {
+                            if (!game.coverImage || options.refresh) {
+                                if (art.cover) { updateData.coverImage = art.cover; dataFound = true; updatesLog.push("Cover Art"); }
+                            }
+                            if (!game.backgroundImage || options.refresh) {
+                                if (art.background) { updateData.backgroundImage = art.background; dataFound = true; updatesLog.push("Background"); }
+                            }
                         }
                     }
-                }
 
-                // 2. Resolve IGDB Data
-                let igdbData: EnrichedIgdbGame | IgdbGame | null = null;
+                    // 2. Resolve IGDB Data
+                    let igdbData: EnrichedIgdbGame | IgdbGame | null = null;
 
-                // FORCE FETCH BY ID for DLC Scan or if we have an ID and need refresh
-                if ((options.scanDlc || options.refresh) && game.igdbId) {
-                    const { getIgdbGameDetails } = require('../lib/igdb'); // Lazy import or ensure it's imported
-                    igdbData = await getIgdbGameDetails(parseInt(game.igdbId));
-                    if (options.scanDlc && igdbData) {
-                        const cat = igdbData.game_type ?? igdbData.category ?? 0;
-                        const catName = cat === 0 ? 'Main' : (cat === 1 ? 'DLC' : (cat === 2 ? 'Expansion' : cat));
-                        console.log(`   🔎 IGDB Check: ${catName} | Parent: ${igdbData.parent_game?.name || 'None'}`);
-                    }
-                }
-                // ... existing fallback to art match ...
-                else if (art?.source === 'igdb' && art.originalData) {
-                    igdbData = art.originalData as EnrichedIgdbGame;
-                }
-                // ... existing search by title ...
-                else if (options.metadata && !game.igdbId) {
-                    // ... search logic ...
-                    const igdbResults = await searchIgdbGames(game.title, 1);
-                    if (igdbResults.length > 0) {
-                        const candidate = igdbResults[0];
-                        const cYear = candidate.first_release_date ? new Date(candidate.first_release_date * 1000).getFullYear() : null;
-                        if (isMatch(game.title, candidate.name, game.releaseDate, cYear)) {
-                            igdbData = candidate;
+                    if ((options.scanDlc || options.refresh) && game.igdbId) {
+                        const { getIgdbGameDetails } = require('../lib/igdb');
+                        igdbData = await getIgdbGameDetails(parseInt(game.igdbId));
+                        if (options.scanDlc && igdbData) {
+                            const cat = igdbData.game_type ?? igdbData.category ?? 0;
+                            const catName = cat === 0 ? 'Main' : (cat === 1 ? 'DLC' : (cat === 2 ? 'Expansion' : cat));
+                            console.log(`   🔎 IGDB Check: ${catName} | Parent: ${igdbData.parent_game?.name || 'None'}`);
                         }
                     }
-                }
-                // If we already have an IGDB ID in DB, we could fetch details if doing a refresh?
-                // (Skipping for now to avoid over-fetching, unless refresh is strict)
-
-                // 3. Apply IGDB Metadata
-                if (igdbData && (options.metadata || options.scanDlc)) {
-                    if ((!game.description || options.refresh) && igdbData.summary) {
-                        updateData.description = igdbData.summary; dataFound = true;
+                    else if (art?.source === 'igdb' && art.originalData) {
+                        igdbData = art.originalData as EnrichedIgdbGame;
+                    }
+                    else if (options.metadata && !game.igdbId) {
+                        const igdbResults = await searchIgdbGames(game.title, 5);
+                        if (igdbResults.length > 0) {
+                            let candidate = null;
+                            for (const res of igdbResults) {
+                                const cYear = res.first_release_date ? new Date(res.first_release_date * 1000).getFullYear() : null;
+                                const match = isMatch(game.title, res.name, game.releaseDate, cYear);
+                                if (match) {
+                                    candidate = res;
+                                    break;
+                                }
+                            }
+                            if (candidate) {
+                                igdbData = candidate;
+                            }
+                        }
                     }
 
-                    if (!game.igdbId) {
-                        const newId = String(igdbData.id);
-                        // Check collision
-                        const exists = await prisma.game.findUnique({ where: { igdbId: newId } });
-                        if (!exists || exists.id === game.id) {
-                            updateData.igdbId = newId;
+                    // 3. Apply IGDB Metadata
+                    if (igdbData && (options.metadata || options.scanDlc)) {
+                        if ((!game.description || options.refresh) && igdbData.summary) {
+                            updateData.description = igdbData.summary; dataFound = true; updatesLog.push("Description");
+                        }
+
+                        if (!game.igdbId) {
+                            const newId = String(igdbData.id);
+                            let exists = null;
+                            if (!options.csv) exists = await prisma.game.findUnique({ where: { igdbId: newId } });
+
+                            if (!exists || exists.id === game.id) {
+                                updateData.igdbId = newId;
+                                dataFound = true;
+                                updatesLog.push(`IGDB ID (${newId})`);
+                            }
+                        }
+
+                        if ((!game.igdbScore || options.refresh) && (igdbData.total_rating || igdbData.aggregated_rating)) {
+                            updateData.igdbScore = Math.round(igdbData.total_rating || igdbData.aggregated_rating!);
                             dataFound = true;
+                            updatesLog.push(`IGDB Score (${updateData.igdbScore})`);
                         }
-                    }
 
-                    if ((!game.igdbScore || options.refresh) && (igdbData.total_rating || igdbData.aggregated_rating)) {
-                        updateData.igdbScore = Math.round(igdbData.total_rating || igdbData.aggregated_rating!);
-                        dataFound = true;
-                    }
+                        if ((!game.igdbUrl || options.refresh) && igdbData.url) {
+                            updateData.igdbUrl = igdbData.url; dataFound = true; updatesLog.push("IGDB URL");
+                        }
 
-                    if ((!game.igdbUrl || options.refresh) && igdbData.url) {
-                        updateData.igdbUrl = igdbData.url; dataFound = true;
-                    }
+                        // Release Date Update (Important for delays)
+                        if (options.refresh && igdbData.first_release_date) {
+                            const newDate = new Date(igdbData.first_release_date * 1000);
+                            // Compare just the days to avoid time drift issues
+                            if (!game.releaseDate || newDate.toISOString().split('T')[0] !== game.releaseDate.toISOString().split('T')[0]) {
+                                updateData.releaseDate = newDate;
+                                dataFound = true;
+                                updatesLog.push(`Release Date (${newDate.toISOString().split('T')[0]})`);
+                                console.log(`   📅 Release Date Adjusted: ${newDate.toISOString().split('T')[0]}`);
+                            }
+                        }
 
-                    // Release Date Update (Important for delays)
-                    if (options.refresh && igdbData.first_release_date) {
-                        const newDate = new Date(igdbData.first_release_date * 1000);
-                        // Compare just the days to avoid time drift issues
-                        if (!game.releaseDate || newDate.toISOString().split('T')[0] !== game.releaseDate.toISOString().split('T')[0]) {
-                            updateData.releaseDate = newDate;
+                        // Videos / Screens / TimeToBeat
+                        // Only update specialized fields on refresh or if empty? Let's be aggressive if we found data.
+                        if (igdbData.screenshots?.length) {
+                            updateData.screenshots = igdbData.screenshots.map(s => getIgdbImageUrl(s.image_id, '1080p'));
                             dataFound = true;
-                            console.log(`   📅 Release Date Adjusted: ${newDate.toISOString().split('T')[0]}`);
+                            updatesLog.push("Screenshots");
                         }
-                    }
-
-                    // Videos / Screens / TimeToBeat
-                    // Only update specialized fields on refresh or if empty? Let's be aggressive if we found data.
-                    if (igdbData.screenshots?.length) {
-                        updateData.screenshots = igdbData.screenshots.map(s => getIgdbImageUrl(s.image_id, '1080p'));
-                        dataFound = true;
-                    }
-                    if (igdbData.videos?.length) {
-                        updateData.videos = igdbData.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`);
-                        dataFound = true;
-                    }
-
-                    // Time To Beat (from IGDB)
-                    try {
-                        const timeData = await getIgdbTimeToBeat(igdbData.id);
-                        if (timeData) {
-                            updateData.igdbTime = {
-                                hastly: timeData.hastly,
-                                normally: timeData.normally,
-                                completely: timeData.completely
-                            };
+                        if (igdbData.videos?.length) {
+                            updateData.videos = igdbData.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`);
                             dataFound = true;
+                            updatesLog.push("Videos");
                         }
-                    } catch (e) { /* ignore */ }
 
-                    if (igdbData.storyline) {
-                        updateData.storyline = igdbData.storyline; dataFound = true;
-                    }
-                    if (igdbData.status !== undefined) {
-                        updateData.status = igdbData.status; dataFound = true;
-                    }
-                    if (igdbData.game_type !== undefined) {
-                        updateData.gameType = igdbData.game_type; dataFound = true;
-                    }
+                        // Time To Beat (from IGDB)
+                        try {
+                            const timeData = await getIgdbTimeToBeat(igdbData.id);
+                            if (timeData) {
+                                updateData.igdbTime = {
+                                    hastly: timeData.hastly,
+                                    normally: timeData.normally,
+                                    completely: timeData.completely
+                                };
+                                dataFound = true;
+                                updatesLog.push("IGDB Time");
+                            }
+                        } catch (e) { /* ignore */ }
 
-                    // Consolidated Related Games JSON
-                    const relatedGames: any = {};
-                    if (igdbData.dlcs?.length) relatedGames.dlcs = igdbData.dlcs;
-                    if (igdbData.expansions?.length) relatedGames.expansions = igdbData.expansions;
-                    if (igdbData.remakes?.length) relatedGames.remakes = igdbData.remakes;
-                    if (igdbData.remasters?.length) relatedGames.remasters = igdbData.remasters;
-                    if (igdbData.expanded_games?.length) relatedGames.expanded_games = igdbData.expanded_games; // Inverse of expansion
-
-                    if (Object.keys(relatedGames).length > 0) {
-                        updateData.relatedGames = relatedGames;
-                        dataFound = true;
-                    }
-
-                    // 4. DLC / Parent Linking (New)
-                    // Simplified Mode: TRUST `game_type` (1=DLC, 2=Expansion)
-                    // Users confirmed game_type is reliable. We ignore heuristics.
-                    const typeId = igdbData.game_type ?? igdbData.category;
-                    let isDlcCandidate = typeId === 1 || typeId === 2;
-
-                    // Safety Checks just for self-referencing integrity (prevent ID loop)
-                    if (isDlcCandidate && igdbData.parent_game) {
-                        // 1. Check for Self-Reference (ID)
-                        if (igdbData.parent_game.id === igdbData.id) {
-                            isDlcCandidate = false;
+                        if (igdbData.storyline) {
+                            updateData.storyline = igdbData.storyline; dataFound = true; updatesLog.push("Storyline");
                         }
-                    }
+                        if (igdbData.status !== undefined) {
+                            updateData.status = igdbData.status; dataFound = true; updatesLog.push(`Status (${igdbData.status})`);
+                        }
+                        if (igdbData.game_type !== undefined) {
+                            updateData.gameType = igdbData.game_type; dataFound = true; updatesLog.push(`Game Type (${igdbData.game_type})`);
+                        }
 
-                    if (isDlcCandidate) {
-                        updateData.isDlc = true;
-                        // Try to find parent if sent
-                        if (igdbData.parent_game) {
-                            const parent = await prisma.game.findFirst({
-                                where: { title: igdbData.parent_game.name },
-                                select: { id: true }
+                        // Consolidated Related Games JSON
+                        const relatedGames: any = {};
+                        if (igdbData.dlcs?.length) relatedGames.dlcs = igdbData.dlcs;
+                        if (igdbData.expansions?.length) relatedGames.expansions = igdbData.expansions;
+                        if (igdbData.remakes?.length) relatedGames.remakes = igdbData.remakes;
+                        if (igdbData.remasters?.length) relatedGames.remasters = igdbData.remasters;
+                        if (igdbData.expanded_games?.length) relatedGames.expanded_games = igdbData.expanded_games; // Inverse of expansion
+
+                        if (Object.keys(relatedGames).length > 0) {
+                            updateData.relatedGames = relatedGames;
+                            dataFound = true;
+                            updatesLog.push("Related Games");
+                        }
+
+                        // --- NEW: Extended Metadata ---
+                        if (igdbData.hypes !== undefined) { updateData.hypes = igdbData.hypes; }
+                        if (igdbData.summary) { updateData.summary = igdbData.summary; }
+                        if (igdbData.keywords?.length) { updateData.keywords = igdbData.keywords.map(k => k.name); }
+                        if (igdbData.themes?.length) { updateData.themes = igdbData.themes.map(t => t.name); }
+
+                        // Explicit Relations Columns (JSON)
+                        if (igdbData.dlcs?.length) { updateData.dlcs = igdbData.dlcs.map(d => ({ id: d.id, name: d.name })); }
+                        if (igdbData.ports?.length) { updateData.ports = igdbData.ports.map(p => ({ id: p.id, name: p.name })); }
+                        if (igdbData.remakes?.length) { updateData.remakes = igdbData.remakes.map(r => ({ id: r.id, name: r.name })); }
+                        if (igdbData.remasters?.length) { updateData.remasters = igdbData.remasters.map(r => ({ id: r.id, name: r.name })); }
+
+                        // --- NEW: Themes & Franchise ---
+                        // Merge Themes into Genres
+                        const existingGenres = (game.genres || []) as string[];
+                        const newGenres = new Set<string>(existingGenres.map(normalizeGenre)); // Normalize existing
+
+                        let genresAdded = 0;
+                        if (igdbData.genres) {
+                            igdbData.genres.forEach(g => {
+                                const norm = normalizeGenre(g.name);
+                                if (!newGenres.has(norm)) { newGenres.add(norm); genresAdded++; }
                             });
-                            if (parent) {
-                                // Double check we aren't linking to ourselves (via DB ID) just in case
-                                if (parent.id !== game.id) {
-                                    updateData.parentId = parent.id;
-                                    console.log(`   🔗 Linked to Parent: ${igdbData.parent_game.name}`);
+                        }
+                        if (igdbData.themes) {
+                            igdbData.themes.forEach(t => {
+                                const norm = normalizeGenre(t.name);
+                                if (!newGenres.has(norm)) { newGenres.add(norm); genresAdded++; }
+                            });
+                        }
+                        if (newGenres.size > existingGenres.length) {
+                            updateData.genres = Array.from(newGenres);
+                            dataFound = true;
+                            updatesLog.push(`Genres (+${genresAdded})`);
+                        }
+
+                        // Franchise / Series / Collection
+                        let franchiseName: string | null = null;
+                        if (igdbData.collection) franchiseName = igdbData.collection.name;
+                        else if (igdbData.franchises && igdbData.franchises.length > 0) franchiseName = igdbData.franchises[0].name;
+
+                        if (franchiseName) {
+                            updateData.franchise = franchiseName;
+                            dataFound = true;
+                            updatesLog.push(`Franchise: ${franchiseName}`);
+                        }
+
+                        // 4. DLC / Parent Linking (New)
+                        // Simplified Mode: TRUST `game_type` (1=DLC, 2=Expansion)
+                        // Users confirmed game_type is reliable. We ignore heuristics.
+                        const typeId = igdbData.game_type ?? igdbData.category;
+                        let isDlcCandidate = typeId === 1 || typeId === 2;
+
+                        // Safety Checks just for self-referencing integrity (prevent ID loop)
+                        if (isDlcCandidate && igdbData.parent_game) {
+                            // 1. Check for Self-Reference (ID)
+                            if (igdbData.parent_game.id === igdbData.id) {
+                                isDlcCandidate = false;
+                            }
+                        }
+
+                        if (isDlcCandidate) {
+                            updateData.isDlc = true;
+                            updatesLog.push("Marked as DLC");
+                            // Try to find parent if sent
+                            if (igdbData.parent_game) {
+                                let parent = null;
+                                if (!options.csv) {
+                                    parent = await prisma.game.findFirst({
+                                        where: { title: igdbData.parent_game.name },
+                                        select: { id: true }
+                                    });
+                                }
+                                if (parent) {
+                                    // Double check we aren't linking to ourselves (via DB ID) just in case
+                                    if (parent.id !== game.id) {
+                                        updateData.parentId = parent.id;
+                                        updatesLog.push(`Parent ID (${parent.id})`);
+                                        console.log(`   🔗 Linked to Parent: ${igdbData.parent_game.name}`);
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-            } catch (e) {
-                console.error(`   ⚠️ Error in Art/Metadata enrichment:`, e);
-            }
-        }
-
-        // --- B. STEAM ENRICHMENT ---
-        // (Combines logic from enrich-steam.ts)
-        if (options.steam) {
-            let steamId = game.steamAppId ? parseInt(game.steamAppId) : null;
-            let foundNewId = false;
-
-            // 1. Find ID if missing
-            if (!steamId) {
-                try {
-                    const results = await searchSteamStore(game.title);
-                    const match = results.find(r => isMatch(game.title, r.name, game.releaseDate, r.releaseYear));
-                    if (match) {
-                        steamId = match.id;
-                        foundNewId = true;
-                        console.log(`   🚂 Steam ID Found: ${steamId}`);
-                    }
-                } catch (e) { /* ignore */ }
-            }
-
-            // 2. Fetch Stats
-            if (steamId) {
-                try {
-                    // Only fetch specific stats if missing or refreshing
-                    if (!game.steamReviewScore || options.refresh) {
-                        const stats = await getSteamReviewStats(steamId);
-                        if (stats) {
-                            updateData.steamUrl = `https://store.steampowered.com/app/${steamId}`;
-                            updateData.steamReviewScore = stats.scoreDesc;
-                            updateData.steamReviewCount = stats.totalReviews;
-                            updateData.steamReviewPercent = stats.percentPositive;
-                            dataFound = true;
-
-                            console.log(`   🚂 Reviews: ${stats.scoreDesc} (${stats.percentPositive}%)`);
-                        }
-                    }
-
-                    if (foundNewId) {
-                        // Check collision
-                        const exists = await prisma.game.findUnique({ where: { steamAppId: String(steamId) } });
-                        if (!exists || exists.id === game.id) {
-                            updateData.steamAppId = String(steamId);
-                            dataFound = true;
-                        }
-                    }
-
-                } catch (e) { console.error(`   ⚠️ Error fetching Steam stats:`, e); }
-            }
-        }
-
-        // --- B2. OPENCRITIC ENRICHMENT ---
-        if (options.opencritic) {
-            // Only fetch if missing or refresh
-            if (game.opencriticScore === null || options.refresh) {
-                try {
-                    const { getOpenCriticScore } = require('../lib/opencritic'); // Lazy load
-                    const ocData = await getOpenCriticScore(game.title);
-
-                    if (ocData && ocData.score !== null) {
-                        updateData.opencriticScore = ocData.score;
-                        if (ocData.url && !game.opencriticUrl) {
-                            updateData.opencriticUrl = ocData.url;
-                        }
-                        dataFound = true;
-                        console.log(`   🏆 OpenCritic: ${ocData.score}`);
-                    }
-                } catch (e: any) {
-                    console.error(`   ⚠️ Error fetching OpenCritic:`, e.message || e);
+                } catch (e) {
+                    console.error(`   ⚠️ Error in Art/Metadata enrichment:`, e);
                 }
             }
-        }
 
-        // --- C. HLTB ENRICHMENT ---
-        if (options.hltb) {
-            // Check if game is unreleased
-            const isUnreleased = game.releaseDate && game.releaseDate > new Date();
-
-            if (isUnreleased) {
-                // console.log(`   ⏳ Skipping unreleased: ${game.title}`);
-            }
-            // Only fetch if missing or refresh and RELEASED
-            else if (!game.hltbMain || options.refresh) {
-                hltbRequestMade = true;
+            // --- A2. RAWG ENRICHMENT (New) ---
+            if (useRawg && !skipRawg) {
                 try {
-                    const hltbResult = await searchHowLongToBeat(game.title);
-                    if (hltbResult) {
-                        updateData.hltbMain = hltbResult.main;
-                        updateData.hltbExtra = hltbResult.extra;
-                        updateData.hltbCompletionist = hltbResult.completionist;
-                        if (hltbResult.url) {
-                            updateData.hltbUrl = hltbResult.url;
+                    // Search RAWG if we want extra genres or didn't find them
+                    const rawgResults = await searchRawgGames(game.title, 5);
+                    rawgRequestMade = true;
+
+                    if (rawgResults.length > 0) {
+                        let candidate: RawgGame | null = null;
+                        for (const res of rawgResults) {
+                            const cYear = res.released ? new Date(res.released).getFullYear() : null;
+                            const match = isMatch(game.title, res.name, game.releaseDate, cYear);
+                            if (match) {
+                                candidate = res;
+                                break;
+                            }
                         }
 
-                        // URL is not returned by current scraper, but we could infer or update lib/hltb to return it
-                        // For now we just save times
-                        dataFound = true;
-                        console.log(`   ⏱️ HLTB: Main ${Math.round(hltbResult.main / 60)}h | Extra ${Math.round(hltbResult.extra / 60)}h`);
-                        currentPause = 180000; // Reset backoff on success
+                        if (candidate) {
+                            // Merge Genres
+                            const existingGenres = new Set<string>((game.genres || []) as string[]);
+                            // Merge local updates from IGDB if any
+                            if (updateData.genres) (updateData.genres as string[]).forEach(g => existingGenres.add(g));
+
+                            // Normalize all current
+                            const normalizedGenres = new Set<string>();
+                            const safeGenres = Array.isArray(game.genres) ? game.genres : (game.genres ? [String(game.genres)] : []);
+                            safeGenres.forEach((g: any) => normalizedGenres.add(normalizeGenre(String(g))));
+
+                            // Add existingGenres (which gathered updates) too
+                            existingGenres.forEach(g => normalizedGenres.add(normalizeGenre(g)));
+
+                            let added = 0;
+                            if (candidate.genres) {
+                                candidate.genres.forEach(g => {
+                                    const norm = normalizeGenre(g.name);
+                                    if (!normalizedGenres.has(norm)) {
+                                        normalizedGenres.add(norm);
+                                        added++;
+                                    }
+                                });
+                            }
+
+                            if (added > 0) {
+                                updateData.genres = Array.from(normalizedGenres);
+                                dataFound = true;
+                                updatesLog.push(`RAWG Genres (+${added})`);
+                            }
+
+                            // Background Image Preference
+                            if (candidate.background_image) {
+                                // Always overwrite or only if better? User said "from rawg since they are better".
+                                // Let's overwrite.
+                                updateData.backgroundImage = candidate.background_image;
+                                dataFound = true;
+                                updatesLog.push("Background (RAWG)");
+                            }
+                        }
                     }
                 } catch (e: any) {
                     if (e.message && e.message.includes('429')) {
-                        console.warn(`   🛑 Rate Limit (429) hit. Pausing for ${Math.round(currentPause / 1000)}s...`);
-                        await new Promise(r => setTimeout(r, currentPause));
-                        currentPause += 120000; // Add 2 minutes for next time if it fails again
+                        console.warn(`   🛑 RAWG Rate Limit hit. Disabling RAWG for the rest of this run.`);
+                        skipRawg = true;
                     } else {
-                        console.error(`   ⚠️ Error fetching HLTB:`, e.message || e);
+                        console.error(`   ⚠️ RAWG Error:`, e.message || e);
                     }
                 }
             }
-        }
 
-        // --- MERGE FOR CSV ---
-        const finalGameData: any = { ...game, ...updateData };
+            // --- B. STEAM ENRICHMENT ---
+            // (Combines logic from enrich-steam.ts)
+            if (options.steam) {
+                let steamId = game.steamAppId ? parseInt(game.steamAppId) : null;
+                let foundNewId = false;
 
-        // --- SAVE TO DB OR CSV ---
-        if (options.csv && csvStream) {
-            const escapeCsv = (field: any): string => {
-                if (field === null || field === undefined) return '';
-                let str = String(field);
-                if (typeof field === 'object') str = JSON.stringify(field); // For JSON fields
-                str = str.replace(/[\r\n]+/g, ' ');
-                str = str.replace(/"/g, '""');
-                if (str.includes('|') || str.includes('"')) return `"${str}"`;
-                return str;
-            };
-
-            // Map finalGameData to row using OUTPUT HEADERS
-            // Note: finalGameData contains ALL merged fields (input + updates)
-            const row = outputHeaders.map(h => finalGameData[h]);
-            csvStream.write(row.map(r => escapeCsv(r)).join('|') + '\n');
-            // console.log(`   📝 Written to CSV.`);
-        } else if (Object.keys(updateData).length > 0) {
-            await prisma.game.update({
-                where: { id: game.id },
-                data: {
-                    ...updateData,
-                    dataFetched: true,
-                    updatedAt: new Date() // Always update timestamp
+                // 1. Find ID if missing
+                if (!steamId) {
+                    try {
+                        const results = await searchSteamStore(game.title);
+                        const match = results.find(r => isMatch(game.title, r.name, game.releaseDate, r.releaseYear));
+                        if (match) {
+                            steamId = match.id;
+                            foundNewId = true;
+                            updatesLog.push(`Steam ID (${steamId})`);
+                            console.log(`   🚂 Steam ID Found: ${steamId}`);
+                        }
+                    } catch (e) { /* ignore */ }
                 }
-            });
-            const changes = Object.keys(updateData).map(k => {
-                let val = updateData[k];
-                if (k === 'relatedGames') val = `[${Object.keys(val).join(', ')}]`;
-                if (k === 'gameType' || k === 'isDlc') return `${k}=${val}`;
-                if (k === 'relatedGames') return `${k}=${val}`;
-                return k;
-            }).join(', ');
-            console.log(`   💾 Updated: ${changes}`);
-            updated++;
-        } else {
-            console.log("   ⏺️ No relevant updates found.");
-        }
 
-        // Update State
-        if (!processedIds.includes(game.id)) {
-            processedIds.push(game.id);
-            // Save state periodically or every time? Every time is safer for "crash proofing"
-            try {
-                fs.writeFileSync(STATE_FILE, JSON.stringify({ processedIds, lastUpdated: new Date().toISOString() }, null, 2));
-            } catch (e) {
-                // ignore write error
+                // 2. Fetch Stats
+                if (steamId) {
+                    try {
+                        // Only fetch specific stats if missing or refreshing
+                        if (!game.steamReviewScore || options.refresh) {
+                            const stats = await getSteamReviewStats(steamId);
+                            if (stats) {
+                                updateData.steamUrl = `https://store.steampowered.com/app/${steamId}`;
+                                updateData.steamReviewScore = stats.scoreDesc;
+                                updateData.steamReviewCount = stats.totalReviews;
+                                updateData.steamReviewPercent = stats.percentPositive;
+                                dataFound = true;
+                                updatesLog.push(`Steam Reviews (${stats.scoreDesc})`);
+                                console.log(`   🚂 Reviews: ${stats.scoreDesc} (${stats.percentPositive}%)`);
+                            }
+                        }
+
+                        if (foundNewId) {
+                            // Check collision
+                            let exists = null;
+                            if (!options.csv) exists = await prisma.game.findUnique({ where: { steamAppId: String(steamId) } });
+
+                            if (!exists || exists.id === game.id) {
+                                updateData.steamAppId = String(steamId);
+                                dataFound = true;
+                                // Log already added for new Steam ID
+                            }
+                        }
+
+                    } catch (e) { console.error(`   ⚠️ Error fetching Steam stats:`, e); }
+                }
             }
-        }
 
-        // Dynamic Delay
-        let delay = DELAY_MS;
-        if (options.hltb && hltbRequestMade) {
-            delay = 10000 + Math.random() * 3000; // 10-13s for scraping
-        }
+            // --- B2. OPENCRITIC ENRICHMENT ---
+            if (options.opencritic && !skipOpenCritic) {
+                // Only fetch if missing or refresh
+                if (game.opencriticScore === null || options.refresh) {
+                    try {
+                        const { getOpenCriticScore } = require('../lib/opencritic'); // Lazy load
+                        const ocData = await getOpenCriticScore(game.title);
 
-        processed++;
-        await new Promise(r => setTimeout(r, delay));
+                        if (ocData && ocData.score !== null) {
+                            updateData.opencriticScore = ocData.score;
+                            if (ocData.url && !game.opencriticUrl) {
+                                updateData.opencriticUrl = ocData.url;
+                                updatesLog.push("OpenCritic URL");
+                            }
+                            dataFound = true;
+                            updatesLog.push(`OpenCritic Score (${ocData.score})`);
+                            console.log(`   🏆 OpenCritic: ${ocData.score}`);
+                        }
+                    } catch (e: any) {
+                        if (e.message && e.message.includes('429')) {
+                            console.warn(`   🛑 OpenCritic Rate Limit hit. Disabling OpenCritic for rest of run.`);
+                            skipOpenCritic = true;
+                        } else {
+                            console.error(`   ⚠️ Error fetching OpenCritic:`, e.message || e);
+                        }
+                    }
+                }
+            }
+
+            // --- C. HLTB ENRICHMENT ---
+            if (options.hltb) {
+                // Check if game is unreleased
+                const isUnreleased = game.releaseDate && game.releaseDate > new Date();
+
+                if (isUnreleased) {
+                    // console.log(`   ⏳ Skipping unreleased: ${game.title}`);
+                }
+                // Only fetch if missing or refresh and RELEASED
+                else if (!game.hltbMain || options.refresh) {
+                    hltbRequestMade = true;
+                    try {
+                        const hltbResult = await searchHowLongToBeat(game.title);
+                        if (hltbResult) {
+                            updateData.hltbMain = hltbResult.main;
+                            updateData.hltbExtra = hltbResult.extra;
+                            updateData.hltbCompletionist = hltbResult.completionist;
+                            if (hltbResult.url) {
+                                updateData.hltbUrl = hltbResult.url;
+                                updatesLog.push("HLTB URL");
+                            }
+
+                            // URL is not returned by current scraper, but we could infer or update lib/hltb to return it
+                            // For now we just save times
+                            dataFound = true;
+                            updatesLog.push(`HLTB Times (Main ${Math.round(hltbResult.main / 60)}h)`);
+                            console.log(`   ⏱️ HLTB: Main ${Math.round(hltbResult.main / 60)}h | Extra ${Math.round(hltbResult.extra / 60)}h`);
+                            currentPause = 180000; // Reset backoff on success
+                        }
+                    } catch (e: any) {
+                        if (e.message && e.message.includes('429')) {
+                            console.warn(`   🛑 Rate Limit (429) hit. Pausing for ${Math.round(currentPause / 1000)}s...`);
+                            await new Promise(r => setTimeout(r, currentPause));
+                            currentPause += 120000; // Add 2 minutes for next time if it fails again
+                        } else {
+                            console.error(`   ⚠️ Error fetching HLTB:`, e.message || e);
+                        }
+                    }
+                }
+            }
+
+            // --- MERGE FOR CSV ---
+            const finalGameData: any = { ...game, ...updateData };
+
+            // --- SAVE TO DB OR CSV ---
+            if (options.csv && csvStream) {
+                const escapeCsv = (field: any): string => {
+                    if (field === null || field === undefined) return '';
+                    let str = String(field);
+                    if (typeof field === 'object') str = JSON.stringify(field); // For JSON fields
+                    str = str.replace(/[\r\n]+/g, ' ');
+                    str = str.replace(/"/g, '""');
+                    if (str.includes('|') || str.includes('"')) return `"${str}"`;
+                    return str;
+                };
+
+                // Map finalGameData to row using OUTPUT HEADERS
+                // Note: finalGameData contains ALL merged fields (input + updates)
+                const row = outputHeaders.map(h => finalGameData[h]);
+                csvStream.write(row.map(r => escapeCsv(r)).join('|') + '\n');
+
+                if (updatesLog.length > 0) {
+                    console.log(`   📝 Updated: ${updatesLog.join(', ')}`);
+                } else {
+                    console.log(`   ⏺️ No new data found.`);
+                }
+            } else if (Object.keys(updateData).length > 0) {
+                await prisma.game.update({
+                    where: { id: game.id },
+                    data: {
+                        ...updateData,
+                        dataFetched: true,
+                        updatedAt: new Date() // Always update timestamp
+                    }
+                });
+                console.log(`   💾 Updated: ${updatesLog.join(', ')}`);
+                updated++;
+            } else {
+                console.log("   ⏺️ No relevant updates found.");
+            }
+
+            // Update State
+            if (!processedIds.includes(game.id)) {
+                processedIds.push(game.id);
+                // Save state periodically or every time? Every time is safer for "crash proofing"
+                try {
+                    fs.writeFileSync(STATE_FILE, JSON.stringify({ processedIds, lastUpdated: new Date().toISOString() }, null, 2));
+                } catch (e) {
+                    // ignore write error
+                }
+            }
+
+            // Dynamic Delay
+            let delay = DELAY_MS;
+            if (options.hltb && hltbRequestMade) {
+                delay = 10000 + Math.random() * 3000; // 10-13s for scraping
+            }
+            if (useRawg && rawgRequestMade) {
+                delay = Math.max(delay, 2000); // RAWG needs ~1-2s spacing usually
+            }
+
+            processed++;
+            await new Promise(r => setTimeout(r, delay));
+
+        } catch (err) {
+            console.error(`❌ CRITICAL ERROR processing ${game.title}:`, err);
+            // Continue loop
+            processed++; // Still count as processed to avoid infinite loop on error
+        }
     }
 
     console.log(`\n🏁 Finished. Updated ${updated} of ${processed} games.`);

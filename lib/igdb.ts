@@ -107,8 +107,13 @@ export interface IgdbGame {
     dlcs?: { id: number; name: string }[];
     expansions?: { id: number; name: string }[];
     expanded_games?: { id: number; name: string }[];
+    themes?: { id: number; name: string }[];
+    collection?: { id: number; name: string };
+    franchises?: { id: number; name: string }[];
     remakes?: { id: number; name: string }[];
     remasters?: { id: number; name: string }[];
+    ports?: { id: number; name: string }[];
+    keywords?: { id: number; name: string }[];
 }
 
 export interface EnrichedIgdbGame extends IgdbGame {
@@ -361,7 +366,9 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
         ${whereClause ? whereClause + ';' : ''}
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
-               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name;
+               screenshots.image_id, artworks.image_id, videos.video_id, videos.name, 
+               genres.name, platforms.name, themes.name, collection.name, franchises.name, game_type, category,
+               keywords.name, ports.name, remakes.name, remasters.name, dlcs.name, expansions.name;
         ${sortClause}
         limit ${limit};
     `;
@@ -429,6 +436,11 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
                 expanded_games.name, expanded_games.id,
                 remakes.name, remakes.id, 
                 remasters.name, remasters.id,
+                ports.name, ports.id,
+                keywords.name, keywords.id,
+                themes.name, themes.id,
+                collection.name, collection.id,
+                franchises.name, franchises.id,
                 release_dates.platform.name, release_dates.date, release_dates.region;
         where id = ${gameId};
     `;
