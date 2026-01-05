@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Library, PieChart, Plus, User, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react"
+import { Home, Library, PieChart, Plus, User, PanelLeftClose, PanelLeftOpen, Search, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useSession } from "next-auth/react"
@@ -25,6 +25,7 @@ export function Sidebar({ className, collapsed, toggleCollapse }: SidebarProps) 
     { href: "/statistics", label: "Statistics", icon: PieChart },
     { href: "/search", label: "Search", icon: Search },
     { href: "/profile", label: "Profile", icon: User },
+    { href: "/settings", label: "Settings", icon: Settings },
   ]
 
   const unauthenticatedLinks = [

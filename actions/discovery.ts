@@ -142,7 +142,7 @@ export const getCachedDiscoveryGames = unstable_cache(
             return [];
         }
     },
-    ['discovery-games-local-v2'],
+    ['discovery-games-local-v3'],
     {
         revalidate: 3600 * 12, // 12 hours cache
         tags: ['discovery']
