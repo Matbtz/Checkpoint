@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_POSTGRES_URL")
 }
 
 model Account {
@@ -136,6 +136,14 @@ model Game {
   predictedExtra         Float?
   predictedCompletionist Float?
 
+  // Crowdsourced Data (Users)
+  usersMain               Int? // Median in minutes
+  usersMainCount          Int? // Number of submissions
+  usersExtra              Int?
+  usersExtraCount         Int?
+  usersCompletionist      Int?
+  usersCompletionistCount Int?
+
   primaryColor   String?
   secondaryColor String?
 
@@ -166,6 +174,9 @@ model UserLibrary {
   playtimeSteam          Int      @default(0) // En minutes
   playtime2weeks         Int      @default(0) // En minutes (Steam Recent)
   playtimeManual         Int? // Override
+  playtimeMain           Int? // User's self-reported Main Story time (minutes)
+  playtimeExtra          Int? // User's self-reported Main + Extra time (minutes)
+  playtimeCompletionist  Int? // User's self-reported 100% time (minutes)
   progressManual         Int? // Percentage 0-100 manual override
   targetedCompletionType String   @default("MAIN")
   lastPlayed             DateTime? // Synced from Steam rtime_last_played
