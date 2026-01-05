@@ -23,7 +23,54 @@ async function main() {
         skip_empty_lines: true,
         delimiter: '|',
         relax_column_count: true, // Handle potential inconsistent rows safely
-    });
+    }) as any[]; // Using any[] for simplicity as CSV columns can be dynamic, or properly interface it.
+
+    // Better to define interface if possible, but 'any' fixes the build error quickly given the script nature.
+    // Or we can define a Loose Record
+    interface CsvRecord {
+        id: string;
+        title: string;
+        releaseDate?: string;
+        genres?: string;
+        screenshots?: string;
+        videos?: string;
+        keywords?: string;
+        themes?: string;
+        platforms?: string;
+        remakes?: string;
+        remasters?: string;
+        ports?: string;
+        relatedGames?: string;
+        igdbTime?: string;
+        isDlc?: string;
+        dataFetched?: string;
+        dataMissing?: string;
+        coverImage?: string;
+        backgroundImage?: string;
+        description?: string;
+        steamUrl?: string;
+        opencriticUrl?: string;
+        igdbUrl?: string;
+        hltbUrl?: string;
+        opencriticScore?: string;
+        igdbScore?: string;
+        steamAppId?: string;
+        steamReviewScore?: string;
+        steamReviewCount?: string;
+        steamReviewPercent?: string;
+        igdbId?: string;
+        studio?: string;
+        storyline?: string;
+        status?: string;
+        gameType?: string;
+        hltbMain?: string;
+        hltbExtra?: string;
+        hltbCompletionist?: string;
+        franchise?: string;
+        hypes?: string;
+        parentId?: string;
+        [key: string]: any;
+    }
 
     console.log(`Found ${records.length} records. Starting Pass 1: Upsert Games...`);
 
@@ -31,7 +78,7 @@ async function main() {
     let errors = 0;
 
     // PASS 1: Create/Update Games (ignoring relations)
-    for (const row of records) {
+    for (const row of (records as CsvRecord[])) {
         try {
             if (!row.id || !row.title) {
                 console.warn('Skipping INVALID_ROW: Minimal data missing', row);
@@ -47,11 +94,11 @@ async function main() {
             }
 
             // Numbers
-            const parseIntSafe = (v: string) => (v && v !== 'null' && v !== '') ? parseInt(v, 10) : null;
-            const parseFloatSafe = (v: string) => (v && v !== 'null' && v !== '') ? parseFloat(v) : null;
+            const parseIntSafe = (v: string | undefined): number | null => (v && v !== 'null' && v !== '') ? parseInt(v, 10) : null;
+            const parseFloatSafe = (v: string | undefined): number | null => (v && v !== 'null' && v !== '') ? parseFloat(v) : null;
 
             // JSON Fields which are definitely arrays/objects in Prisma (Json or String[])
-            const parseJsonSafe = (v: string, defaultVal: any = null) => {
+            const parseJsonSafe = (v: string | undefined, defaultVal: any = null) => {
                 if (!v || v === 'null' || v === '') return defaultVal;
                 try {
                     return JSON.parse(v);
