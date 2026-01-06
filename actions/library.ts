@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { auth } from '@/lib/auth';
+import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { searchRawgGame, getRawgGameDetails } from '@/lib/rawg';
 import { extractDominantColors } from '@/lib/color-utils';

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { auth } from "@/auth";
 import Image from "next/image";
+import { SafeImage } from "@/components/ui/safe-image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { HLTBCard } from "@/components/game/HLTBCard";
@@ -114,6 +115,9 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
         ? GAME_STATUS_MAP[game.status]
         : (game.status === 0 ? "Released" : null);
 
+    // Fallback HLTB URL if specific one is missing
+    const hltbUrl = game.hltbUrl || `https://howlongtobeat.com/?q=${encodeURIComponent(game.title)}`;
+
     return (
         <div className="min-h-screen pb-20 bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100">
             {/* Hero Section */}
@@ -134,14 +138,16 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                 {/* Hero Content */}
                 <div className="relative z-10 container mx-auto px-4 h-full flex flex-col md:flex-row items-center md:items-end justify-center md:justify-start pb-12 md:pb-16 gap-8">
                     {/* Poster */}
-                    <div className="shrink-0 w-48 md:w-64 lg:w-72 aspect-[3/4] rounded-lg shadow-2xl overflow-hidden border-4 border-white/10 relative transform translate-y-8 md:translate-y-0">
-                        <Image
+                    <div className="shrink-0 w-48 md:w-64 lg:w-72 aspect-[3/4] rounded-lg shadow-2xl overflow-hidden border-4 border-white/10 relative transform translate-y-8 md:translate-y-0 bg-zinc-900">
+                        <SafeImage
                             src={coverImage}
-                            alt={`${game.title} cover`}
+                            alt={game.title}
                             fill
                             className="object-cover"
                             sizes="(max-width: 768px) 200px, 300px"
                             priority
+                            gameId={game.id}
+                            imageType="COVER"
                         />
                     </div>
 
@@ -250,8 +256,15 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                             </div>
                         )}
 
-                        {/* Media Carousel */}
-                        <MediaCarousel screenshots={game.screenshots} videos={game.videos} />
+                        {/* Media Carousels */}
+                        <div className="space-y-8">
+                            {game.videos.length > 0 && (
+                                <MediaCarousel videos={game.videos} screenshots={[]} title="Trailers" />
+                            )}
+                            {game.screenshots.length > 0 && (
+                                <MediaCarousel videos={[]} screenshots={game.screenshots} title="Screenshots" />
+                            )}
+                        </div>
                     </div>
 
                     {/* Right Column (Stats Stack) */}
@@ -262,6 +275,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                             hltbMain={game.hltbMain}
                             hltbExtra={game.hltbExtra}
                             hltbCompletionist={game.hltbCompletionist}
+                            hltbUrl={hltbUrl}
                             userPlaytime={userLibrary?.playtimeManual || userLibrary?.playtimeSteam}
                             predictedMain={game.predictedMain}
                             predictedExtra={game.predictedExtra}

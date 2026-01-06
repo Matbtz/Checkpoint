@@ -113,10 +113,6 @@ export interface BestArtResult {
  * Intelligent Cascade for finding the best game art.
  * Priority: Steam Library > IGDB > RAWG
  */
-/**
- * Intelligent Cascade for finding the best game art.
- * Priority: Steam Library > IGDB > RAWG
- */
 export async function findBestGameArt(title: string, releaseYear?: number | null, excludedSources: string[] = []): Promise<BestArtResult | null> {
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
     const query = normalize(title);
@@ -157,7 +153,7 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
     // Generic match for other providers (less strict as they usually return games not DLCs first)
     const isMatch = (candidateTitle: string, candidateYear?: number | null) => {
         const sim = stringSimilarity(normalize(candidateTitle), query);
-        const titleMatch = sim >= 0.85 || normalize(candidateTitle).includes(query) || query.includes(normalize(candidateTitle));
+        const titleMatch = sim >= 0.8 || normalize(candidateTitle).includes(query) || query.includes(normalize(candidateTitle));
         const yearMatch = releaseYear && candidateYear ? Math.abs(releaseYear - candidateYear) <= 1 : true;
         return titleMatch && yearMatch;
     };
@@ -186,20 +182,72 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
             });
 
             if (matches.length > 0) {
-                const steamMatch = matches[0];
-                return {
-                    cover: steamMatch.library_cover,
-                    background: steamMatch.library_hero,
-                    source: 'steam',
-                    originalData: steamMatch
-                };
+                // Iterate through candidates to find one with a valid image
+                for (const steamMatch of matches) {
+                    const coverUrl = steamMatch.library_cover;
+
+                    // Verify image exists (Steam Store search constructs URL blindly)
+                    // Use a short timeout to avoid hanging
+                    try {
+                        const check = await fetch(coverUrl, { method: 'HEAD', signal: AbortSignal.timeout(1500) });
+                        if (check.ok) {
+                            return {
+                                cover: steamMatch.library_cover,
+                                background: steamMatch.library_hero,
+                                source: 'steam',
+                                originalData: steamMatch
+                            };
+                        } else {
+                            console.log(`[Enrichment] Steam image 404 for ${steamMatch.name} (ID: ${steamMatch.id}): ${coverUrl}`);
+                        }
+                    } catch (err) {
+                        console.log(`[Enrichment] Steam image verification failed for ${steamMatch.name}:`, err);
+                    }
+                }
+                console.log(`[Enrichment] No valid Steam images found for "${title}" among ${matches.length} candidates.`);
             }
         } catch (e) {
             console.error("Error finding art on Steam:", e);
         }
     }
 
-    // 2. RAWG (Fallback -> Now 2nd Priority)
+    // 2. IGDB (High quality covers & art -> Priority over RAWG)
+    if (!excludedSources.includes('igdb')) {
+        try {
+            // Fetch a bit more to allow fuzzy match within top results
+            const igdbResults = await searchIgdbGames(title, 5);
+            const igdbMatch = igdbResults.find(g => {
+                const gameYear = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null;
+                return isMatch(g.name, gameYear);
+            });
+
+            if (igdbMatch) {
+                let cover = null;
+                if (igdbMatch.cover) {
+                    cover = getIgdbImageUrl(igdbMatch.cover.image_id, '1080p');
+                }
+
+                let background = null;
+                // Prioritize artworks, then screenshots
+                if (igdbMatch.artworks && igdbMatch.artworks.length > 0) {
+                    background = getIgdbImageUrl(igdbMatch.artworks[0].image_id, '1080p');
+                } else if (igdbMatch.screenshots && igdbMatch.screenshots.length > 0) {
+                    background = getIgdbImageUrl(igdbMatch.screenshots[0].image_id, '1080p');
+                }
+
+                return {
+                    cover,
+                    background,
+                    source: 'igdb',
+                    originalData: igdbMatch
+                };
+            }
+        } catch (e) {
+            console.error("Error finding art on IGDB:", e);
+        }
+    }
+
+    // 3. RAWG (Fallback)
     if (!excludedSources.includes('rawg')) {
         try {
             const rawgResults = await searchRawgGames(title, 5);
@@ -221,40 +269,93 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
         }
     }
 
-    // 3. IGDB (High quality covers & art -> Now 3rd Priority)
-    if (!excludedSources.includes('igdb')) {
-        try {
-            // Fetch a bit more to allow fuzzy match within top results
-            const igdbResults = await searchIgdbGames(title, 5);
-            const igdbMatch = igdbResults.find(g => {
-                const gameYear = g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null;
-                return isMatch(g.name, gameYear);
-            });
+    return null;
+}
 
-            if (igdbMatch) {
-                let cover = null;
-                if (igdbMatch.cover) {
-                    cover = getIgdbImageUrl(igdbMatch.cover.image_id, 'cover_big');
+export interface FallbackMetadata {
+    description?: string;
+    screenshots?: string[];
+}
+
+/**
+ * Attempts to find missing metadata (description, screens) from Steam
+ */
+export async function findFallbackMetadata(title: string, releaseYear?: number | null): Promise<FallbackMetadata | null> {
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    const query = normalize(title);
+
+    try {
+        const steamResults = await searchSteamStore(title);
+
+        // Matching Logic (Simplified from findBestGameArt)
+        const matches = steamResults.filter(g => {
+            const nCandidate = normalize(g.name);
+
+            // Year check if valid
+            if (releaseYear && g.releaseYear) {
+                if (Math.abs(releaseYear - g.releaseYear) > 1) return false;
+            }
+
+            // Exact match
+            if (nCandidate === query) return true;
+
+            // Fuzzy match
+            const sim = stringSimilarity(nCandidate, query);
+            if (sim >= 0.85) return true;
+
+            // Substring with length check
+            if (nCandidate.includes(query) || query.includes(nCandidate)) {
+                const lengthDiff = Math.abs(nCandidate.length - query.length);
+                // Allow a bit more flex for fallback than for art, as description is better than nothing
+                return lengthDiff <= query.length * 0.6;
+            }
+
+            // Prefix Match (for DLCs/Season Passes sharing base name)
+            // Ensure significant overlap (e.g. "Sonic Racing: CrossWorlds" -> "sonicracingcrossworlds" is > 20 chars)
+            // Using 10 chars as safe minimum for unique titles (avoiding just "Legacy of...")
+            const prefixLen = 10;
+            if (nCandidate.length >= prefixLen && query.length >= prefixLen) {
+                const pC = nCandidate.substring(0, prefixLen);
+                const pQ = query.substring(0, prefixLen);
+                if (pC === pQ) {
+                    // Start matches. Check if year is compatible (already checked above).
+                    // This is a strong signal for related content.
+                    console.log(`[Fallback] Prefix match found: ${g.name}`);
+                    return true;
                 }
+            }
 
-                let background = null;
-                // Prioritize artworks, then screenshots
-                if (igdbMatch.artworks && igdbMatch.artworks.length > 0) {
-                    background = getIgdbImageUrl(igdbMatch.artworks[0].image_id, '1080p');
-                } else if (igdbMatch.screenshots && igdbMatch.screenshots.length > 0) {
-                    background = getIgdbImageUrl(igdbMatch.screenshots[0].image_id, '1080p');
-                }
+            return false;
+        });
 
+        // Sort by quality of match
+        matches.sort((a, b) => {
+            const nA = normalize(a.name);
+            const nB = normalize(b.name);
+            const exactA = nA === query;
+            const exactB = nB === query;
+            if (exactA && !exactB) return -1;
+            if (!exactA && exactB) return 1;
+            return nA.length - nB.length;
+        });
+
+        if (matches.length > 0) {
+            const bestMatch = matches[0];
+            // Import the details function dynamically to avoid circular deps if any (though steam-store is leaf)
+            // But we already imported searchSteamStore from there, so it's fine.
+            const { getSteamGameDetails } = await import('./steam-store');
+
+            const details = await getSteamGameDetails(bestMatch.id);
+            if (details) {
                 return {
-                    cover,
-                    background,
-                    source: 'igdb',
-                    originalData: igdbMatch
+                    description: details.description,
+                    screenshots: details.screenshots
                 };
             }
-        } catch (e) {
-            console.error("Error finding art on IGDB:", e);
         }
+
+    } catch (e) {
+        console.error("[Enrichment] Error in findFallbackMetadata:", e);
     }
 
     return null;

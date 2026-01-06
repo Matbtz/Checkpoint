@@ -43,7 +43,8 @@ export async function getRecentlyPlayedGames(steamId: string): Promise<SteamGame
     throw new Error('STEAM_SECRET api key not configured');
   }
 
-  const url = `http://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v0001/?key=${apiKey}&steamid=${steamId}&format=json&count=0`;
+  const url = `http://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v0001/?key=${apiKey}&steamid=${steamId}&format=json`;
+  console.log(`[Steam] Fetching recently played for steamId: ${steamId}, URL: ${url.replace(apiKey, 'HIDDEN')}`);
 
   const response = await fetch(url);
   if (!response.ok) {

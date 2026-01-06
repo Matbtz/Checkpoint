@@ -140,10 +140,8 @@ export interface SearchFilters {
     releaseDateModifier?: 'last_30_days' | 'last_2_months' | 'next_2_months' | 'this_year' | 'next_year' | 'past_year' | 'this_month' | 'last_month' | 'next_month';
 }
 
-/**
- * Helper pour construire l'URL d'une image IGDB
- */
-export function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot_huge' | '1080p' = 'cover_big'): string {
+// Helper pour construire l'URL d'une image IGDB
+export function getIgdbImageUrl(imageId: string, size: 'cover_big' | 'screenshot_huge' | '1080p' | '720p' = '1080p'): string {
     return `https://images.igdb.com/igdb/image/upload/t_${size}/${imageId}.jpg`;
 }
 
@@ -190,29 +188,27 @@ export async function fetchIgdb<T>(endpoint: string, query: string, retrying = f
     }
 }
 
-/**
- * Helper to map raw IGDB games to EnrichedIgdbGame
- */
 function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
     return games.map(game => {
         const covers: string[] = [];
         const backgrounds: string[] = [];
 
         if (game.cover?.image_id) {
-            covers.push(getIgdbImageUrl(game.cover.image_id, 'cover_big'));
-            backgrounds.push(getIgdbImageUrl(game.cover.image_id, 'screenshot_huge'));
+            // Prefer 1080p for high quality covers (will be ~720x1080 for portraits)
+            covers.push(getIgdbImageUrl(game.cover.image_id, '1080p'));
+            backgrounds.push(getIgdbImageUrl(game.cover.image_id, '1080p'));
         }
 
         if (game.artworks) {
             game.artworks.forEach(art => {
-                covers.push(getIgdbImageUrl(art.image_id, 'cover_big'));
-                backgrounds.push(getIgdbImageUrl(art.image_id, 'screenshot_huge'));
+                covers.push(getIgdbImageUrl(art.image_id, '1080p'));
+                backgrounds.push(getIgdbImageUrl(art.image_id, '1080p'));
             });
         }
 
         if (game.screenshots) {
             game.screenshots.forEach(screen => {
-                backgrounds.push(getIgdbImageUrl(screen.image_id, 'screenshot_huge'));
+                backgrounds.push(getIgdbImageUrl(screen.image_id, '1080p'));
             });
         }
 

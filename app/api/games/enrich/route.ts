@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { enrichGameData } from '@/actions/enrich';
-import { auth } from '@/lib/auth';
+import { auth } from '@/auth';
 
 export async function POST(req: Request) {
   // Ensure the user is authenticated
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
           const result = await enrichGameData(game.id, game.title);
           results.push({ id: game.id, success: result.success });
         } else {
-            results.push({ id: gameId, success: false, error: 'Game not found' });
+          results.push({ id: gameId, success: false, error: 'Game not found' });
         }
       } catch (err) {
         console.error(`Error enriching game ${gameId}:`, err);

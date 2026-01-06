@@ -104,3 +104,66 @@ export async function getSteamReviewStats(appId: number): Promise<SteamReviewSta
     }
 }
 
+
+export interface SteamGameDetails {
+    id: number;
+    name: string;
+    description: string;
+    screenshots: string[];
+    movies: string[];
+}
+
+export async function getSteamGameDetails(appId: number): Promise<SteamGameDetails | null> {
+    try {
+        const url = `https://store.steampowered.com/app/${appId}?l=english`;
+        const response = await fetch(url, {
+            headers: {
+                // Use a standard User-Agent to avoid being blocked or served mobile version
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        });
+
+        if (!response.ok) return null;
+
+        const html = await response.text();
+        const $ = load(html);
+
+        const name = $('.apphub_AppName').first().text().trim() || '';
+
+        // Try to get short description first
+        let description = $('.game_description_snippet').first().text().trim();
+
+        // If short description is missing or too short, try the Open Graph description
+        if (!description) {
+            description = $('meta[name="twitter:description"]').attr('content') || '';
+        }
+
+        // Clean up description
+        description = description.replace(/\s+/g, ' ').trim();
+
+        const screenshots: string[] = [];
+        $('.highlight_screenshot_link').each((i, el) => {
+            const url = $(el).attr('href');
+            if (url) screenshots.push(url);
+        });
+
+        const movies: string[] = [];
+        $('.highlight_movie').each((i, el) => {
+            const src = $(el).data('mp4-hd-source');
+            if (src) movies.push(src as string);
+        });
+
+        return {
+            id: appId,
+            name,
+            description,
+            screenshots,
+            movies
+        };
+
+    } catch (e) {
+        console.error(`Error fetching Steam details for ${appId}:`, e);
+        return null;
+    }
+}

@@ -231,47 +231,41 @@ export async function syncSteamPlaytime(options?: { activeOnly?: boolean }) {
     const userId = session?.user?.id;
 
     if (!userId) {
-        throw new Error('Not authenticated');
+        return { success: false, updatedCount: 0 };
     }
 
-    // 1. Fetch all steam games AND recent games
-    const [steamGames, recentGames] = await Promise.all([
-        fetchSteamGames(),
-        getRecentlyPlayedGames(userId).catch(e => {
-            console.error("Failed to fetch recently played:", e);
-            return [] as SteamGame[];
-        }) // We need the steamId normally, but fetchSteamGames extracts it. getRecentlyPlayedGames asks for it.
-        // Wait, fetchSteamGames logic extracts steamId. We need that logic or we need to extract it again.
-        // Let's refactor slightly to get SteamID.
-    ]);
+    // 1. Fetch user to get Steam ID first
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { accounts: true },
+    });
 
-    // RE-FETCH STEAM ID for usage (copied logic from fetchSteamGames temporarily or refactor? 
-    // fetchSteamGames is exported. Let's just fix the call below by extracting ID first)
-    // Actually, to avoid code duplication, I'll rely on fetchSteamGames to get owned. 
-    // But for recent, I need the ID. 
-
-    // Quick fetching of steamId again:
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { accounts: true } });
     let steamId = user?.steamId;
     if (!steamId && user?.accounts) {
         const steamAccount = user.accounts.find(acc => acc.provider === 'steam');
-        if (steamAccount) steamId = steamAccount.providerAccountId;
-    }
-
-    let recentGameMap = new Map<string, number>();
-    if (steamId) {
-        try {
-            // We can't use 'userId' as steamId argument, we need the actual steamId
-            // Importing getRecentlyPlayedGames requires importing it first.
-            // Implemented below.
-            const recents = await import('@/lib/steam').then(m => m.getRecentlyPlayedGames(steamId!));
-            recents.forEach(g => {
-                recentGameMap.set(g.appid.toString(), g.playtime_2weeks || 0);
-            });
-        } catch (e) {
-            console.error("Failed to fetch recents", e);
+        if (steamAccount) {
+            steamId = steamAccount.providerAccountId;
         }
     }
+
+    if (!steamId) {
+        // Cannot sync without steam ID
+        return { success: false, updatedCount: 0 };
+    }
+
+    // 2. Fetch all steam games AND recent games in parallel using the Steam ID
+    const [steamGames, recentGames] = await Promise.all([
+        fetchSteamGames(), // This function internally refetches/verifies steamID but strictly needs auth. We already auth'd.
+        getRecentlyPlayedGames(steamId).catch(e => {
+            console.error("Failed to fetch recently played:", e);
+            return [] as SteamGame[];
+        })
+    ]);
+
+    let recentGameMap = new Map<string, number>();
+    recentGames.forEach(g => {
+        recentGameMap.set(g.appid.toString(), g.playtime_2weeks || 0);
+    });
 
     const steamGameMap = new Map(steamGames.map(g => [g.appid.toString(), g]));
 

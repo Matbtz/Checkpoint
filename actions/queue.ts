@@ -2,7 +2,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { auth } from '@/lib/auth';
+import { auth } from '@/auth';
 
 export async function getPendingEnrichmentGames(): Promise<string[]> {
   const session = await auth();

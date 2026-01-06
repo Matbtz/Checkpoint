@@ -1,0 +1,38 @@
+[
+  {
+    "id": 1237320,
+    "name": "Sonic Frontiers",
+    "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1237320/header.jpg",
+    "library_cover": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1237320/library_600x900.jpg",
+    "library_hero": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1237320/library_hero.jpg",
+    "screenshots": [],
+    "releaseYear": 2022
+  },
+  {
+    "id": 3592250,
+    "name": "Sonic Racing: CrossWorlds Season Pass",
+    "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3592250/header.jpg",
+    "library_cover": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3592250/library_600x900.jpg",
+    "library_hero": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3592250/library_hero.jpg",
+    "screenshots": [],
+    "releaseYear": 2025
+  },
+  {
+    "id": 959800,
+    "name": "TIRELESS: Prepare For The Adrenaline",
+    "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/959800/header.jpg",
+    "library_cover": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/959800/library_600x900.jpg",
+    "library_hero": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/959800/library_hero.jpg",
+    "screenshots": [],
+    "releaseYear": 2025
+  },
+  {
+    "id": 3885040,
+    "name": "life's a beach",
+    "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3885040/header.jpg",
+    "library_cover": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3885040/library_600x900.jpg",
+    "library_hero": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3885040/library_hero.jpg",
+    "screenshots": [],
+    "releaseYear": 2025
+  }
+]

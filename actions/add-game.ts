@@ -5,7 +5,7 @@
 import { searchIgdbGames, getIgdbImageUrl } from '@/lib/igdb';
 import { getOpenCriticScore } from '@/lib/opencritic';
 import { prisma } from '@/lib/db';
-import { auth } from '@/lib/auth';
+import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { extractDominantColors } from '@/lib/color-utils';
 

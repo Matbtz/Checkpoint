@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { auth } from '@/lib/auth';
+import { auth } from '@/auth';
 import { Game } from '@prisma/client';
 
 interface GenreScore {

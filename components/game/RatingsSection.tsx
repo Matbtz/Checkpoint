@@ -20,7 +20,7 @@ export function RatingsSection({
   igdbUrl,
   opencriticUrl,
 }: RatingsSectionProps) {
-  const hasRatings = opencriticScore || igdbScore || steamReviewScore;
+  const hasRatings = opencriticScore || igdbScore || steamReviewScore || igdbUrl;
 
   if (!hasRatings) return null;
 
@@ -41,8 +41,8 @@ export function RatingsSection({
                 opencriticScore >= 84
                   ? "hover:border-green-500/50 hover:bg-green-50/50 dark:hover:bg-green-950/20"
                   : opencriticScore >= 74
-                  ? "hover:border-yellow-500/50 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
-                  : "hover:border-zinc-400"
+                    ? "hover:border-yellow-500/50 hover:bg-yellow-50/50 dark:hover:bg-yellow-950/20"
+                    : "hover:border-zinc-400"
               )}
             >
               <div className="flex flex-col items-center justify-center space-y-2 text-center h-full">
@@ -55,8 +55,8 @@ export function RatingsSection({
                     opencriticScore >= 84
                       ? "text-green-600 dark:text-green-400"
                       : opencriticScore >= 74
-                      ? "text-yellow-600 dark:text-yellow-400"
-                      : "text-zinc-700 dark:text-zinc-300"
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-zinc-700 dark:text-zinc-300"
                   )}
                 >
                   {opencriticScore}
@@ -80,8 +80,8 @@ export function RatingsSection({
                     opencriticScore >= 84
                       ? "text-green-600 dark:text-green-400"
                       : opencriticScore >= 74
-                      ? "text-yellow-600 dark:text-yellow-400"
-                      : "text-zinc-700 dark:text-zinc-300"
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-zinc-700 dark:text-zinc-300"
                   )}
                 >
                   {opencriticScore}
@@ -92,7 +92,7 @@ export function RatingsSection({
         )}
 
         {/* IGDB */}
-        {igdbScore && (
+        {(igdbScore || igdbUrl) && (
           igdbUrl ? (
             <a
               href={igdbUrl}
@@ -105,7 +105,7 @@ export function RatingsSection({
                   IGDB <ExternalLink className="w-3 h-3 opacity-50" />
                 </span>
                 <span className="text-4xl font-black text-purple-600 dark:text-purple-400">
-                  {igdbScore}
+                  {igdbScore || "--"}
                 </span>
               </div>
             </a>
@@ -116,7 +116,7 @@ export function RatingsSection({
                   IGDB
                 </span>
                 <span className="text-4xl font-black text-purple-600 dark:text-purple-400">
-                  {igdbScore}
+                  {igdbScore || "--"}
                 </span>
               </div>
             </div>

@@ -1,11 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Clock } from "lucide-react";
+import { Clock, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 interface HLTBCardProps {
   hltbMain: number | null;
   hltbExtra: number | null;
   hltbCompletionist: number | null;
+  hltbUrl?: string | null;
 
   usersMain?: number | null;
   usersMainCount?: number | null;
@@ -24,6 +26,7 @@ export function HLTBCard({
   hltbMain,
   hltbExtra,
   hltbCompletionist,
+  hltbUrl,
   usersMain,
   usersMainCount,
   usersExtra,
@@ -121,9 +124,22 @@ export function HLTBCard({
   return (
     <Card className="bg-zinc-50/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200/50 dark:border-zinc-800/50">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-          <Clock className="w-4 h-4" />
-          Time To Beat
+        <CardTitle className="text-sm font-medium flex items-center justify-between text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            Time To Beat
+          </div>
+          {hltbUrl && (
+            <Link
+              href={hltbUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-purple-600 transition-colors"
+              title="View on HowLongToBeat"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </Link>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
