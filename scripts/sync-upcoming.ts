@@ -85,15 +85,28 @@ async function main() {
         }
 
         if (match) {
-            // Update mode: Ensure Release Date is fresh
-            // Release dates for upcoming games shift often
-            if (releaseDate && match.releaseDate && releaseDate.getTime() !== match.releaseDate.getTime()) {
-                console.log(`   🔄 Updating Release Date: ${match.releaseDate.toISOString().split('T')[0]} -> ${releaseDate.toISOString().split('T')[0]}`);
+            // Update mode: Ensure Release Date is fresh OR we are missing enriched data
+            const isMissingData = !match.storyline || (match.videos && match.videos.length === 0);
+            const dateChanged = releaseDate && match.releaseDate && releaseDate.getTime() !== match.releaseDate.getTime();
+
+            if (dateChanged || isMissingData) {
+                console.log(`   🔄 Updating Game: ${match.title} (Date Changed: ${dateChanged}, Missing Data: ${isMissingData})`);
                 await prisma.game.update({
                     where: { id: match.id },
                     data: {
                         releaseDate: releaseDate,
-                        igdbId: igdbId // Ensure link
+                        igdbId: igdbId, // Ensure link
+                        // Update extended fields if available
+                        storyline: g.storyline,
+                        videos: g.videos ? g.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`) : undefined,
+                        keywords: g.keywords ? g.keywords.map(k => k.name) : undefined,
+                        relatedGames: {
+                            dlcs: g.dlcs?.map(d => ({ id: d.id, name: d.name })) || [],
+                            expansions: g.expansions?.map(e => ({ id: e.id, name: e.name })) || [],
+                            remakes: g.remakes?.map(r => ({ id: r.id, name: r.name })) || [],
+                            remasters: g.remasters?.map(r => ({ id: r.id, name: r.name })) || [],
+                            franchise_games: (g.franchises?.[0]?.games || g.collection?.games || []).map(fg => ({ id: fg.id, name: fg.name }))
+                        }
                     }
                 });
                 updated++;
@@ -127,7 +140,21 @@ async function main() {
                     igdbScore: g.total_rating ? Math.round(g.total_rating) : null,
                     igdbUrl: g.url,
                     dataFetched: true,
-                    updatedAt: new Date()
+                    updatedAt: new Date(),
+                    // Extended Metadata
+                    storyline: g.storyline,
+                    videos: g.videos ? g.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`) : [],
+                    keywords: g.keywords ? g.keywords.map(k => k.name) : [],
+                    themes: g.themes ? g.themes.map(t => t.name) : [],
+                    gameType: g.game_type,
+                    status: g.status,
+                    relatedGames: {
+                        dlcs: g.dlcs?.map(d => ({ id: d.id, name: d.name })) || [],
+                        expansions: g.expansions?.map(e => ({ id: e.id, name: e.name })) || [],
+                        remakes: g.remakes?.map(r => ({ id: r.id, name: r.name })) || [],
+                        remasters: g.remasters?.map(r => ({ id: r.id, name: r.name })) || [],
+                        franchise_games: (g.franchises?.[0]?.games || g.collection?.games || []).map(fg => ({ id: fg.id, name: fg.name }))
+                    }
                 }
             });
             created++;

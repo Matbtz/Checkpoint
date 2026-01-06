@@ -512,6 +512,12 @@ async function main() {
                         if (igdbData.remasters?.length) relatedGames.remasters = igdbData.remasters;
                         if (igdbData.expanded_games?.length) relatedGames.expanded_games = igdbData.expanded_games; // Inverse of expansion
 
+                        // Add Franchise Games
+                        const franchiseGames = igdbData.franchises?.[0]?.games || igdbData.collection?.games;
+                        if (franchiseGames?.length) {
+                            relatedGames.franchise_games = franchiseGames.map(fg => ({ id: fg.id, name: fg.name }));
+                        }
+
                         if (Object.keys(relatedGames).length > 0) {
                             updateData.relatedGames = relatedGames;
                             dataFound = true;
