@@ -88,6 +88,22 @@ export async function importGames(games: SteamGame[]) {
         throw new Error('Not authenticated');
     }
 
+    // Fetch user preferences once
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { preferences: true }
+    });
+
+    let defaultTarget = 'Main';
+    try {
+        if (user?.preferences) {
+            const parsed = JSON.parse(user.preferences);
+            if (parsed.defaultCompletionGoal) {
+                defaultTarget = parsed.defaultCompletionGoal;
+            }
+        }
+    } catch { }
+
     // Process imports in batches to avoid rate limits and timeouts
     const BATCH_SIZE = 5;
     let importedCount = 0;
@@ -199,7 +215,7 @@ export async function importGames(games: SteamGame[]) {
                         gameId: gameId,
                         status: status,
                         playtimeSteam: game.playtime_forever,
-                        targetedCompletionType: 'Main'
+                        targetedCompletionType: defaultTarget
                     }
                 });
                 return true;

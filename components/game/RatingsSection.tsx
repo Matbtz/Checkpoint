@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface RatingsSectionProps {
   opencriticScore?: number | null;
@@ -9,6 +10,7 @@ interface RatingsSectionProps {
   steamUrl?: string | null;
   igdbUrl?: string | null;
   opencriticUrl?: string | null;
+  variant?: 'default' | 'compact';
 }
 
 export function RatingsSection({
@@ -19,10 +21,105 @@ export function RatingsSection({
   steamUrl,
   igdbUrl,
   opencriticUrl,
+  variant = 'default',
 }: RatingsSectionProps) {
   const hasRatings = opencriticScore || igdbScore || steamReviewScore || igdbUrl;
 
   if (!hasRatings) return null;
+
+  if (variant === 'compact') {
+    return (
+      <div className="flex flex-wrap gap-3 items-center w-full">
+        {/* OpenCritic */}
+        {opencriticScore && (
+          opencriticUrl ? (
+            <a
+              href={opencriticUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-underline"
+            >
+              <Badge
+                variant="outline"
+                className={cn(
+                  "gap-2 px-3 py-1.5 text-sm font-semibold transition-colors cursor-pointer",
+                  opencriticScore >= 84
+                    ? "border-green-500/50 bg-green-50/50 text-green-700 dark:bg-green-950/20 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40"
+                    : opencriticScore >= 74
+                      ? "border-yellow-500/50 bg-yellow-50/50 text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-900/40"
+                      : "border-zinc-300 bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                )}
+              >
+                <span>OpenCritic</span>
+                <span className="font-black text-base border-l border-current pl-2 leading-none">
+                  {opencriticScore}
+                </span>
+              </Badge>
+            </a>
+          ) : (
+            <Badge
+              variant="outline"
+              className={cn(
+                "gap-2 px-3 py-1.5 text-sm font-semibold",
+                opencriticScore >= 84
+                  ? "border-green-500/50 bg-green-50/50 text-green-700 dark:bg-green-950/20 dark:text-green-400"
+                  : opencriticScore >= 74
+                    ? "border-yellow-500/50 bg-yellow-50/50 text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400"
+                    : "border-zinc-300 bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+              )}
+            >
+              <span>OpenCritic</span>
+              <span className="font-black text-base border-l border-current pl-2 leading-none">
+                {opencriticScore}
+              </span>
+            </Badge>
+          )
+        )}
+
+        {/* IGDB */}
+        {(igdbScore || igdbUrl) && (
+          igdbUrl ? (
+            <a href={igdbUrl} target="_blank" rel="noopener noreferrer" className="no-underline">
+              <Badge variant="outline" className="gap-2 px-3 py-1.5 text-sm font-semibold border-purple-500/50 bg-purple-50/50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors cursor-pointer">
+                <span>IGDB</span>
+                <span className="font-black text-base border-l border-current pl-2 leading-none">
+                  {igdbScore || "--"}
+                </span>
+              </Badge>
+            </a>
+          ) : (
+            <Badge variant="outline" className="gap-2 px-3 py-1.5 text-sm font-semibold border-purple-500/50 bg-purple-50/50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400">
+              <span>IGDB</span>
+              <span className="font-black text-base border-l border-current pl-2 leading-none">
+                {igdbScore || "--"}
+              </span>
+            </Badge>
+          )
+        )}
+
+        {/* Steam */}
+        {steamReviewScore && (
+          steamUrl ? (
+            <a href={steamUrl} target="_blank" rel="noopener noreferrer" className="no-underline">
+               <Badge variant="outline" className="gap-2 px-3 py-1.5 text-sm font-semibold border-blue-500/50 bg-blue-50/50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors cursor-pointer">
+                <span>Steam</span>
+                <div className="flex items-baseline gap-1 border-l border-current pl-2 leading-none">
+                   {steamReviewPercent && <span className="font-black text-base">{steamReviewPercent}%</span>}
+                </div>
+              </Badge>
+            </a>
+          ) : (
+             <Badge variant="outline" className="gap-2 px-3 py-1.5 text-sm font-semibold border-blue-500/50 bg-blue-50/50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400">
+                <span>Steam</span>
+                <div className="flex items-baseline gap-1 border-l border-current pl-2 leading-none">
+                   {steamReviewPercent && <span className="font-black text-base">{steamReviewPercent}%</span>}
+                </div>
+              </Badge>
+          )
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

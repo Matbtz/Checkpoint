@@ -7,7 +7,12 @@ import { type UserLibrary, type Game } from '@prisma/client';
 import { calculateProgress } from '@/lib/format-utils';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Gamepad2, Monitor, Check } from 'lucide-react';
+import { Gamepad2, Monitor, Check, TriangleAlert } from 'lucide-react';
+import {
+    HoverCard,
+    HoverCardContent,
+    HoverCardTrigger,
+} from "@/components/ui/hover-card"
 
 type ExtendedGame = Game & {
     studio?: string | null;
@@ -42,7 +47,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
     const targetType = item.targetedCompletionType || 'Main';
 
     const adjustedHltbTimes = useMemo(() => {
-        // Use flat fields directly
         const times = {
             main: game.hltbMain || 0,
             extra: game.hltbExtra || 0,
@@ -55,14 +59,33 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
         return times;
     }, [game, paceFactor]);
 
-    const progress = item.progressManual ?? calculateProgress(playedMinutes, adjustedHltbTimes, targetType);
+    // calculateProgress caps at 100, but we want to detect over-limit for icon.
+    // We can recalculate raw percentage here if needed, or rely on isOverLimit logic.
+    // calculateProgress returns capped value.
+    // Let's compute raw manually for isOverLimit check.
+
+    // Normalize target selection
+    const normalizedTarget = targetType.toLowerCase();
+    let targetMinutes = 0;
+    if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
+        targetMinutes = adjustedHltbTimes.completionist;
+    } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
+        targetMinutes = adjustedHltbTimes.extra;
+    } else {
+        targetMinutes = adjustedHltbTimes.main;
+    }
+
+    const rawProgress = targetMinutes > 0 ? (playedMinutes / targetMinutes) * 100 : 0;
+    const progress = Math.min(rawProgress, 100);
+
     const playedHours = Math.round(playedMinutes / 60);
-    const timeToBeat = adjustedHltbTimes[targetType.toLowerCase() === '100%' ? 'completionist' : targetType.toLowerCase() === 'extra' ? 'extra' : 'main'];
-    const totalHours = timeToBeat ? Math.round(timeToBeat / 60) : null;
+    const totalHours = targetMinutes ? Math.round(targetMinutes / 60) : null;
+
     const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
     const developer = extendedGame.studio || "Unknown Studio";
     const isSteam = (item.playtimeSteam && item.playtimeSteam > 0) || false;
-    const isCompleted = progress >= 100;
+    const isCompleted = rawProgress >= 100;
+    const isOverLimit = rawProgress > 130;
 
     const defaultPrimaryColor = '#27272a'; // Zinc-800
     const defaultSecondaryColor = '#09090b'; // Zinc-950
@@ -155,7 +178,6 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
                             className="object-cover"
                             sizes="150px"
                             onError={() => {
-                                // If the image fails (e.g. 404), try to fallback to portrait.png if it's a steam library URL
                                 if (currentCoverImage.includes('library_600x900.jpg')) {
                                     setCurrentCoverImage(currentCoverImage.replace('library_600x900.jpg', 'portrait.png'));
                                 }
@@ -170,19 +192,16 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
                 {/* Column 2: Main Content */}
                 <div className="flex flex-col justify-between min-w-0 py-1 relative">
                     <div>
-                        {/* Title: Text Shadow added for readability against raw background */}
                         <h2 className="text-lg sm:text-xl font-black uppercase leading-tight text-white line-clamp-2 tracking-tight drop-shadow-lg pr-12">
                             {game.title}
                         </h2>
 
-                        {/* Metadata: Lighter text colors + Drop shadow for readability */}
                         <div className="flex items-center gap-2 font-inter text-xs font-medium text-zinc-300 mt-1.5 drop-shadow-md">
                             {releaseYear && <span className="text-zinc-200">{releaseYear}</span>}
                             {releaseYear && <span className="text-zinc-500">|</span>}
                             <span className="truncate max-w-[140px] text-zinc-200">{developer}</span>
                         </div>
 
-                        {/* Tags: Blank Glassmorphism Style */}
                         {genres.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-2.5">
                                 {genres.slice(0, 2).map((genre: string) => (
@@ -198,7 +217,18 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
                     <div className="w-full mt-auto">
                         <div className="flex justify-between items-end mb-1.5 px-0.5 drop-shadow-md">
                             <span className="text-[9px] font-bold text-white uppercase tracking-wider flex items-center gap-1">
-                                {isCompleted && <Check className="w-3 h-3 text-yellow-500" />}
+                                {isOverLimit ? (
+                                    <HoverCard>
+                                        <HoverCardTrigger asChild>
+                                            <TriangleAlert className="w-3 h-3 text-amber-500 cursor-help" />
+                                        </HoverCardTrigger>
+                                        <HoverCardContent className="w-64 text-xs bg-zinc-900 text-white border-zinc-800 p-2 z-[60]">
+                                            You have exceeded 130% of the estimated time for {targetType}. Is this the correct goal?
+                                        </HoverCardContent>
+                                    </HoverCard>
+                                ) : isCompleted ? (
+                                    <Check className="w-3 h-3 text-yellow-500" />
+                                ) : null}
                                 {playedHours}h Played
                             </span>
                             <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -209,10 +239,10 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
                             <motion.div
                                 className={cn(
                                     "absolute inset-y-0 left-0 shadow-[0_0_10px_rgba(255,255,255,0.3)]",
-                                    isCompleted ? "bg-gradient-to-r from-yellow-600 to-yellow-400" : "bg-gradient-to-r from-blue-600 to-cyan-400"
+                                    isCompleted ? "bg-yellow-500" : "bg-gradient-to-r from-blue-600 to-cyan-400"
                                 )}
                                 initial={{ width: 0 }}
-                                animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                                animate={{ width: `${progress}%` }}
                                 transition={{ duration: 1, ease: "easeOut" }}
                             />
                         </div>

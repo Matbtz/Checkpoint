@@ -42,9 +42,46 @@ export async function updateUserPace(paceFactor: number) {
     return { success: true };
 }
 
+export async function updateUserDefaultCompletionGoal(goal: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error('Unauthorized');
+
+    const validGoals = ['Main', 'Extra', '100%'];
+    if (!validGoals.includes(goal)) {
+        throw new Error('Invalid completion goal');
+    }
+
+    const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { preferences: true }
+    });
+
+    let prefs = {};
+    try {
+        if (user?.preferences) {
+            prefs = JSON.parse(user.preferences);
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    const newPrefs = {
+        ...prefs,
+        defaultCompletionGoal: goal
+    };
+
+    await prisma.user.update({
+        where: { id: session.user.id },
+        data: { preferences: JSON.stringify(newPrefs) }
+    });
+
+    revalidatePath('/settings');
+    return { success: true };
+}
+
 export async function getUserPreferences() {
     const session = await auth();
-    if (!session?.user?.id) return { pace: 1.0 }; // Default
+    if (!session?.user?.id) return { pace: 1.0, defaultCompletionGoal: 'Main' }; // Default
 
     const user = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -55,12 +92,13 @@ export async function getUserPreferences() {
         if (user?.preferences) {
             const parsed = JSON.parse(user.preferences);
             return {
-                pace: typeof parsed.pace === 'number' ? parsed.pace : 1.0
+                pace: typeof parsed.pace === 'number' ? parsed.pace : 1.0,
+                defaultCompletionGoal: typeof parsed.defaultCompletionGoal === 'string' ? parsed.defaultCompletionGoal : 'Main'
             };
         }
     } catch { }
 
-    return { pace: 1.0 };
+    return { pace: 1.0, defaultCompletionGoal: 'Main' };
 }
 
 export async function searchUsers(query: string) {
