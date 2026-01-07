@@ -198,9 +198,11 @@ export function HLTBCard({
             {/* Override Shadcn Progress indicator color */}
             <Progress
                 value={Math.min(100, progressPercent)}
-                className={cn("h-2", "[&>div]:bg-primary")}
-                indicatorClassName={cn(
-                    isCompleted ? "bg-yellow-500" : "bg-gradient-to-r from-blue-600 to-cyan-400"
+                className={cn(
+                    "h-2",
+                    isCompleted
+                        ? "[&>div]:bg-yellow-500"
+                        : "[&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-cyan-400"
                 )}
             />
           </div>
