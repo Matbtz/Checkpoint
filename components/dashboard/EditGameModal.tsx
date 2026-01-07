@@ -61,6 +61,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     // --- GENERAL TAB STATE ---
     const [status, setStatus] = useState(item.status);
     const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
+    const [ownedPlatforms, setOwnedPlatforms] = useState<string[]>(item.ownedPlatforms || []);
 
     // Time
     const initialMinutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
@@ -125,6 +126,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             // Reset General
             setStatus(item.status);
             setCompletionType(item.targetedCompletionType || 'Main');
+            setOwnedPlatforms(item.ownedPlatforms || []);
             const minutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
             setUseManualTime(item.playtimeManual !== null);
             setManualTimeHours((Math.round((minutes / 60) * 10) / 10).toString());
@@ -188,6 +190,9 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             const libData: Partial<Parameters<typeof updateLibraryEntry>[1]> = {};
             if (status !== item.status) libData.status = status;
             if (completionType !== item.targetedCompletionType) libData.targetedCompletionType = completionType;
+            if (JSON.stringify(ownedPlatforms.sort()) !== JSON.stringify((item.ownedPlatforms || []).sort())) {
+                libData.ownedPlatforms = ownedPlatforms;
+            }
 
             if (useManualTime) {
                 const m = parseFloat(manualTimeHours);
@@ -385,6 +390,26 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                 </div>
                             </div>
 
+                            {/* Owned Platforms */}
+                            <div className="space-y-2">
+                                <Label>Owned Platforms</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {platforms.length > 0 ? platforms.map(p => (
+                                        <div key={p} className="flex items-center gap-2 border px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900/50">
+                                            <Checkbox
+                                                id={`op-${p}`}
+                                                checked={ownedPlatforms.includes(p)}
+                                                onCheckedChange={(c) => {
+                                                    if (c) setOwnedPlatforms([...ownedPlatforms, p]);
+                                                    else setOwnedPlatforms(ownedPlatforms.filter(op => op !== p));
+                                                }}
+                                            />
+                                            <Label htmlFor={`op-${p}`} className="text-xs cursor-pointer">{p}</Label>
+                                        </div>
+                                    )) : <span className="text-sm text-zinc-500 italic">No platforms data for this game. Add them in Metadata tab.</span>}
+                                </div>
+                            </div>
+
                             {/* Time & Progress */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -466,6 +491,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                     predictedMain={item.game.predictedMain}
                                     predictedExtra={item.game.predictedExtra}
                                     predictedCompletionist={item.game.predictedCompletionist}
+                                    targetType={completionType}
                                 />
 
                                 <div className="grid grid-cols-2 gap-4">

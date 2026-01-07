@@ -295,6 +295,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                         predictedMain={game.predictedMain}
                         predictedExtra={game.predictedExtra}
                         predictedCompletionist={game.predictedCompletionist}
+                        targetType={userLibrary?.targetedCompletionType || 'Main'}
                     />
                 </div>
 
@@ -382,6 +383,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                                 predictedMain={game.predictedMain}
                                 predictedExtra={game.predictedExtra}
                                 predictedCompletionist={game.predictedCompletionist}
+                                targetType={userLibrary?.targetedCompletionType || 'Main'}
                             />
                         </div>
 

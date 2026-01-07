@@ -185,6 +185,8 @@ model UserLibrary {
   primaryColor     String?
   secondaryColor   String?
 
+  ownedPlatforms   String[] @default([])
+
   createdAt              DateTime @default(now())
   user                   User     @relation(fields: [userId], references: [id])
   game                   Game     @relation(fields: [gameId], references: [id])

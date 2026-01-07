@@ -6,6 +6,31 @@ import { revalidatePath } from 'next/cache';
 import { searchRawgGame, getRawgGameDetails } from '@/lib/rawg';
 import { extractDominantColors } from '@/lib/color-utils';
 
+// Helper to determine owned platforms
+function determineOwnedPlatforms(gamePlatforms: any, userPlatforms: string[]) {
+    let gPlatforms: string[] = [];
+    if (Array.isArray(gamePlatforms)) {
+        gPlatforms = gamePlatforms.map((p: any) =>
+            typeof p === 'string' ? p : p?.name
+        ).filter((p): p is string => typeof p === 'string' && !!p);
+    }
+
+    // Rule 1: Game has only 1 platform -> Select it
+    if (gPlatforms.length === 1) {
+        return [gPlatforms[0]];
+    }
+
+    // Rule 2: Intersection with User Platforms has only 1 match -> Select it
+    if (userPlatforms.length > 0) {
+        const intersection = gPlatforms.filter(p => userPlatforms.includes(p));
+        if (intersection.length === 1) {
+            return [intersection[0]];
+        }
+    }
+
+    return [];
+}
+
 export async function updateLibraryEntry(
   userLibraryId: string,
   data: {
@@ -16,16 +41,15 @@ export async function updateLibraryEntry(
     customCoverImage?: string | null,
     primaryColor?: string | null,
     secondaryColor?: string | null,
-    // New Playground Fields
     playtimeMain?: number | null,
     playtimeExtra?: number | null,
     playtimeCompletionist?: number | null,
+    ownedPlatforms?: string[],
   }
 ) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  // Get current state to detect changes
   const currentEntry = await prisma.userLibrary.findUnique({
     where: { id: userLibraryId },
     include: { game: true }
@@ -33,17 +57,14 @@ export async function updateLibraryEntry(
 
   if (!currentEntry) throw new Error("Entry not found");
 
-  // Prepare update data
   const updateData: any = { ...data };
 
-  // --- LOGIC: Auto-Capture Time on Completion ---
-  // If status is changing to COMPLETED (and wasn't before)
+  // Logic: Auto-Capture Time on Completion
   if (data.status === 'COMPLETED' && currentEntry.status !== 'COMPLETED') {
     const targetType = data.targetedCompletionType || currentEntry.targetedCompletionType || 'Main';
-    const effectiveTime = currentEntry.playtimeManual ?? currentEntry.playtimeSteam; // Minutes
+    const effectiveTime = currentEntry.playtimeManual ?? currentEntry.playtimeSteam;
 
     if (effectiveTime > 0) {
-      // Only auto-fill if the specific slot is currently empty to avoid overwriting user edits
       if (targetType === 'Main' && !currentEntry.playtimeMain && !data.playtimeMain) {
         updateData.playtimeMain = effectiveTime;
       } else if (targetType === 'Extra' && !currentEntry.playtimeExtra && !data.playtimeExtra) {
@@ -54,12 +75,10 @@ export async function updateLibraryEntry(
     }
   }
 
-  // If customCoverImage is present (string)
+  // Cover Image Logic
   if (data.customCoverImage && typeof data.customCoverImage === 'string') {
-    // Default to null (reset) before extraction
     updateData.primaryColor = null;
     updateData.secondaryColor = null;
-
     try {
       const colors = await extractDominantColors(data.customCoverImage);
       if (colors && colors.primary) {
@@ -68,18 +87,19 @@ export async function updateLibraryEntry(
       }
     } catch (e) {
       console.error("Failed to extract colors for custom cover:", e);
-      // If extraction fails, we leave them as null (correct behavior)
     }
-  }
-  // If explicitly null (clearing)
-  else if (data.customCoverImage === null) {
+  } else if (data.customCoverImage === null) {
     updateData.primaryColor = null;
     updateData.secondaryColor = null;
   }
 
-  // Explicit color override (takes precedence if provided)
   if (data.primaryColor !== undefined) updateData.primaryColor = data.primaryColor;
   if (data.secondaryColor !== undefined) updateData.secondaryColor = data.secondaryColor;
+
+  // Explicitly handle ownedPlatforms
+  if (data.ownedPlatforms !== undefined) {
+      updateData.ownedPlatforms = data.ownedPlatforms;
+  }
 
   await prisma.userLibrary.update({
     where: {
@@ -89,26 +109,18 @@ export async function updateLibraryEntry(
     data: updateData,
   });
 
-  // --- LOGIC: Recalculate Medians ---
-  // If any playtime field was updated, trigger aggregation
   if (
     updateData.playtimeMain !== undefined ||
     updateData.playtimeExtra !== undefined ||
     updateData.playtimeCompletionist !== undefined
   ) {
-    // We run this asynchronously (fire and forget) or await it?
-    // Await to ensure UI shows fresh data on revalidate.
     await recalculateGameMedians(currentEntry.gameId);
   }
 
   revalidatePath('/dashboard');
 }
 
-/**
- * Recalculates the median times for a game based on all user submissions.
- */
 async function recalculateGameMedians(gameId: string) {
-  // Fetch all user entries with data
   const entries = await prisma.userLibrary.findMany({
     where: {
       gameId: gameId,
@@ -211,29 +223,39 @@ export async function updateManualPlayTime(gameId: string, minutes: number | nul
   revalidatePath('/dashboard');
 }
 
+export async function updateOwnedPlatforms(gameId: string, platforms: string[]) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    await prisma.userLibrary.update({
+        where: {
+            userId_gameId: { userId: session.user.id, gameId }
+        },
+        data: { ownedPlatforms: platforms }
+    });
+    revalidatePath('/dashboard');
+    revalidatePath(`/game/${gameId}`);
+}
+
 export async function searchAndAddGame(query: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  // Check API Key
   if (!process.env.RAWG_API_KEY) {
     throw new Error("Missing RAWG_API_KEY");
   }
 
-  // 1. Search RAWG
   const rawgGame = await searchRawgGame(query);
   if (!rawgGame) {
     console.error("RAWG search returned null for query:", query);
     throw new Error("Game not found on RAWG");
   }
 
-  // 2. Check if game exists in DB
   let game = await prisma.game.findUnique({
     where: { id: String(rawgGame.id) },
   });
 
   if (!game) {
-    // 3. If not, create it.
     const fullDetails = await getRawgGameDetails(rawgGame.id);
     const details = fullDetails || rawgGame;
 
@@ -244,12 +266,11 @@ export async function searchAndAddGame(query: string) {
         coverImage: details.background_image,
         releaseDate: details.released ? new Date(details.released) : null,
         genres: JSON.stringify(details.genres.map((g: { name: any; }) => g.name)),
-        dataMissing: true // Flag for enrichment
+        dataMissing: true
       }
     });
   }
 
-  // 4. Add to user library
   const existingEntry = await prisma.userLibrary.findUnique({
     where: {
       userId_gameId: {
@@ -260,29 +281,42 @@ export async function searchAndAddGame(query: string) {
   });
 
   if (!existingEntry) {
-    // Task 4: Default status based on release date
-    // If release date is in the future, set to WISHLIST, else BACKLOG
     let status = 'BACKLOG';
-
-    // Ensure we compare purely on date part if possible, or just standard comparison.
-    // Also handle cases where releaseDate might be today (treated as released).
     if (game.releaseDate) {
       const now = new Date();
       const release = new Date(game.releaseDate);
-      // Reset time components to compare only dates
       now.setHours(0, 0, 0, 0);
       release.setHours(0, 0, 0, 0);
-
-      if (release > now) {
-        status = 'WISHLIST';
-      }
+      if (release > now) status = 'WISHLIST';
     }
+
+    let targetedCompletionType = 'Main';
+    let userPlatforms: string[] = [];
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { preferences: true, platforms: true }
+        });
+        if (user) {
+            userPlatforms = user.platforms;
+            if (user.preferences) {
+                const parsed = JSON.parse(user.preferences);
+                if (parsed.defaultCompletionGoal) {
+                    targetedCompletionType = parsed.defaultCompletionGoal;
+                }
+            }
+        }
+    } catch { }
+
+    const ownedPlatforms = determineOwnedPlatforms(game.platforms, userPlatforms);
 
     await prisma.userLibrary.create({
       data: {
         userId: session.user.id,
         gameId: game.id,
         status: status,
+        targetedCompletionType: targetedCompletionType,
+        ownedPlatforms: ownedPlatforms
       }
     });
   }
@@ -295,14 +329,12 @@ export async function addGameToLibrary(gameId: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  // Check if game exists in DB
   const game = await prisma.game.findUnique({
     where: { id: gameId },
   });
 
   if (!game) throw new Error("Game not found");
 
-  // Add to user library if not exists
   const existingEntry = await prisma.userLibrary.findUnique({
     where: {
       userId_gameId: {
@@ -313,29 +345,42 @@ export async function addGameToLibrary(gameId: string) {
   });
 
   if (!existingEntry) {
-    // Task 4: Default status based on release date
-    // If release date is in the future, set to WISHLIST, else BACKLOG
     let status = 'BACKLOG';
-
-    // Ensure we compare purely on date part if possible, or just standard comparison.
-    // Also handle cases where releaseDate might be today (treated as released).
     if (game.releaseDate) {
       const now = new Date();
       const release = new Date(game.releaseDate);
-      // Reset time components to compare only dates
       now.setHours(0, 0, 0, 0);
       release.setHours(0, 0, 0, 0);
-
-      if (release > now) {
-        status = 'WISHLIST';
-      }
+      if (release > now) status = 'WISHLIST';
     }
+
+    let targetedCompletionType = 'Main';
+    let userPlatforms: string[] = [];
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { preferences: true, platforms: true }
+        });
+        if (user) {
+            userPlatforms = user.platforms;
+            if (user.preferences) {
+                const parsed = JSON.parse(user.preferences);
+                if (parsed.defaultCompletionGoal) {
+                    targetedCompletionType = parsed.defaultCompletionGoal;
+                }
+            }
+        }
+    } catch { }
+
+    const ownedPlatforms = determineOwnedPlatforms(game.platforms, userPlatforms);
 
     await prisma.userLibrary.create({
       data: {
         userId: session.user.id,
         gameId: game.id,
         status: status,
+        targetedCompletionType: targetedCompletionType,
+        ownedPlatforms: ownedPlatforms
       }
     });
   }
@@ -362,7 +407,6 @@ export async function fixGameMatch(gameId: string, hltbData: { main: number, ext
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
-  // Verify user owns the game in library (security check)
   const userLib = await prisma.userLibrary.findUnique({
     where: {
       userId_gameId: {
@@ -380,7 +424,7 @@ export async function fixGameMatch(gameId: string, hltbData: { main: number, ext
       hltbMain: Math.round(hltbData.main),
       hltbExtra: Math.round(hltbData.extra),
       hltbCompletionist: Math.round(hltbData.completionist),
-      dataMissing: false // Assume fixed
+      dataMissing: false
     }
   });
 

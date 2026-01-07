@@ -32,6 +32,7 @@ export default async function SettingsPage() {
     return (
         <SettingsClient
             initialPace={prefs.pace}
+            initialDefaultCompletionGoal={prefs.defaultCompletionGoal}
             initialTags={tags}
             initialAccounts={accounts}
             userSteamId={userSteamId}
