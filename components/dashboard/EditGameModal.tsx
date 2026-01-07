@@ -118,6 +118,36 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     const [searchedBackgrounds, setSearchedBackgrounds] = useState<string[]>([]);
     const [searchingMedia, setSearchingMedia] = useState(false);
 
+    // Auto-calculate progress when not manual
+    useEffect(() => {
+        if (!useManualProgress) {
+            let targetMinutes = 0;
+            const normalizedTarget = completionType.toLowerCase();
+
+            // Use local state HLTB values if admin override enabled, otherwise use game default (or local state initialized from game)
+            // Actually, we initialized local state (hltbMain, etc) from item.game, and those are editable if showFixMatch is true.
+            // So we can just use the local state variables hltbMain, hltbExtra, hltbCompletionist which are numbers.
+
+            if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
+                targetMinutes = hltbCompletionist;
+            } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
+                targetMinutes = hltbExtra;
+            } else {
+                targetMinutes = hltbMain;
+            }
+
+            const currentHours = parseFloat(manualTimeHours);
+            if (!isNaN(currentHours) && targetMinutes > 0) {
+                const currentMinutes = currentHours * 60;
+                const prog = Math.min(100, Math.round((currentMinutes / targetMinutes) * 100));
+                setManualProgress(prog.toString());
+            } else if (targetMinutes === 0 && !isNaN(currentHours) && currentHours > 0) {
+                 // If no target time but we have playtime, maybe don't change progress or set to 0?
+                 // Usually 0 if undefined target.
+            }
+        }
+    }, [useManualProgress, manualTimeHours, completionType, hltbMain, hltbExtra, hltbCompletionist]);
+
 
     useEffect(() => {
         if (isOpen) {
