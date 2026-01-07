@@ -235,7 +235,39 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 const p = parseInt(manualProgress);
                 if (!isNaN(p)) libData.progressManual = Math.min(100, Math.max(0, p));
             } else {
-                libData.progressManual = null;
+                // Calculate and save progress even if not manual override
+                // Re-calculate to be sure we save the current state
+                let targetMinutes = 0;
+                const normalizedTarget = completionType.toLowerCase();
+
+                if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
+                    targetMinutes = hltbCompletionist;
+                } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
+                    targetMinutes = hltbExtra;
+                } else {
+                    targetMinutes = hltbMain;
+                }
+
+                // Determine effective playtime (manual or fallback) for calculation
+                let effectiveMinutes = 0;
+                if (useManualTime) {
+                    const m = parseFloat(manualTimeHours);
+                    if (!isNaN(m)) effectiveMinutes = Math.round(m * 60);
+                } else {
+                    effectiveMinutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
+                }
+
+                if (targetMinutes > 0) {
+                    const calculatedProgress = Math.min(100, Math.round((effectiveMinutes / targetMinutes) * 100));
+                    libData.progressManual = calculatedProgress;
+                } else if (targetMinutes === 0 && effectiveMinutes > 0) {
+                     // If we have playtime but no target, maybe default to 0 or keep null?
+                     // Keeping null effectively means 0 in UI usually.
+                     // But user wants it saved. Let's save 0 if we can't calculate percentage.
+                     libData.progressManual = 0;
+                } else {
+                    libData.progressManual = 0;
+                }
             }
 
             // User Completion Times
