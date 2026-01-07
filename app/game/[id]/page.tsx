@@ -11,6 +11,7 @@ import { RatingsSection } from "@/components/game/RatingsSection";
 import { RefreshButton } from "@/components/game/RefreshButton";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Building2, Gamepad2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 // ... (existing imports)
 
 import { format } from "date-fns";
@@ -103,6 +104,19 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
         // It might be a JSON object from Prisma
         relatedGames = game.relatedGames as Record<string, { id: number, name: string }[]>;
     }
+
+    // Collect all related IDs to check for existence in DB
+    const relatedIds = new Set<string>();
+    Object.values(relatedGames).forEach(list => {
+        list.forEach(item => relatedIds.add(String(item.id)));
+    });
+
+    const knownRelatedGames = await prisma.game.findMany({
+        where: { id: { in: Array.from(relatedIds) } },
+        select: { id: true, title: true, opencriticScore: true }
+    });
+
+    const knownGamesMap = new Map(knownRelatedGames.map(g => [g.id, g]));
 
     // Prepare fallback for cover image
     const coverImage = game.coverImage || "/placeholder-game.png"; // You might want a real placeholder
@@ -199,6 +213,32 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
 
             {/* Main Content Grid */}
             <div className="container mx-auto px-4 py-8 md:py-12">
+
+                {/* Mobile Top Section (Ratings + HLTB) - Hidden on lg screens */}
+                <div className="flex flex-col gap-6 mb-8 lg:hidden">
+                    <RatingsSection
+                        opencriticScore={game.opencriticScore}
+                        igdbScore={game.igdbScore}
+                        steamReviewScore={game.steamReviewScore}
+                        steamReviewPercent={game.steamReviewPercent}
+                        steamUrl={game.steamUrl}
+                        igdbUrl={game.igdbUrl}
+                        opencriticUrl={game.opencriticUrl}
+                        variant="compact"
+                    />
+
+                    <HLTBCard
+                        hltbMain={game.hltbMain}
+                        hltbExtra={game.hltbExtra}
+                        hltbCompletionist={game.hltbCompletionist}
+                        hltbUrl={hltbUrl}
+                        userPlaytime={userLibrary?.playtimeManual || userLibrary?.playtimeSteam}
+                        predictedMain={game.predictedMain}
+                        predictedExtra={game.predictedExtra}
+                        predictedCompletionist={game.predictedCompletionist}
+                    />
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
 
                     {/* Left Column (Details & Media) */}
@@ -272,28 +312,32 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                     {/* Right Column (Stats Stack) */}
                     <div className="space-y-6">
 
-                        {/* Time To Beat */}
-                        <HLTBCard
-                            hltbMain={game.hltbMain}
-                            hltbExtra={game.hltbExtra}
-                            hltbCompletionist={game.hltbCompletionist}
-                            hltbUrl={hltbUrl}
-                            userPlaytime={userLibrary?.playtimeManual || userLibrary?.playtimeSteam}
-                            predictedMain={game.predictedMain}
-                            predictedExtra={game.predictedExtra}
-                            predictedCompletionist={game.predictedCompletionist}
-                        />
+                        {/* Time To Beat - Hidden on mobile (moved to top) */}
+                        <div className="hidden lg:block">
+                            <HLTBCard
+                                hltbMain={game.hltbMain}
+                                hltbExtra={game.hltbExtra}
+                                hltbCompletionist={game.hltbCompletionist}
+                                hltbUrl={hltbUrl}
+                                userPlaytime={userLibrary?.playtimeManual || userLibrary?.playtimeSteam}
+                                predictedMain={game.predictedMain}
+                                predictedExtra={game.predictedExtra}
+                                predictedCompletionist={game.predictedCompletionist}
+                            />
+                        </div>
 
-                        {/* Ratings Section */}
-                        <RatingsSection
-                            opencriticScore={game.opencriticScore}
-                            igdbScore={game.igdbScore}
-                            steamReviewScore={game.steamReviewScore}
-                            steamReviewPercent={game.steamReviewPercent}
-                            steamUrl={game.steamUrl}
-                            igdbUrl={game.igdbUrl}
-                            opencriticUrl={game.opencriticUrl}
-                        />
+                        {/* Ratings Section - Hidden on mobile (moved to top) */}
+                        <div className="hidden lg:block">
+                            <RatingsSection
+                                opencriticScore={game.opencriticScore}
+                                igdbScore={game.igdbScore}
+                                steamReviewScore={game.steamReviewScore}
+                                steamReviewPercent={game.steamReviewPercent}
+                                steamUrl={game.steamUrl}
+                                igdbUrl={game.igdbUrl}
+                                opencriticUrl={game.opencriticUrl}
+                            />
+                        </div>
 
                         {/* Related Games (DLCs, Remakes, etc) */}
                         {Object.keys(relatedGames).length > 0 && (
@@ -309,18 +353,43 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                                                 {type.replace('_', ' ')}
                                             </h4>
                                             <ul className="space-y-1">
-                                                {list.slice(0, 5).map(g => (
-                                                    <li key={g.id}>
-                                                        {/* Since we only have ID, we can link to a potential page OR search */}
-                                                        {/* Ideally we would have synced these games. For now, let's link to search or simple text */}
-                                                        <Link
-                                                            href={`/search?q=${encodeURIComponent(g.name)}`}
-                                                            className="block text-sm hover:text-purple-600 dark:hover:text-purple-400 truncate transition-colors"
-                                                        >
+                                                {list.slice(0, 5).map(g => {
+                                                    const knownGame = knownGamesMap.get(String(g.id));
+
+                                                    if (knownGame) {
+                                                        return (
+                                                            <li key={g.id} className="flex items-center justify-between gap-2">
+                                                                <Link
+                                                                    href={`/game/${knownGame.id}`}
+                                                                    className="block text-sm font-medium hover:text-purple-600 dark:hover:text-purple-400 truncate transition-colors flex-1"
+                                                                >
+                                                                    {g.name}
+                                                                </Link>
+                                                                {knownGame.opencriticScore && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            "text-[10px] h-5 px-1.5 min-w-[32px] justify-center",
+                                                                            knownGame.opencriticScore >= 84
+                                                                                ? "border-green-500/30 text-green-600 bg-green-50/50 dark:bg-green-950/20"
+                                                                                : knownGame.opencriticScore >= 74
+                                                                                    ? "border-yellow-500/30 text-yellow-600 bg-yellow-50/50 dark:bg-yellow-950/20"
+                                                                                    : "border-zinc-300 text-zinc-500 bg-zinc-100 dark:bg-zinc-800"
+                                                                        )}
+                                                                    >
+                                                                        {knownGame.opencriticScore}
+                                                                    </Badge>
+                                                                )}
+                                                            </li>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <li key={g.id} className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
                                                             {g.name}
-                                                        </Link>
-                                                    </li>
-                                                ))}
+                                                        </li>
+                                                    );
+                                                })}
                                                 {list.length > 5 && (
                                                     <li className="text-xs text-zinc-400 italic">
                                                         +{list.length - 5} more
