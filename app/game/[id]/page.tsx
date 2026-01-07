@@ -99,10 +99,39 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
     }
 
     // Parse Related Games
-    let relatedGames: Record<string, { id: number, name: string }[]> = {};
+    let relatedGames: Record<string, { id: string | number, name: string }[]> = {};
     if (game.relatedGames) {
         // It might be a JSON object from Prisma
         relatedGames = game.relatedGames as Record<string, { id: number, name: string }[]>;
+    }
+
+    // Fetch Franchise Games (if applicable)
+    if (game.franchise) {
+        const franchiseGames = await prisma.game.findMany({
+            where: {
+                franchise: game.franchise,
+                id: { not: game.id }
+            },
+            select: { id: true, title: true, opencriticScore: true, releaseDate: true },
+            orderBy: { releaseDate: 'desc' },
+            take: 20
+        });
+
+        if (franchiseGames.length > 0) {
+            const existingIds = new Set<string>();
+            Object.values(relatedGames).forEach(list => {
+                list.forEach(item => existingIds.add(String(item.id)));
+            });
+
+            const newFranchiseGames = franchiseGames.filter(g => !existingIds.has(g.id));
+
+            if (newFranchiseGames.length > 0) {
+                relatedGames['franchise'] = newFranchiseGames.map(g => ({
+                    id: g.id,
+                    name: g.title
+                }));
+            }
+        }
     }
 
     // Collect all related IDs to check for existence in DB
