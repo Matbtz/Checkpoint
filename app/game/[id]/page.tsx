@@ -264,6 +264,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                                 gameId={game.id}
                                 userLibrary={userLibrary}
                                 isLoggedIn={!!session}
+                                gamePlatforms={platforms.map(p => p.name)}
                             />
                         </div>
                     </div>
