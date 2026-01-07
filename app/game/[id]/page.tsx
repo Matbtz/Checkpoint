@@ -112,9 +112,9 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                 franchise: game.franchise,
                 id: { not: game.id }
             },
-            select: { id: true, title: true, opencriticScore: true, releaseDate: true },
+            select: { id: true, title: true, opencriticScore: true, releaseDate: true, gameType: true },
             orderBy: { releaseDate: 'desc' },
-            take: 20
+            take: 100
         });
 
         if (franchiseGames.length > 0) {
@@ -125,12 +125,42 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
 
             const newFranchiseGames = franchiseGames.filter(g => !existingIds.has(g.id));
 
-            if (newFranchiseGames.length > 0) {
-                relatedGames['franchise'] = newFranchiseGames.map(g => ({
+            newFranchiseGames.forEach(g => {
+                let category = 'main_games';
+
+                // Map gameType to category buckets
+                switch (g.gameType) {
+                    case 0: // Main
+                        category = 'main_games';
+                        break;
+                    case 1: // DLC
+                    case 2: // Expansion
+                    case 4: // Standalone Expansion
+                    case 10: // Expanded Game
+                        category = 'dlcs_and_expansions';
+                        break;
+                    case 8: // Remake
+                        category = 'remakes';
+                        break;
+                    case 9: // Remaster
+                        category = 'remasters';
+                        break;
+                    case 3: // Bundle
+                        category = 'bundles';
+                        break;
+                    default:
+                        category = 'others_in_franchise';
+                        break;
+                }
+
+                if (!relatedGames[category]) {
+                    relatedGames[category] = [];
+                }
+                relatedGames[category].push({
                     id: g.id,
                     name: g.title
-                }));
-            }
+                });
+            });
         }
     }
 
@@ -142,7 +172,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
 
     const knownRelatedGames = await prisma.game.findMany({
         where: { id: { in: Array.from(relatedIds) } },
-        select: { id: true, title: true, opencriticScore: true }
+        select: { id: true, title: true, opencriticScore: true, releaseDate: true }
     });
 
     const knownGamesMap = new Map(knownRelatedGames.map(g => [g.id, g]));
@@ -382,7 +412,7 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                                                 {type.replace('_', ' ')}
                                             </h4>
                                             <ul className="space-y-1">
-                                                {list.slice(0, 5).map(g => {
+                                                {list.map(g => {
                                                     const knownGame = knownGamesMap.get(String(g.id));
 
                                                     if (knownGame) {
@@ -419,11 +449,6 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                                                         </li>
                                                     );
                                                 })}
-                                                {list.length > 5 && (
-                                                    <li className="text-xs text-zinc-400 italic">
-                                                        +{list.length - 5} more
-                                                    </li>
-                                                )}
                                             </ul>
                                         </div>
                                     ))}
