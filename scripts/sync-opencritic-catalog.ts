@@ -449,6 +449,17 @@ async function main() {
 
           const opencriticScore = (apiGame.topCriticScore && apiGame.topCriticScore !== -1) ? Math.round(apiGame.topCriticScore) : null;
 
+          // Studio Extraction
+          let studio: string | null = null;
+          if ((igdbData as EnrichedIgdbGame)?.involved_companies) {
+            const dev = (igdbData as EnrichedIgdbGame).involved_companies?.find(c => c.developer);
+            if (dev) studio = dev.company.name;
+            else if ((igdbData as EnrichedIgdbGame).involved_companies?.length && (igdbData as EnrichedIgdbGame).involved_companies!.length > 0) {
+              // Fallback to first company if no dev specified
+              studio = (igdbData as EnrichedIgdbGame).involved_companies![0].company.name;
+            }
+          }
+
           const gameData = {
             id: newGameId,
             title: cleanTitle,
@@ -477,7 +488,7 @@ async function main() {
             igdbUrl: (igdbData as EnrichedIgdbGame)?.url || null,
             igdbTime: JSON.stringify(igdbTime),
 
-            studio: null, // Hard to fetch reliably without deep diving companies
+            studio: studio,
             dataMissing: false,
             hltbMain: null, hltbExtra: null, hltbCompletionist: null, hltbUrl: null, // DISABLED HLTB SCRAPING
 

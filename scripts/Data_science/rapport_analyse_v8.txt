@@ -1,68 +1,38 @@
-=== RAPPORT ANALYSE MODELE V8 (Audit Compliant) ===
+=== RAPPORT ANALYSE MODELE V8 (Enriched & Verified) ===
 
-Global MAE: 2.06h
-Median Error: 0.04h
-MAPE: 25.4%
-R2 Score: 0.624
+Global MAE: 2.62h
+Median Error: 0.20h
+R2 Score: 0.854
 
---- REGIME ANALYSIS ---
-DLC/Expansion MAE: 3.07h (Target: Low)
-Main Game MAE: 1.92h
+--- KEYWORDS & FRANCHISE ---
+Games with Open World: 634
+Games with Franchise: 8237
+Games with GameType=DLC: 662
 
---- CASE STUDIES (V7 Failures) ---
+--- CASE STUDIES ---
 Title: Hollow Knight: Silksong
-   Prediction V8: 6.2h
-   Actual HLTB: 49.6h
+   Prediction V8: 26.9h
    Is Expansion: 0
-   Is Mega Indie: 0
-   Fran Max: 49.6h
+   Is Mega Indie: 1
+   Keywords: OpenWorld=0, Linear=0
 
 Title: The Legend of Zelda: Tears of the Kingdom
-   Prediction V8: 12.1h
-   Actual HLTB: 58.4h
+   Prediction V8: 22.2h
    Is Expansion: 0
    Is Mega Indie: 0
-   Fran Max: 77.7h
+   Keywords: OpenWorld=1, Linear=0
 
-Title: FINAL FANTASY VII REBIRTH
-   Prediction V8: 29.4h
+Title: Final Fantasy VII Rebirth
+   Prediction V8: 28.8h
    Actual HLTB: 48.9h
    Is Expansion: 0
    Is Mega Indie: 0
-   Fran Max: 307.4h
-
-Title: Final Fantasy XI: Scars of Abyssea DLC
-   Prediction V8: 3.2h
-   Actual HLTB: 0.5h
-   Is Expansion: 1
-   Is Mega Indie: 0
-   Fran Max: 307.4h
+   Keywords: OpenWorld=1, Linear=0
 
 Title: Blue Prince
-   Prediction V8: 18.0h
+   Prediction V8: 17.9h
    Actual HLTB: 17.8h
    Is Expansion: 0
-   Is Mega Indie: 0
-   Fran Max: 17.8h
+   Is Mega Indie: 1
+   Keywords: OpenWorld=0, Linear=0
 
---- TOP 20 REMAINING ERRORS ---
-The Witcher 3: Wild Hunt - New Quest: 'Scavenger Hunt: Wolf School Gear': Pred 17.7h vs Real 0.5h (Error: 3438%)
-Kingdom Hearts: VR Experience: Pred 17.0h vs Real 0.5h (Error: 3182%)
-Dragon Quest Wars: Pred 28.3h vs Real 0.9h (Error: 2983%)
-Phoenix Wright: Ace Attorney - Spirit of Justice: Apollo Justice - Asinine Attorney: Pred 16.1h vs Real 0.6h (Error: 2587%)
-Dissidia 012 Prologus Final Fantasy: Pred 16.9h vs Real 0.7h (Error: 2434%)
-Muv-Luv VR: Pred 12.0h vs Real 0.5h (Error: 2303%)
-Farming Simulator 18: Pred 31.0h vs Real 1.4h (Error: 2171%)
-Don't Take It Personally, I Just Don't Like You: The Camping Trip: Pred 17.0h vs Real 0.8h (Error: 2112%)
-Final Fantasy XIII-2: Sazh's Story - Heads or Tails?: Pred 16.9h vs Real 0.8h (Error: 2108%)
-The Elder Scrolls IV: Fighter's Stronghold: Pred 9.3h vs Real 0.5h (Error: 1763%)
-Anti-Opoly: Pred 35.8h vs Real 2.0h (Error: 1688%)
-MLB 09: The Show: Pred 17.6h vs Real 1.0h (Error: 1658%)
-Viva Piñata: Party Animals: Pred 11.5h vs Real 0.7h (Error: 1620%)
-NBA Live 2000: Pred 12.1h vs Real 0.7h (Error: 1583%)
-Hypnotizing the Rich Bitch into My Personal Plaything: Pred 17.0h vs Real 1.0h (Error: 1568%)
-King's Field III: Pilot Style: Pred 11.4h vs Real 0.7h (Error: 1531%)
-Tiger Woods PGA Tour 2000: Pred 12.0h vs Real 0.8h (Error: 1501%)
-NCAA Football 2003: Pred 12.0h vs Real 0.8h (Error: 1467%)
-Worms: The Director's Cut: Pred 7.5h vs Real 0.5h (Error: 1404%)
-Dungeon Siege: Return to Arhok: Pred 11.4h vs Real 0.8h (Error: 1389%)
