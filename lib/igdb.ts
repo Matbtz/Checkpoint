@@ -224,7 +224,7 @@ function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
  * Recherche de jeux avec récupération étendue des images et filtres
  */
 export async function searchIgdbGames(query: string, limit: number = 10, filters?: SearchFilters): Promise<EnrichedIgdbGame[]> {
-    let whereClause = query ? `search "${query}"` : '';
+    const searchClause = query ? `search "${query}";` : '';
 
     // Exclude fan-made games and mods by default
     // Category 0 = Main Game, 1 = DLC, 2 = Expansion, 3 = Bundle, 4 = Standalone Expansion, 8 = Remake, 9 = Remaster, 10 = Expanded Game
@@ -253,10 +253,10 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
     // Let's stick to positive inclusion for safety: 0, 1, 2, 3, 4, 8, 9, 10.
     const allowedCategories = [0, 1, 2, 3, 4, 8, 9, 10];
     const categoryFilter = `category = (${allowedCategories.join(',')})`;
+    let whereClause = `where ${categoryFilter}`;
 
     // Add Filters
     if (filters) {
-        // ... (existing logic)
         const conditions: string[] = [];
 
         if (filters.genres && filters.genres.length > 0) {
@@ -352,27 +352,7 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
         }
 
         if (conditions.length > 0) {
-            // If we have a query (search "foo"), we append with &
-            // If no query, we start with 'where' if it's the first condition, or just join them
-            if (whereClause) {
-                whereClause += ` & ${categoryFilter} & ${conditions.join(' & ')}`;
-            } else {
-                whereClause = `where ${categoryFilter} & ${conditions.join(' & ')}`;
-            }
-        } else {
-            // No filters provided, but we still have category filter
-             if (whereClause) {
-                whereClause += ` & ${categoryFilter}`;
-            } else {
-                whereClause = `where ${categoryFilter}`;
-            }
-        }
-    } else {
-        // No filters object provided at all
-        if (whereClause) {
-            whereClause += ` & ${categoryFilter}`;
-        } else {
-            whereClause = `where ${categoryFilter}`;
+            whereClause += ` & ${conditions.join(' & ')}`;
         }
     }
 
@@ -402,7 +382,8 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
     }
 
     const body = `
-        ${whereClause ? whereClause + ';' : ''}
+        ${searchClause}
+        ${whereClause};
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, videos.video_id, videos.name, 
