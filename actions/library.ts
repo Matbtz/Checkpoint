@@ -60,26 +60,6 @@ export async function updateLibraryEntry(
 
   const updateData: any = { ...data };
 
-  // Playtime History Tracking for Manual Updates
-  if (data.playtimeManual !== undefined && data.playtimeManual !== null) {
-      const oldTime = currentEntry.playtimeManual || 0;
-      const newTime = data.playtimeManual;
-      const diff = newTime - oldTime;
-
-      // Only record positive increments as play sessions
-      if (diff > 0) {
-          await prisma.activityLog.create({
-              data: {
-                  userId: session.user.id,
-                  gameId: currentEntry.gameId,
-                  type: "PLAY_SESSION",
-                  details: { durationMinutes: diff }
-              }
-          });
-          updateData.lastPlayed = new Date();
-      }
-  }
-
   // Logic: Auto-Capture Time on Completion
   if (data.status === 'COMPLETED' && currentEntry.status !== 'COMPLETED') {
     const targetType = data.targetedCompletionType || currentEntry.targetedCompletionType || 'Main';
