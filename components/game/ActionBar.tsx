@@ -14,10 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Monitor, Smartphone, Gamepad2 } from "lucide-react";
+import { Check } from "lucide-react";
 
 interface ActionBarProps {
   gameId: string;
@@ -33,7 +30,6 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
 
   // Owned Platforms State
   const [ownedPlatforms, setOwnedPlatforms] = useState<string[]>([]);
-  const [openPlatforms, setOpenPlatforms] = useState(false);
 
   useEffect(() => {
     if (userLibrary) {
@@ -91,19 +87,23 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
     }
   };
 
-  const handlePlatformToggle = async (platform: string, checked: boolean) => {
+  const togglePlatform = async (platform: string) => {
+      const isOwned = ownedPlatforms.includes(platform);
       let newPlatforms = [...ownedPlatforms];
-      if (checked) {
-          if (!newPlatforms.includes(platform)) newPlatforms.push(platform);
-      } else {
+
+      if (isOwned) {
           newPlatforms = newPlatforms.filter(p => p !== platform);
+      } else {
+          newPlatforms.push(platform);
       }
-      setOwnedPlatforms(newPlatforms);
+
+      setOwnedPlatforms(newPlatforms); // Optimistic update
+
       try {
           await updateOwnedPlatforms(gameId, newPlatforms);
       } catch {
           toast.error("Failed to update platforms");
-          // Revert on error?
+          setOwnedPlatforms(ownedPlatforms); // Revert
       }
   };
 
@@ -129,71 +129,80 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
     }
   };
 
-  // Determine icon for platforms button
-  const PlatformIcon = ownedPlatforms.length > 0 ? Check : Monitor; // Or generic
-  // Actually let's use a generic icon like Gamepad2 or Monitor
-
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <StatusSelector gameId={gameId} currentStatus={userLibrary.status} />
+    <div className="flex flex-col gap-4">
+        {/* ROW 1: Controls (Status - Hours - Objective) */}
+        <div className="flex items-end gap-3 flex-wrap">
 
-      {(userLibrary.status === "PLAYING" || userLibrary.status === "BACKLOG" || userLibrary.status === "COMPLETED") && (
-          <>
-            <Select defaultValue={userLibrary.targetedCompletionType || "Main"} onValueChange={handleCompletionChange}>
-                <SelectTrigger className="w-[140px] h-10 bg-white/10 border-white/20 text-white backdrop-blur-md">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="Main">Main Story</SelectItem>
-                    <SelectItem value="Extra">Main + Extra</SelectItem>
-                    <SelectItem value="100%">100% Completion</SelectItem>
-                </SelectContent>
-            </Select>
+            {/* 1. Status */}
+            <div className="space-y-1">
+                <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider pl-1">Status</span>
+                <StatusSelector gameId={gameId} currentStatus={userLibrary.status} />
+            </div>
 
-            {/* Owned Platforms Popover */}
-            <Popover open={openPlatforms} onOpenChange={setOpenPlatforms}>
-                <PopoverTrigger asChild>
-                    <Button variant="secondary" className="h-10 px-3 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-md gap-2">
-                        <Monitor className="w-4 h-4" />
-                        <span className="text-xs">{ownedPlatforms.length > 0 ? `${ownedPlatforms.length} Owned` : "Platforms"}</span>
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-56 p-2 bg-zinc-900 border-zinc-800 text-white" align="start">
-                    <div className="space-y-2">
-                        <h4 className="font-medium text-xs text-zinc-400 mb-2 uppercase tracking-wider px-1">Owned On</h4>
-                        {gamePlatforms && gamePlatforms.length > 0 ? gamePlatforms.map(p => (
-                            <div key={p} className="flex items-center gap-2 hover:bg-zinc-800 p-1.5 rounded transition-colors">
-                                <Checkbox
-                                    id={`ab-op-${p}`}
-                                    checked={ownedPlatforms.includes(p)}
-                                    onCheckedChange={(c) => handlePlatformToggle(p, c === true)}
-                                    className="border-zinc-600 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                                />
-                                <Label htmlFor={`ab-op-${p}`} className="text-sm cursor-pointer flex-1">{p}</Label>
-                            </div>
-                        )) : <div className="text-xs text-zinc-500 italic p-2">No platforms data.</div>}
+            {(userLibrary.status === "PLAYING" || userLibrary.status === "BACKLOG" || userLibrary.status === "COMPLETED") && (
+                <>
+                     {/* 2. Hours Played */}
+                    <div className="space-y-1">
+                         <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider pl-1">Hours</span>
+                        <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-md px-2 h-10 backdrop-blur-md w-[100px]">
+                            <Input
+                                type="number"
+                                value={playtime}
+                                onChange={handlePlaytimeChange}
+                                onBlur={savePlaytime}
+                                className="w-full h-8 bg-transparent border-none text-white placeholder:text-white/50 focus-visible:ring-0 p-0 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                placeholder="0"
+                            />
+                            <span className="text-sm text-white/70 font-medium">hrs</span>
+                        </div>
                     </div>
-                </PopoverContent>
-            </Popover>
-          </>
-      )}
 
-      {(userLibrary.status === "PLAYING" || userLibrary.status === "COMPLETED") && (
-        <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-md px-3 h-10 backdrop-blur-md">
-          <Input
-            type="number"
-            value={playtime}
-            onChange={handlePlaytimeChange}
-            onBlur={savePlaytime}
-            className="w-16 h-8 bg-transparent border-none text-white placeholder:text-white/50 focus-visible:ring-0 p-0 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            placeholder="0"
-          />
-          <span className="text-sm text-white/70 font-medium">hrs</span>
+                    {/* 3. Objective */}
+                    <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider pl-1">Objective</span>
+                        <Select defaultValue={userLibrary.targetedCompletionType || "Main"} onValueChange={handleCompletionChange}>
+                            <SelectTrigger className="w-[130px] h-10 bg-white/10 border-white/20 text-white backdrop-blur-md">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Main">Main Story</SelectItem>
+                                <SelectItem value="Extra">Main + Extra</SelectItem>
+                                <SelectItem value="100%">100% Completion</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </>
+            )}
         </div>
-      )}
+
+        {/* ROW 2: Platforms (Pills) */}
+        {(userLibrary.status === "PLAYING" || userLibrary.status === "BACKLOG" || userLibrary.status === "COMPLETED") && gamePlatforms && gamePlatforms.length > 0 && (
+            <div className="space-y-1">
+                <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider pl-1">Game owned on</span>
+                <div className="flex flex-wrap gap-2">
+                    {gamePlatforms.map((platform) => {
+                        const isOwned = ownedPlatforms.includes(platform);
+                        return (
+                            <button
+                                key={platform}
+                                onClick={() => togglePlatform(platform)}
+                                className={`
+                                    px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 flex items-center gap-1.5
+                                    ${isOwned
+                                        ? "bg-white text-black border-white hover:bg-white/90"
+                                        : "bg-transparent text-white/60 border-white/20 hover:border-white/40 hover:text-white"
+                                    }
+                                `}
+                            >
+                                {isOwned && <Check className="w-3 h-3" />}
+                                {platform}
+                            </button>
+                        )
+                    })}
+                </div>
+            </div>
+        )}
     </div>
   );
 }
-
-// Icon import helper
-import { Check } from "lucide-react";
