@@ -15,6 +15,9 @@ export async function updateGameMetadata(gameId: string, data: {
   platforms?: string[]; // Expecting array, will JSON.stringify
   opencriticScore?: number | null;
   opencriticUrl?: string | null;
+  igdbScore?: number | null;
+  steamReviewPercent?: number | null;
+  franchise?: string | null;
   releaseDate?: Date | null;
   coverImage?: string;
   backgroundImage?: string;
@@ -42,6 +45,9 @@ export async function updateGameMetadata(gameId: string, data: {
   if (data.platforms !== undefined) updateData.platforms = data.platforms;
   if (data.opencriticScore !== undefined) updateData.opencriticScore = data.opencriticScore;
   if (data.opencriticUrl !== undefined) updateData.opencriticUrl = data.opencriticUrl;
+  if (data.igdbScore !== undefined) updateData.igdbScore = data.igdbScore;
+  if (data.steamReviewPercent !== undefined) updateData.steamReviewPercent = data.steamReviewPercent;
+  if (data.franchise !== undefined) updateData.franchise = data.franchise;
   if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate;
   if (data.coverImage !== undefined) updateData.coverImage = data.coverImage;
   if (data.backgroundImage !== undefined) updateData.backgroundImage = data.backgroundImage;

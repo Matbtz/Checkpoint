@@ -45,6 +45,7 @@ export async function updateLibraryEntry(
     playtimeExtra?: number | null,
     playtimeCompletionist?: number | null,
     ownedPlatforms?: string[],
+    isManualProgress?: boolean
   }
 ) {
   const session = await auth();
@@ -99,6 +100,11 @@ export async function updateLibraryEntry(
   // Explicitly handle ownedPlatforms
   if (data.ownedPlatforms !== undefined) {
       updateData.ownedPlatforms = data.ownedPlatforms;
+  }
+
+  // Handle isManualProgress
+  if (data.isManualProgress !== undefined) {
+      updateData.isManualProgress = data.isManualProgress;
   }
 
   await prisma.userLibrary.update({

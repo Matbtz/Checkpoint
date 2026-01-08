@@ -178,6 +178,7 @@ model UserLibrary {
   playtimeExtra          Int? // User's self-reported Main + Extra time (minutes)
   playtimeCompletionist  Int? // User's self-reported 100% time (minutes)
   progressManual         Int? // Percentage 0-100 manual override
+  isManualProgress       Boolean  @default(false)
   targetedCompletionType String   @default("MAIN")
   lastPlayed             DateTime? // Synced from Steam rtime_last_played
 

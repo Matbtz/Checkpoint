@@ -10,17 +10,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateLibraryEntry, fixGameMatch, extractColorsAction } from '@/actions/library';
 import { updateGameMetadata, searchGameImages } from '@/actions/game';
+import { fetchExternalMetadata, ExternalMetadata } from '@/actions/fetch-metadata';
 import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, X, ChevronDown, ChevronRight, RefreshCw, BadgeInfo } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { HLTBCard } from '@/components/game/HLTBCard';
+import { Badge } from '@/components/ui/badge';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
+// Add isManualProgress to UserLibrary type for TS, assuming db migration is applied or will be
+type UserLibraryExtended = UserLibrary & { isManualProgress?: boolean };
+type GameWithLibraryExtended = UserLibraryExtended & { game: Game; tags?: Tag[] };
+
 interface EditGameModalProps {
-    item: GameWithLibrary;
+    item: GameWithLibraryExtended;
     isOpen: boolean;
     onClose: () => void;
 }
@@ -70,11 +76,12 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     const [manualTimeHours, setManualTimeHours] = useState(initialHours.toString());
 
     // Progress
-    const [useManualProgress, setUseManualProgress] = useState(item.progressManual !== null);
-    const [manualProgress, setManualProgress] = useState(item.progressManual?.toString() || '0');
+    const [isManualProgress, setIsManualProgress] = useState(item.isManualProgress || false);
+    // Note: progressManual holds the value regardless of mode.
+    // If isManualProgress=false, we calc it. If true, user inputs it.
+    const [progressValue, setProgressValue] = useState(item.progressManual?.toString() || '0');
 
     // Fix Match (HLTB)
-    // Use flat fields
     const [showFixMatch, setShowFixMatch] = useState(false);
     const [hltbMain, setHltbMain] = useState(item.game.hltbMain || 0);
     const [hltbExtra, setHltbExtra] = useState(item.game.hltbExtra || 0);
@@ -90,13 +97,14 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     const [newTagName, setNewTagName] = useState("");
 
     // --- METADATA TAB STATE ---
-    const [title, setTitle] = useState(item.game.title);
-    const [studio, setStudio] = useState(item.game.studio || "");
-    const [releaseDate, setReleaseDate] = useState(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
-    const [genres, setGenres] = useState<string[]>(item.game.genres ? JSON.parse(item.game.genres) : []);
+    // Read-only logic: Store displayed values
+    const [metaTitle, setMetaTitle] = useState(item.game.title);
+    const [metaStudio, setMetaStudio] = useState(item.game.studio || "");
+    const [metaReleaseDate, setMetaReleaseDate] = useState(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
+    const [metaGenres, setMetaGenres] = useState<string[]>(item.game.genres ? JSON.parse(item.game.genres) : []);
 
-    // Handle platforms: Json type (Array of strings or objects)
-    const [platforms, setPlatforms] = useState<string[]>(() => {
+    // Platforms handling
+    const [metaPlatforms, setMetaPlatforms] = useState<string[]>(() => {
         const p = item.game.platforms;
         if (Array.isArray(p)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,10 +113,13 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         return [];
     });
 
-    const [opencritic, setOpencritic] = useState(item.game.opencriticScore?.toString() || "");
+    const [metaOpencritic, setMetaOpencritic] = useState(item.game.opencriticScore?.toString() || "");
+    const [metaIgdbScore, setMetaIgdbScore] = useState(item.game.igdbScore?.toString() || "");
+    const [metaSteamScore, setMetaSteamScore] = useState(item.game.steamReviewPercent?.toString() || "");
+    const [metaFranchise, setMetaFranchise] = useState(item.game.franchise || "");
 
-    const [newGenre, setNewGenre] = useState("");
-    const [newPlatform, setNewPlatform] = useState("");
+    const [refreshProvider, setRefreshProvider] = useState<'IGDB' | 'RAWG'>('IGDB');
+    const [refreshingMetadata, setRefreshingMetadata] = useState(false);
 
     // --- MEDIA TAB STATE ---
     const [coverImage, setCoverImage] = useState(item.customCoverImage || item.game.coverImage || "");
@@ -118,15 +129,16 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     const [searchedBackgrounds, setSearchedBackgrounds] = useState<string[]>([]);
     const [searchingMedia, setSearchingMedia] = useState(false);
 
-    // Auto-calculate progress when not manual
+    // Collapsible states
+    const [showFoundCovers, setShowFoundCovers] = useState(true);
+    const [showFoundBackgrounds, setShowFoundBackgrounds] = useState(true);
+
+    // Auto-calculate progress
     useEffect(() => {
-        if (!useManualProgress) {
+        // If Manual Mode is OFF, we calculate progress automatically
+        if (!isManualProgress) {
             let targetMinutes = 0;
             const normalizedTarget = completionType.toLowerCase();
-
-            // Use local state HLTB values if admin override enabled, otherwise use game default (or local state initialized from game)
-            // Actually, we initialized local state (hltbMain, etc) from item.game, and those are editable if showFixMatch is true.
-            // So we can just use the local state variables hltbMain, hltbExtra, hltbCompletionist which are numbers.
 
             if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
                 targetMinutes = hltbCompletionist;
@@ -136,17 +148,25 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 targetMinutes = hltbMain;
             }
 
-            const currentHours = parseFloat(manualTimeHours);
-            if (!isNaN(currentHours) && targetMinutes > 0) {
-                const currentMinutes = currentHours * 60;
+            // Playtime source: Manual Time Override OR Steam/System Time
+            let currentMinutes = 0;
+            if (useManualTime) {
+                const m = parseFloat(manualTimeHours);
+                if (!isNaN(m)) currentMinutes = m * 60;
+            } else {
+                currentMinutes = item.playtimeSteam || 0;
+            }
+
+            if (targetMinutes > 0) {
                 const prog = Math.min(100, Math.round((currentMinutes / targetMinutes) * 100));
-                setManualProgress(prog.toString());
-            } else if (targetMinutes === 0 && !isNaN(currentHours) && currentHours > 0) {
-                 // If no target time but we have playtime, maybe don't change progress or set to 0?
-                 // Usually 0 if undefined target.
+                setProgressValue(prog.toString());
+            } else {
+                // No target, progress is ambiguous. Default to 0? Or keep last known?
+                // Usually 0 if unknown target.
+                setProgressValue('0');
             }
         }
-    }, [useManualProgress, manualTimeHours, completionType, hltbMain, hltbExtra, hltbCompletionist]);
+    }, [isManualProgress, useManualTime, manualTimeHours, completionType, hltbMain, hltbExtra, hltbCompletionist, item.playtimeSteam]);
 
 
     useEffect(() => {
@@ -160,23 +180,27 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             const minutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
             setUseManualTime(item.playtimeManual !== null);
             setManualTimeHours((Math.round((minutes / 60) * 10) / 10).toString());
-            setUseManualProgress(item.progressManual !== null);
-            setManualProgress(item.progressManual?.toString() || '0');
+
+            setIsManualProgress(item.isManualProgress || false);
+            setProgressValue(item.progressManual?.toString() || '0');
 
             // Reset Metadata
-            setTitle(item.game.title);
-            setStudio(item.game.studio || "");
-            setReleaseDate(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
-            setGenres(item.game.genres ? JSON.parse(item.game.genres) : []);
+            setMetaTitle(item.game.title);
+            setMetaStudio(item.game.studio || "");
+            setMetaReleaseDate(item.game.releaseDate ? new Date(item.game.releaseDate).toISOString().split('T')[0] : "");
+            setMetaGenres(item.game.genres ? JSON.parse(item.game.genres) : []);
 
             if (Array.isArray(item.game.platforms)) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                setPlatforms(item.game.platforms.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean));
+                setMetaPlatforms(item.game.platforms.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean));
             } else {
-                setPlatforms([]);
+                setMetaPlatforms([]);
             }
 
-            setOpencritic(item.game.opencriticScore?.toString() || "");
+            setMetaOpencritic(item.game.opencriticScore?.toString() || "");
+            setMetaIgdbScore(item.game.igdbScore?.toString() || "");
+            setMetaSteamScore(item.game.steamReviewPercent?.toString() || "");
+            setMetaFranchise(item.game.franchise || "");
 
             // Reset Media
             setCoverImage(item.customCoverImage || item.game.coverImage || "");
@@ -184,6 +208,8 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             setSearchedCovers([]);
             setSearchedBackgrounds([]);
             setMediaQuery("");
+            setShowFoundCovers(true);
+            setShowFoundBackgrounds(true);
         }
     }, [isOpen, item]);
 
@@ -200,8 +226,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         if (!query.trim()) return;
 
         setSearchingMedia(true);
-        // Pass IGDB ID if available to ensure accurate results
-        // Pass Release Year to strict filter
         const releaseYear = item.game.releaseDate ? new Date(item.game.releaseDate).getFullYear() : undefined;
 
         const { covers, backgrounds } = await searchGameImages(query, {
@@ -211,6 +235,32 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         setSearchedCovers(covers);
         setSearchedBackgrounds(backgrounds);
         setSearchingMedia(false);
+        // Expand both on search
+        setShowFoundCovers(true);
+        setShowFoundBackgrounds(true);
+    };
+
+    const handleMetadataRefresh = async () => {
+        setRefreshingMetadata(true);
+        try {
+            // Fix: Pass query as Title (first arg) and externalId as IGDB ID (second arg)
+            const data = await fetchExternalMetadata(refreshProvider, item.game.title, item.game.igdbId || undefined);
+            if (data) {
+                // Only update fields if new data is not null
+                if (data.title) setMetaTitle(data.title);
+                if (data.studio) setMetaStudio(data.studio);
+                if (data.releaseDate) setMetaReleaseDate(data.releaseDate.toISOString().split('T')[0]);
+                if (data.genres && data.genres.length > 0) setMetaGenres(data.genres);
+                if (data.platforms && data.platforms.length > 0) setMetaPlatforms(data.platforms);
+                if (data.igdbScore !== null) setMetaIgdbScore(data.igdbScore.toString());
+                if (data.steamReviewPercent !== null) setMetaSteamScore(data.steamReviewPercent.toString());
+                if (data.franchise) setMetaFranchise(data.franchise);
+            }
+        } catch (e) {
+            console.error("Refresh failed", e);
+        } finally {
+            setRefreshingMetadata(false);
+        }
     };
 
     const handleSave = async () => {
@@ -231,44 +281,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 libData.playtimeManual = null;
             }
 
-            if (useManualProgress) {
-                const p = parseInt(manualProgress);
-                if (!isNaN(p)) libData.progressManual = Math.min(100, Math.max(0, p));
-            } else {
-                // Calculate and save progress even if not manual override
-                // Re-calculate to be sure we save the current state
-                let targetMinutes = 0;
-                const normalizedTarget = completionType.toLowerCase();
-
-                if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
-                    targetMinutes = hltbCompletionist;
-                } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
-                    targetMinutes = hltbExtra;
-                } else {
-                    targetMinutes = hltbMain;
-                }
-
-                // Determine effective playtime (manual or fallback) for calculation
-                let effectiveMinutes = 0;
-                if (useManualTime) {
-                    const m = parseFloat(manualTimeHours);
-                    if (!isNaN(m)) effectiveMinutes = Math.round(m * 60);
-                } else {
-                    // If not manual, use Steam time (ignore item.playtimeManual as we are disabling it)
-                    effectiveMinutes = item.playtimeSteam || 0;
-                }
-
-                if (targetMinutes > 0) {
-                    const calculatedProgress = Math.min(100, Math.round((effectiveMinutes / targetMinutes) * 100));
-                    libData.progressManual = calculatedProgress;
-                } else if (targetMinutes === 0 && effectiveMinutes > 0) {
-                     // If we have playtime but no target, maybe default to 0 or keep null?
-                     // Keeping null effectively means 0 in UI usually.
-                     // But user wants it saved. Let's save 0 if we can't calculate percentage.
-                     libData.progressManual = 0;
-                } else {
-                    libData.progressManual = 0;
-                }
+            // Progress Logic
+            libData.isManualProgress = isManualProgress;
+            const pVal = parseInt(progressValue);
+            if (!isNaN(pVal)) {
+                libData.progressManual = Math.min(100, Math.max(0, pVal));
             }
 
             // User Completion Times
@@ -276,21 +293,33 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 const val = parseInt(playtimeMain);
                 if (!isNaN(val)) libData.playtimeMain = val;
             } else if (item.playtimeMain !== null) {
-                libData.playtimeMain = null; // Clear if empty
+                libData.playtimeMain = null;
             }
-
             if (playtimeExtra.trim()) {
                 const val = parseInt(playtimeExtra);
                 if (!isNaN(val)) libData.playtimeExtra = val;
             } else if (item.playtimeExtra !== null) {
                 libData.playtimeExtra = null;
             }
-
             if (playtimeCompletionist.trim()) {
                 const val = parseInt(playtimeCompletionist);
                 if (!isNaN(val)) libData.playtimeCompletionist = val;
             } else if (item.playtimeCompletionist !== null) {
                 libData.playtimeCompletionist = null;
+            }
+
+            // Cover Logic
+            const currentEffectiveCover = item.customCoverImage || item.game.coverImage || "";
+            const globalCover = item.game.coverImage || "";
+            let coverChanged = false;
+
+            if (coverImage !== currentEffectiveCover) {
+                coverChanged = true;
+                if (coverImage === globalCover) {
+                    libData.customCoverImage = null;
+                } else {
+                    libData.customCoverImage = coverImage;
+                }
             }
 
             const promises = [];
@@ -304,67 +333,69 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 }));
             }
 
-            // Update Custom Cover Image on Library Entry
-            // Calculate the effective current cover (user custom or global default)
-            const currentEffectiveCover = item.customCoverImage || item.game.coverImage || "";
-            const globalCover = item.game.coverImage || "";
-            let coverChanged = false;
-
-            // Only include in payload if the image actually changed from what is currently displayed/stored
-            if (coverImage !== currentEffectiveCover) {
-                coverChanged = true;
-                if (coverImage === globalCover) {
-                    // User changed back to the global default -> Reset custom field to null
-                    libData.customCoverImage = null;
-                } else {
-                    // User selected a new custom image
-                    libData.customCoverImage = coverImage;
-                }
-            }
-
             // 2. Update Game Metadata (Metadata & Media Tabs)
             const metaData: Parameters<typeof updateGameMetadata>[1] = {};
-            if (title !== item.game.title) metaData.title = title;
-            if (studio !== item.game.studio) metaData.studio = studio;
-            if (releaseDate) metaData.releaseDate = new Date(releaseDate);
 
-            // Compare arrays
+            // Only update if changed
+            if (metaTitle !== item.game.title) metaData.title = metaTitle;
+            if (metaStudio !== (item.game.studio || "")) metaData.studio = metaStudio;
+
+            const newDate = metaReleaseDate ? new Date(metaReleaseDate) : null;
+            const oldDate = item.game.releaseDate ? new Date(item.game.releaseDate) : null;
+            if (newDate?.getTime() !== oldDate?.getTime()) metaData.releaseDate = newDate;
+
             const currentGenres = item.game.genres ? JSON.parse(item.game.genres) : [];
-            if (JSON.stringify([...genres].sort()) !== JSON.stringify([...currentGenres].sort())) metaData.genres = genres;
+            if (JSON.stringify([...metaGenres].sort()) !== JSON.stringify([...currentGenres].sort())) metaData.genres = metaGenres;
 
             const currentPlatformsRaw = item.game.platforms;
             const currentPlatforms = Array.isArray(currentPlatformsRaw)
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 ? currentPlatformsRaw.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean)
                 : [];
-            if (JSON.stringify([...platforms].sort()) !== JSON.stringify([...currentPlatforms].sort())) metaData.platforms = platforms;
+            if (JSON.stringify([...metaPlatforms].sort()) !== JSON.stringify([...currentPlatforms].sort())) metaData.platforms = metaPlatforms;
 
-            // Handle Scores (allow clearing)
-            if (opencritic === "") {
-                if (item.game.opencriticScore !== null) metaData.opencriticScore = null;
-            } else {
-                const openVal = parseInt(opencritic);
-                if (!isNaN(openVal) && openVal !== item.game.opencriticScore) metaData.opencriticScore = openVal;
+            // Scores - OpenCritic (manual edit disabled in new design, but state is there)
+            // Wait, we made them read-only, but logic says "save fields".
+            // If the user refreshed, metaOpencritic doesn't change from refresh (excluded).
+            // But if we want to save igdbScore etc, we need updateGameMetadata to support them.
+            // Currently updateGameMetadata only supports opencriticScore.
+            // I should update updateGameMetadata if I want to save other scores, but the task says "Add IGDB and steam scores".
+            // Assuming I just display them for now or if I should persist them.
+            // The prompt says: "Upon save the fields in the DB are refreshed". So yes, persist them.
+            // But updateGameMetadata schema in my previous read_file didn't show igdbScore.
+            // I need to check actions/game.ts again. It only lists specific fields.
+            // I will add them to the payload but I might need to update the server action too.
+            // The server action updateGameMetadata accepts specific fields. I will need to update it to accept igdbScore/steam.
+            // But wait, the task implies I should be able to update them.
+            // I will update updateGameMetadata in the same step.
+
+            // Re-read prompt: "All fields from this page except OpenCritic score (for now) are refreshed by requesting the selected provider."
+            // So I should save whatever is in the state.
+
+            // NOTE: updateGameMetadata in actions/game.ts handles opencriticScore.
+            // I will rely on what is there. If igdbScore is not in updateGameMetadata signature, I can't save it yet without modifying that action.
+            // I will assume I should modify that action as well or just ignore saving them if the action doesn't support it.
+            // Given the instruction "Upon save the fields in the DB are refreshed", I must support saving them.
+            // I will update the action call here, but I must also update actions/game.ts.
+
+            if (metaOpencritic) {
+                const val = parseInt(metaOpencritic);
+                if (!isNaN(val) && val !== item.game.opencriticScore) metaData.opencriticScore = val;
+            }
+            if (metaIgdbScore) {
+                const val = parseInt(metaIgdbScore);
+                if (!isNaN(val) && val !== item.game.igdbScore) metaData.igdbScore = val;
+            }
+            if (metaSteamScore) {
+                const val = parseInt(metaSteamScore);
+                if (!isNaN(val) && val !== item.game.steamReviewPercent) metaData.steamReviewPercent = val;
+            }
+            if (metaFranchise !== item.game.franchise) {
+                metaData.franchise = metaFranchise;
             }
 
-            // Handle Release Date (allow clearing)
-            if (releaseDate === "") {
-                if (item.game.releaseDate !== null) metaData.releaseDate = null;
-            } else {
-                const dateVal = new Date(releaseDate);
-                if (dateVal.getTime() !== (item.game.releaseDate ? new Date(item.game.releaseDate).getTime() : 0)) {
-                    metaData.releaseDate = dateVal;
-                }
-            }
-
-            // We no longer update the global game cover from here, we use customCoverImage on UserLibrary
-            // if (coverImage !== item.game.coverImage) metaData.coverImage = coverImage;
             if (backgroundImage !== item.game.backgroundImage) {
                 metaData.backgroundImage = backgroundImage;
-
-                // If background changed AND cover did NOT change, we want to update the colors from the new background
-                // This allows users to "fix" colors by choosing a background, without overwriting a custom cover's colors if they are also setting one.
-                // (If they set a custom cover, updateLibraryEntry handles extraction from that cover automatically).
                 if (!coverChanged && !item.customCoverImage && backgroundImage) {
                     try {
                         const colors = await extractColorsAction(backgroundImage);
@@ -379,10 +410,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             }
 
             if (Object.keys(libData).length > 0) promises.push(updateLibraryEntry(item.id, libData));
-
-            if (Object.keys(metaData).length > 0) {
-                promises.push(updateGameMetadata(item.gameId, metaData));
-            }
+            if (Object.keys(metaData).length > 0) promises.push(updateGameMetadata(item.gameId, metaData));
 
             await Promise.all(promises);
             onClose();
@@ -391,17 +419,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         } finally {
             setLoading(false);
         }
-    };
-
-    const addItem = (list: string[], setList: (l: string[]) => void, val: string, setVal: (v: string) => void) => {
-        if (val.trim() && !list.includes(val.trim())) {
-            setList([...list, val.trim()]);
-            setVal("");
-        }
-    };
-
-    const removeItem = (list: string[], setList: (l: string[]) => void, val: string) => {
-        setList(list.filter(i => i !== val));
     };
 
     return (
@@ -457,7 +474,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                             <div className="space-y-2">
                                 <Label>Owned Platforms</Label>
                                 <div className="flex flex-wrap gap-2">
-                                    {platforms.length > 0 ? platforms.map(p => (
+                                    {metaPlatforms.length > 0 ? metaPlatforms.map(p => (
                                         <div key={p} className="flex items-center gap-2 border px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900/50">
                                             <Checkbox
                                                 id={`op-${p}`}
@@ -469,7 +486,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                             />
                                             <Label htmlFor={`op-${p}`} className="text-xs cursor-pointer">{p}</Label>
                                         </div>
-                                    )) : <span className="text-sm text-zinc-500 italic">No platforms data for this game. Add them in Metadata tab.</span>}
+                                    )) : <span className="text-sm text-zinc-500 italic">No platforms data.</span>}
                                 </div>
                             </div>
 
@@ -496,15 +513,16 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                         <Label>Progress (%)</Label>
                                         <div className="flex items-center gap-2">
                                             <Label htmlFor="manual-prog" className="text-xs text-muted-foreground">Manual Override</Label>
-                                            <Checkbox id="manual-prog" checked={useManualProgress} onCheckedChange={(c) => setUseManualProgress(c === true)} />
+                                            <Checkbox id="manual-prog" checked={isManualProgress} onCheckedChange={(c) => setIsManualProgress(c === true)} />
                                         </div>
                                     </div>
                                     <Input
                                         type="number"
                                         min="0" max="100"
-                                        value={manualProgress}
-                                        onChange={(e) => setManualProgress(e.target.value)}
-                                        disabled={!useManualProgress}
+                                        value={progressValue}
+                                        onChange={(e) => setProgressValue(e.target.value)}
+                                        disabled={!isManualProgress}
+                                        className={!isManualProgress ? "bg-muted text-muted-foreground opacity-80" : ""}
                                     />
                                 </div>
                             </div>
@@ -563,30 +581,15 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                         <div className="space-y-2">
                                             <div className="flex items-center gap-2">
                                                 <Label className="w-12 text-xs">Main</Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="-- min"
-                                                    value={playtimeMain}
-                                                    onChange={(e) => setPlaytimeMain(e.target.value)}
-                                                />
+                                                <Input type="number" placeholder="-- min" value={playtimeMain} onChange={(e) => setPlaytimeMain(e.target.value)} />
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Label className="w-12 text-xs">Extra</Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="-- min"
-                                                    value={playtimeExtra}
-                                                    onChange={(e) => setPlaytimeExtra(e.target.value)}
-                                                />
+                                                <Input type="number" placeholder="-- min" value={playtimeExtra} onChange={(e) => setPlaytimeExtra(e.target.value)} />
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Label className="w-12 text-xs">100%</Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="-- min"
-                                                    value={playtimeCompletionist}
-                                                    onChange={(e) => setPlaytimeCompletionist(e.target.value)}
-                                                />
+                                                <Input type="number" placeholder="-- min" value={playtimeCompletionist} onChange={(e) => setPlaytimeCompletionist(e.target.value)} />
                                             </div>
                                         </div>
                                     </div>
@@ -620,66 +623,73 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
 
                         {/* --- METADATA TAB --- */}
                         <TabsContent value="metadata" className="mt-0 space-y-6">
-                            <div className="space-y-2">
-                                <Label>Title</Label>
-                                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+
+                            {/* Refresh Controls */}
+                            <div className="flex items-center gap-2 mb-6 p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border">
+                                <BadgeInfo className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground flex-1">Refresh metadata from external provider.</span>
+                                <Select value={refreshProvider} onValueChange={(v: 'IGDB' | 'RAWG') => setRefreshProvider(v)}>
+                                    <SelectTrigger className="w-[100px] h-8">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="IGDB">IGDB</SelectItem>
+                                        <SelectItem value="RAWG">RAWG</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button size="sm" variant="secondary" onClick={handleMetadataRefresh} disabled={refreshingMetadata}>
+                                    <RefreshCw className={`w-3 h-3 mr-2 ${refreshingMetadata ? 'animate-spin' : ''}`} />
+                                    Refresh
+                                </Button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Title</Label>
+                                    <div className="text-lg font-semibold">{metaTitle}</div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-8">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Studio</Label>
+                                        <div className="font-medium">{metaStudio || "-"}</div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Release Date</Label>
+                                        <div className="font-medium">{metaReleaseDate || "-"}</div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Genres & Platforms</Label>
+                                    <div className="flex flex-wrap gap-2 items-center">
+                                        {metaGenres.map(g => <Badge key={g} variant="secondary">{g}</Badge>)}
+                                        {metaGenres.length > 0 && metaPlatforms.length > 0 && <span className="text-zinc-300">|</span>}
+                                        {metaPlatforms.map(p => <Badge key={p} variant="outline">{p}</Badge>)}
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
-                                    <Label>Studio</Label>
-                                    <Input value={studio} onChange={(e) => setStudio(e.target.value)} />
+                                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Scores</Label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2 p-2 border rounded-md min-w-[100px] justify-center">
+                                            <span className="text-xs font-bold text-muted-foreground">OpenCritic</span>
+                                            <span className="text-xl font-bold">{metaOpencritic || "-"}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 p-2 border rounded-md min-w-[100px] justify-center">
+                                            <span className="text-xs font-bold text-muted-foreground">IGDB</span>
+                                            <span className="text-xl font-bold">{metaIgdbScore || "-"}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 p-2 border rounded-md min-w-[100px] justify-center">
+                                            <span className="text-xs font-bold text-muted-foreground">Steam</span>
+                                            <span className="text-xl font-bold">{metaSteamScore ? metaSteamScore + '%' : "-"}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Release Date</Label>
-                                    <Input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} />
-                                </div>
-                            </div>
 
-                            <div className="space-y-2">
-                                <Label>Genres</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        placeholder="Add genre..."
-                                        value={newGenre}
-                                        onChange={(e) => setNewGenre(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && addItem(genres, setGenres, newGenre, setNewGenre)}
-                                    />
-                                    <Button size="icon" variant="outline" onClick={() => addItem(genres, setGenres, newGenre, setNewGenre)}><Plus className="h-4 w-4" /></Button>
-                                </div>
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                    {genres.map(g => (
-                                        <span key={g} className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-md text-xs flex items-center gap-1">
-                                            {g} <button onClick={() => removeItem(genres, setGenres, g)}><X className="h-3 w-3" /></button>
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Platforms</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        placeholder="Add platform..."
-                                        value={newPlatform}
-                                        onChange={(e) => setNewPlatform(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && addItem(platforms, setPlatforms, newPlatform, setNewPlatform)}
-                                    />
-                                    <Button size="icon" variant="outline" onClick={() => addItem(platforms, setPlatforms, newPlatform, setNewPlatform)}><Plus className="h-4 w-4" /></Button>
-                                </div>
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                    {platforms.map(p => (
-                                        <span key={p} className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-md text-xs flex items-center gap-1">
-                                            {p} <button onClick={() => removeItem(platforms, setPlatforms, p)}><X className="h-3 w-3" /></button>
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>OpenCritic Score</Label>
-                                    <Input type="number" value={opencritic} onChange={(e) => setOpencritic(e.target.value)} />
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Franchise</Label>
+                                    <div className="font-medium">{metaFranchise || "-"}</div>
                                 </div>
                             </div>
                         </TabsContent>
@@ -703,15 +713,21 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                 </div>
                             </div>
 
-                            <div className="space-y-6">
+                            <div className="space-y-2">
+                                {/* Found Covers Section */}
+                                {(searchedCovers.length > 0) && (
+                                    <div className="border rounded-md overflow-hidden">
+                                        <button
+                                            onClick={() => setShowFoundCovers(!showFoundCovers)}
+                                            className="w-full flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                        >
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Covers ({searchedCovers.length})</span>
+                                            {showFoundCovers ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                        </button>
 
-                                {/* Search Results Area */}
-                                {(searchedCovers.length > 0 || searchedBackgrounds.length > 0) && (
-                                    <div className="space-y-4 border rounded-md p-4 bg-zinc-50 dark:bg-zinc-900/50">
-                                        {searchedCovers.length > 0 && (
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Covers</Label>
-                                                <ScrollArea className="h-[240px] border rounded-md bg-background p-2">
+                                        {showFoundCovers && (
+                                            <div className="p-2 bg-background border-t">
+                                                 <ScrollArea className={`${showFoundBackgrounds ? 'h-[200px]' : 'h-[350px]'} transition-all`}>
                                                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                                                         {searchedCovers.map((src, i) => (
                                                             <button
@@ -726,11 +742,23 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                                 </ScrollArea>
                                             </div>
                                         )}
+                                    </div>
+                                )}
 
-                                        {searchedBackgrounds.length > 0 && (
-                                            <div className="space-y-2">
-                                                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Backgrounds</Label>
-                                                <ScrollArea className="h-[200px] border rounded-md bg-background p-2">
+                                {/* Found Backgrounds Section */}
+                                {(searchedBackgrounds.length > 0) && (
+                                    <div className="border rounded-md overflow-hidden">
+                                        <button
+                                            onClick={() => setShowFoundBackgrounds(!showFoundBackgrounds)}
+                                            className="w-full flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                                        >
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Found Backgrounds ({searchedBackgrounds.length})</span>
+                                            {showFoundBackgrounds ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                        </button>
+
+                                        {showFoundBackgrounds && (
+                                            <div className="p-2 bg-background border-t">
+                                                <ScrollArea className={`${showFoundCovers ? 'h-[160px]' : 'h-[350px]'} transition-all`}>
                                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                         {searchedBackgrounds.map((src, i) => (
                                                             <button
@@ -747,47 +775,47 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                         )}
                                     </div>
                                 )}
+                            </div>
 
-                                {/* Current Selection & Manual Input */}
-                                <div className="space-y-4 pt-4 border-t">
-                                    <Label className="text-base font-semibold">Current Selection</Label>
+                            {/* Current Selection & Manual Input */}
+                            <div className="space-y-4 pt-4 border-t">
+                                <Label className="text-base font-semibold">Current Selection</Label>
 
-                                    <div className="grid sm:grid-cols-2 gap-6">
-                                        {/* Cover Selection */}
-                                        <div className="space-y-2">
-                                            <Label className="text-xs text-muted-foreground">Cover Art</Label>
-                                            <div className="aspect-[3/4] relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm w-[140px] mx-auto sm:mx-0">
-                                                {coverImage ? (
-                                                    <Image src={coverImage} alt="Cover" fill className="object-cover" />
-                                                ) : (
-                                                    <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Cover</div>
-                                                )}
-                                            </div>
-                                            <Input
-                                                value={coverImage}
-                                                onChange={(e) => setCoverImage(e.target.value)}
-                                                placeholder="Cover URL"
-                                                className="font-mono text-xs h-8"
-                                            />
+                                <div className="grid sm:grid-cols-2 gap-6">
+                                    {/* Cover Selection */}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">Cover Art</Label>
+                                        <div className="aspect-[3/4] relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm w-[140px] mx-auto sm:mx-0">
+                                            {coverImage ? (
+                                                <Image src={coverImage} alt="Cover" fill className="object-cover" />
+                                            ) : (
+                                                <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Cover</div>
+                                            )}
                                         </div>
+                                        <Input
+                                            value={coverImage}
+                                            onChange={(e) => setCoverImage(e.target.value)}
+                                            placeholder="Cover URL"
+                                            className="font-mono text-xs h-8"
+                                        />
+                                    </div>
 
-                                        {/* Background Selection */}
-                                        <div className="space-y-2">
-                                            <Label className="text-xs text-muted-foreground">Background Art</Label>
-                                            <div className="aspect-video relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm">
-                                                {backgroundImage ? (
-                                                    <Image src={backgroundImage} alt="Background" fill className="object-cover" />
-                                                ) : (
-                                                    <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Background</div>
-                                                )}
-                                            </div>
-                                            <Input
-                                                value={backgroundImage}
-                                                onChange={(e) => setBackgroundImage(e.target.value)}
-                                                placeholder="Background URL"
-                                                className="font-mono text-xs h-8"
-                                            />
+                                    {/* Background Selection */}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">Background Art</Label>
+                                        <div className="aspect-video relative bg-zinc-100 dark:bg-zinc-800 rounded-md overflow-hidden border shadow-sm">
+                                            {backgroundImage ? (
+                                                <Image src={backgroundImage} alt="Background" fill className="object-cover" />
+                                            ) : (
+                                                <div className="flex items-center justify-center h-full text-zinc-400 text-xs">No Background</div>
+                                            )}
                                         </div>
+                                        <Input
+                                            value={backgroundImage}
+                                            onChange={(e) => setBackgroundImage(e.target.value)}
+                                            placeholder="Background URL"
+                                            className="font-mono text-xs h-8"
+                                        />
                                     </div>
                                 </div>
                             </div>
