@@ -48,17 +48,20 @@ model VerificationToken {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  steamId       String?   @unique
-  preferences   String? // JSON string
-  isPublic      Boolean   @default(false)
+  id                   String    @id @default(cuid())
+  name                 String?
+  email                String?   @unique
+  emailVerified        DateTime?
+  image                String?
+  password             String?
+  steamId              String?   @unique
+  preferences          String? // JSON string
+  isPublic             Boolean   @default(false)
   profileBackgroundUrl String?
+  profileBackgroundMode String   @default("URL") // URL, DYNAMIC_LAST, DYNAMIC_RANDOM, STATIC_GAME
+  profileBackgroundGameId String?
   platforms     String[]  @default([])
+  platforms            String[]  @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -109,23 +112,23 @@ model Game {
   studio    String? // Nom du studio/développeur
   genres    String? // JSON string
   platforms Json? // Structure: [{ name: "Switch", date: "2017-10-27" }]
-  
+
   // DLC Hierarchy
-  parentId  String?
-  parent    Game?   @relation("GameToDLC", fields: [parentId], references: [id])
-  dlcs      Game[]  @relation("GameToDLC")
+  parentId String?
+  parent   Game?   @relation("GameToDLC", fields: [parentId], references: [id])
+  dlcs     Game[]  @relation("GameToDLC")
 
   // Playtime Data
-  igdbTime       Json? // { storyline, completionist }
+  igdbTime Json? // { storyline, completionist }
 
   // New Metadata (IGDB)
-  storyline      String? @db.Text
-  status         Int?    // IGDB Game Status
-  gameType       Int?    // IGDB Game Type
-  relatedGames   Json?   // { dlcs, expansions, remakes, remasters, expanded_games } (IDs & Names)
+  storyline    String? @db.Text
+  status       Int? // IGDB Game Status
+  gameType     Int? // IGDB Game Type
+  relatedGames Json? // { dlcs, expansions, remakes, remasters, expanded_games } (IDs & Names)
 
-  dataMissing Boolean   @default(false)
-  dataFetched Boolean   @default(false)
+  dataMissing Boolean @default(false)
+  dataFetched Boolean @default(false)
 
   hltbMain          Int? // En minutes
   hltbExtra         Int?
@@ -147,32 +150,35 @@ model Game {
   primaryColor   String?
   secondaryColor String?
 
-  imageStatus    String        @default("OK") // OK, BROKEN
+  imageStatus String @default("OK") // OK, BROKEN
 
   // Extended Metadata
-  franchise      String?
-  hypes          Int?
-  summary        String?       @db.Text // Distinct from description?
-  keywords       String[]      // Array of strings
-  themes         String[]      // Array of strings (IGDB Themes specific)
-  
+  franchise String?
+  hypes     Int?
+  summary   String?  @db.Text // Distinct from description?
+  keywords  String[] // Array of strings
+  themes    String[] // Array of strings (IGDB Themes specific)
+
   // JSON lists for explicit tracking if not using Relations
-  ports          Json?         // [{ id, name }]
-  remakes        Json?
-  remasters      Json?
+  ports     Json? // [{ id, name }]
+  remakes   Json?
+  remasters Json?
 
   updatedAt    DateTime      @updatedAt
   users        UserLibrary[]
   activityLogs ActivityLog[]
+
+  @@index([releaseDate])
+  @@index([opencriticScore])
 }
 
 model UserLibrary {
-  id                     String   @id @default(cuid())
+  id                     String    @id @default(cuid())
   userId                 String
   gameId                 String
-  status                 String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
-  playtimeSteam          Int      @default(0) // En minutes
-  playtime2weeks         Int      @default(0) // En minutes (Steam Recent)
+  status                 String    @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
+  playtimeSteam          Int       @default(0) // En minutes
+  playtime2weeks         Int       @default(0) // En minutes (Steam Recent)
   playtimeManual         Int? // Override
   playtimeMain           Int? // User's self-reported Main Story time (minutes)
   playtimeExtra          Int? // User's self-reported Main + Extra time (minutes)
@@ -186,14 +192,15 @@ model UserLibrary {
   primaryColor     String?
   secondaryColor   String?
 
-  ownedPlatforms   String[] @default([])
+  ownedPlatforms String[] @default([])
 
-  createdAt              DateTime @default(now())
-  user                   User     @relation(fields: [userId], references: [id])
-  game                   Game     @relation(fields: [gameId], references: [id])
-  tags                   Tag[]
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  game      Game     @relation(fields: [gameId], references: [id])
+  tags      Tag[]
 
   @@unique([userId, gameId])
+  @@index([userId, status])
 }
 
 model Tag {

@@ -3,7 +3,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { User as ProfileUser, PlaySession, UpcomingGame, FriendActivity } from "@/types/profile";
-import { differenceInMinutes } from "date-fns";
+import { differenceInMinutes, subDays } from "date-fns";
 import { revalidatePath } from "next/cache";
 
 export async function getUserProfileData() {
@@ -25,13 +25,6 @@ export async function getUserProfileData() {
         include: {
           game: true,
         },
-        // orderBy createdAt is not available on UserLibrary, use basic fetch and sort in memory if needed or verify schema
-        // The schema actually has createdAt on UserLibrary. But TS complained about "updatedAt" in the other query?
-        // Ah, the error was "updatedAt does not exist in type UserLibraryOrderByWithRelationInput"
-        // Let's check schema again. UserLibrary has createdAt. Game has updatedAt. UserLibrary does NOT have updatedAt in the schema file I read?
-        // Wait, schema says:
-        // model UserLibrary { ... createdAt DateTime @default(now()) ... }
-        // It does NOT have updatedAt. That explains the error.
         orderBy: {
           createdAt: "desc",
         },
@@ -56,31 +49,82 @@ export async function getUserProfileData() {
     throw new Error("User not found");
   }
 
-  // 2. Derive Profile Data
-  // Determine background image: priority to the latest PLAYING game, else fallback
-  const fallbackBackground = "https://images.igdb.com/igdb/image/upload/t_1080p/79555.jpg"; // Generic gaming background or fallback
-  let backgroundUrl = fallbackBackground;
+  // 2. Derive Profile Data - Background Image Logic
+  let backgroundUrl = "https://images.igdb.com/igdb/image/upload/t_1080p/79555.jpg"; // Default fallback if really nothing found
 
-  if (user.library.length > 0 && user.library[0].game.backgroundImage) {
-    backgroundUrl = user.library[0].game.backgroundImage;
-  } else if (user.library.length > 0 && user.library[0].game.screenshots.length > 0) {
-    backgroundUrl = user.library[0].game.screenshots[0];
+  // Resolve based on profileBackgroundMode
+  const mode = user.profileBackgroundMode || "URL"; // Default to URL if null
+
+  if (mode === "URL" && user.profileBackgroundUrl) {
+      backgroundUrl = user.profileBackgroundUrl;
+  } else if (mode === "STATIC_GAME" && user.profileBackgroundGameId) {
+      const game = await prisma.game.findUnique({
+          where: { id: user.profileBackgroundGameId },
+          select: { backgroundImage: true, screenshots: true, coverImage: true }
+      });
+      if (game) {
+          backgroundUrl = game.backgroundImage || (game.screenshots.length > 0 ? game.screenshots[0] : game.coverImage || backgroundUrl);
+      }
+  } else if (mode === "DYNAMIC_LAST") {
+      // Find most recent played game
+      const lastPlayed = await prisma.userLibrary.findFirst({
+          where: { userId },
+          orderBy: { lastPlayed: "desc" },
+          include: { game: true }
+      });
+      if (lastPlayed) {
+          backgroundUrl = lastPlayed.game.backgroundImage || (lastPlayed.game.screenshots.length > 0 ? lastPlayed.game.screenshots[0] : lastPlayed.game.coverImage || backgroundUrl);
+      }
+  } else if (mode === "DYNAMIC_RANDOM") {
+      // Pick random from BACKLOG or PLAYING
+      // To ensure it changes "every new day", we use a seeded random based on the current date and User ID.
+      const candidates = await prisma.userLibrary.findMany({
+          where: {
+              userId,
+              status: { in: ["BACKLOG", "PLAYING"] },
+              game: {
+                 OR: [
+                     { backgroundImage: { not: null } },
+                     { screenshots: { isEmpty: false } }
+                 ]
+              }
+          },
+          take: 50,
+          orderBy: { id: "asc" }, // Ensure stable order for the seed to work
+          select: { game: { select: { backgroundImage: true, screenshots: true } } }
+      });
+
+      if (candidates.length > 0) {
+          // Simple daily seed: YYYY-MM-DD + UserID
+          const today = new Date().toISOString().split('T')[0];
+          const seed = userId + today;
+
+          let hash = 0;
+          for (let i = 0; i < seed.length; i++) {
+            hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+            hash |= 0; // Convert to 32bit integer
+          }
+          const index = Math.abs(hash) % candidates.length;
+
+          const random = candidates[index];
+          backgroundUrl = random.game.backgroundImage || (random.game.screenshots.length > 0 ? random.game.screenshots[0] : backgroundUrl);
+      }
   }
+
+  // Final fallback to ensure we don't return null if logic fails
+  if (!backgroundUrl) backgroundUrl = "";
+
 
   const profileUser: ProfileUser = {
     id: user.id,
     username: user.name || "Gamer",
     avatarUrl: user.image || "",
     profileBackgroundUrl: backgroundUrl,
+    profileBackgroundMode: user.profileBackgroundMode,
+    profileBackgroundGameId: user.profileBackgroundGameId
   };
 
   // 3. Recent Plays (Based on UserLibrary status=PLAYING or recently updated)
-  // Since ActivityLog isn't fully reliable for history yet, we use UserLibrary 'PLAYING' status
-  // sorted by updatedAt.
-  // 3. Recent Plays (Based on UserLibrary status=PLAYING or with recent lastPlayed)
-  // We fetch two sets to ensure we don't miss:
-  // A. Games with actual recent play history (Steam or manual logs)
-  // B. Games marked as PLAYING but maybe without history yet (recently added)
   const [playedGames, runningGames] = await prisma.$transaction([
     prisma.userLibrary.findMany({
       where: { userId, lastPlayed: { not: null } },
@@ -117,9 +161,34 @@ export async function getUserProfileData() {
   // Take top 10 after sort
   const topRecent = recentLibrary.slice(0, 10);
 
+  // Fetch ActivityLogs for these games in the last 2 weeks (14 days)
+  const twoWeeksAgo = subDays(new Date(), 14);
+  const gameIds = topRecent.map(r => r.gameId);
+
+  const activityLogs = await prisma.activityLog.findMany({
+      where: {
+          userId,
+          gameId: { in: gameIds },
+          type: "PLAY_SESSION",
+          createdAt: { gte: twoWeeksAgo }
+      },
+      select: {
+          gameId: true,
+          details: true
+      }
+  });
+
+  // Helper to sum minutes from logs
+  const getManualRecentMinutes = (gameId: string) => {
+      const logs = activityLogs.filter(l => l.gameId === gameId);
+      return logs.reduce((acc, log) => {
+          const details = log.details as { durationMinutes?: number } | null;
+          return acc + (details?.durationMinutes || 0);
+      }, 0);
+  };
+
   const recentPlays: PlaySession[] = topRecent.map((entry) => {
     // Calculate progress (simplified)
-    // progressManual or steam vs HLTB
     let progress = 0;
     if (entry.progressManual !== null) {
       progress = entry.progressManual;
@@ -131,23 +200,37 @@ export async function getUserProfileData() {
     }
 
     // Format duration
-    const recentMinutes = entry.playtime2weeks ?? 0;
-    // const totalMinutes = entry.playtimeManual ?? entry.playtimeSteam;
+    // Logic: If Steam game, use playtime2weeks from Steam.
+    // If not Steam (or manual overrides), use calculated log sum.
+    let recentMinutes = 0;
+
+    // Check if game is linked to Steam (has steamAppId) OR user has steam connection
+    // But strictly speaking, we trust `playtime2weeks` if it's > 0 or if it's a Steam game.
+    // However, entry.playtime2weeks is explicitly "Steam Recent".
+    if (entry.game.steamAppId) {
+        recentMinutes = entry.playtime2weeks ?? 0;
+    } else {
+        recentMinutes = getManualRecentMinutes(entry.gameId);
+    }
 
     let duration = "";
-
-    // Always show recent playtime (Last 2 weeks)
     if (recentMinutes < 60) {
       duration = `Recent playtime: ${recentMinutes}m`;
     } else {
       duration = `Recent playtime: ${Math.round(recentMinutes / 60)}h`;
     }
 
+    // Image logic: STRICTLY from DB. No external fallback in URL.
+    // entry.game.coverImage is the primary source.
+    // If missing, use backgroundImage.
+    // If both missing, use a local placeholder (not external).
+    const coverUrl = entry.game.coverImage || entry.game.backgroundImage || "/placeholder-game.png";
+
     return {
       game: {
         id: entry.game.id,
         title: entry.game.title,
-        coverUrl: entry.game.coverImage || "",
+        coverUrl: coverUrl,
         slug: entry.game.title.toLowerCase().replace(/ /g, "-"), // simplified slug
       },
       progressPercent: progress,
@@ -157,9 +240,6 @@ export async function getUserProfileData() {
   });
 
   // 4. Upcoming Games (Wishlist + future release date)
-  // We include games with future release dates OR no release date (TBA) that are in wishlist.
-  // Actually, let's just show all Wishlist items sorted by release date (asc), filtering those in the past in memory if needed,
-  // or just relying on the status 'WISHLIST' being the source of truth for "Planned/Upcoming".
   const upcomingLibrary = await prisma.userLibrary.findMany({
     where: {
       userId: userId,
@@ -194,20 +274,17 @@ export async function getUserProfileData() {
     game: {
       id: entry.game.id,
       title: entry.game.title,
-      coverUrl: entry.game.coverImage || "",
+      coverUrl: entry.game.coverImage || "/placeholder-game.png",
       slug: entry.game.title.toLowerCase().replace(/ /g, "-"),
     },
     releaseDate: entry.game.releaseDate ? entry.game.releaseDate.toISOString() : new Date().toISOString(),
   }));
 
   // 5. Friends Activity
-  // We fetched following users. Let's aggregate their latest activity.
-  // Currently we only fetched 'take: 1' activity per friend.
   const friendActivities: FriendActivity[] = [];
   user.following.forEach((friend) => {
     if (friend.activityLogs.length > 0) {
       const log = friend.activityLogs[0];
-      // Only include if we have game data
       if (log.game) {
         friendActivities.push({
           friend: {
@@ -219,7 +296,7 @@ export async function getUserProfileData() {
           game: {
             id: log.game.id,
             title: log.game.title,
-            coverUrl: log.game.coverImage || "",
+            coverUrl: log.game.coverImage || "/placeholder-game.png",
             slug: log.game.title.toLowerCase().replace(/ /g, "-"),
           },
         });
@@ -235,20 +312,29 @@ export async function getUserProfileData() {
   };
 }
 
-export async function updateUserProfile(data: { avatarUrl?: string; backgroundUrl?: string }) {
+export async function updateUserProfile(data: {
+    avatarUrl?: string;
+    backgroundUrl?: string;
+    backgroundMode?: string;
+    backgroundGameId?: string;
+}) {
   const session = await auth();
   if (!session?.user?.id) {
     throw new Error("Unauthorized");
   }
 
   const userId = session.user.id;
+  const updateData: any = {};
+
+  if (data.avatarUrl !== undefined) updateData.image = data.avatarUrl;
+  if (data.backgroundUrl !== undefined) updateData.profileBackgroundUrl = data.backgroundUrl;
+  if (data.backgroundMode !== undefined) updateData.profileBackgroundMode = data.backgroundMode;
+  // allow setting null
+  if (data.backgroundGameId !== undefined) updateData.profileBackgroundGameId = data.backgroundGameId;
 
   await prisma.user.update({
     where: { id: userId },
-    data: {
-      image: data.avatarUrl,
-      profileBackgroundUrl: data.backgroundUrl,
-    },
+    data: updateData,
   });
 
   // Revalidate profile page
