@@ -224,7 +224,16 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         setCustomCoverUrl('');
         setCustomBackgroundUrl('');
 
-        setStatus('BACKLOG');
+        // Default to WISHLIST for TBA/Future, BACKLOG for Released
+        let defaultStatus = 'WISHLIST';
+        if (game.releaseDate) {
+            const rDate = new Date(game.releaseDate);
+            const today = new Date();
+            if (!isNaN(rDate.getTime()) && rDate <= today) {
+                defaultStatus = 'BACKLOG';
+            }
+        }
+        setStatus(defaultStatus);
         setCompletionTarget('MAIN');
 
         setFetchedOpenCritic(score || null);
