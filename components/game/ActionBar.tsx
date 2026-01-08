@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 
 interface ActionBarProps {
   gameId: string;
@@ -153,6 +153,7 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
                                 onBlur={savePlaytime}
                                 className="w-full h-8 bg-transparent border-none text-white placeholder:text-white/50 focus-visible:ring-0 p-0 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 placeholder="0"
+                                aria-label="Hours played"
                             />
                             <span className="text-sm text-white/70 font-medium">hrs</span>
                         </div>
@@ -185,8 +186,10 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
                         const isOwned = ownedPlatforms.includes(platform);
                         return (
                             <button
+                                type="button"
                                 key={platform}
                                 onClick={() => togglePlatform(platform)}
+                                aria-pressed={isOwned}
                                 className={`
                                     px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 flex items-center gap-1.5
                                     ${isOwned
