@@ -37,7 +37,7 @@ export async function searchMetadataCandidates(query: string): Promise<MetadataC
 
     if (igdbRes.status === 'fulfilled') {
         igdbRes.value.forEach(g => {
-            const studio = g.involved_companies?.find(c => c.developer || c.publisher)?.company.name;
+            const studio = g.involved_companies?.find(c => c.developer)?.company.name || g.involved_companies?.find(c => c.publisher)?.company.name;
             candidates.push({
                 id: g.id.toString(),
                 title: g.name,
@@ -87,7 +87,7 @@ export async function fetchExternalMetadata(provider: 'IGDB' | 'RAWG', query: st
 
         if (!game) return null;
 
-        const studio = game.involved_companies?.find(c => c.developer || c.publisher)?.company.name || "";
+        const studio = game.involved_companies?.find(c => c.developer)?.company.name || game.involved_companies?.find(c => c.publisher)?.company.name || "";
         const releaseDate = game.first_release_date ? new Date(game.first_release_date * 1000) : null;
         const genres = game.genres?.map(g => g.name) || [];
         const platforms = game.platforms?.map(p => p.name) || [];
