@@ -115,7 +115,7 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
         disabled={adding}
         className="bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md"
       >
-        {adding ? "Adding..." : "Add to Library"}
+        {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add to Library"}
       </Button>
     )
   }
