@@ -58,6 +58,8 @@ model User {
   preferences   String? // JSON string
   isPublic      Boolean   @default(false)
   profileBackgroundUrl String?
+  profileBackgroundMode String   @default("URL") // URL, DYNAMIC_LAST, DYNAMIC_RANDOM, STATIC_GAME
+  profileBackgroundGameId String?
   platforms     String[]  @default([])
 
   createdAt DateTime @default(now())
