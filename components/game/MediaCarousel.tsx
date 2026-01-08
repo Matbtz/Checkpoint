@@ -17,7 +17,7 @@ interface MediaCarouselProps {
 
 export function MediaCarousel({ screenshots, videos, className, title = "Media" }: MediaCarouselProps) {
   const [lightboxOpen, setLightboxOpen] = React.useState(false);
-  const [selectedMedia, setSelectedMedia] = React.useState<{ src: string, type: "image" | "video" } | null>(null);
+  const [initialIndex, setInitialIndex] = React.useState(0);
 
   if (screenshots.length === 0 && videos.length === 0) return null;
 
@@ -27,23 +27,15 @@ export function MediaCarousel({ screenshots, videos, className, title = "Media" 
     ...screenshots.filter(s => s && s.startsWith('http')).map((s) => ({ type: "image" as const, src: s })),
   ];
 
-  const handleMediaClick = (item: { src: string, type: "image" | "video" }) => {
-      // For videos, VideoCard might handle interactions, but if we want a lightbox for it too:
-      // Note: VideoCard currently likely renders an iframe or direct video player.
-      // If it's an iframe, clicking it might just play it inside the card.
-      // We might want an overlay to intercept click?
-      // For images, definitely lightbox.
+  const handleMediaClick = (index: number) => {
+      // Only open lightbox for images currently, or both if desired.
+      // Based on previous decision, let's open for images.
+      // If we enable for video, we need to handle the iframe click interception or overlay.
+      // Assuming VideoCard might consume click.
+      const item = items[index];
       if (item.type === "image") {
-          setSelectedMedia(item);
+          setInitialIndex(index);
           setLightboxOpen(true);
-      } else {
-         // Optional: Do we want to lightbox videos?
-         // User asked "allow screenshots to be clicked to see them in a large format".
-         // I'll prioritize screenshots. Videos usually play inline.
-         // But I'll enable it for videos if they want.
-         // Let's stick to images for now based on "screenshots to be clicked".
-         // Actually, if it's a small carousel, viewing video large is good too.
-         // But typical YouTube embeds handle fullscreen.
       }
   };
 
@@ -59,7 +51,7 @@ export function MediaCarousel({ screenshots, videos, className, title = "Media" 
                   "relative aspect-video w-[300px] md:w-[400px] shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-zinc-700 group",
                   item.type === "image" ? "cursor-pointer" : ""
               )}
-              onClick={() => handleMediaClick(item)}
+              onClick={() => handleMediaClick(idx)}
             >
               {item.type === "video" ? (
                 <VideoCard url={item.src} className="absolute inset-0" />
@@ -81,14 +73,12 @@ export function MediaCarousel({ screenshots, videos, className, title = "Media" 
         <ScrollBar orientation="horizontal" />
       </ScrollArea>
 
-      {selectedMedia && (
-        <MediaLightbox
-            isOpen={lightboxOpen}
-            onClose={() => setLightboxOpen(false)}
-            src={selectedMedia.src}
-            type={selectedMedia.type}
-        />
-      )}
+      <MediaLightbox
+          isOpen={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          items={items}
+          initialIndex={initialIndex}
+      />
     </div>
   );
 }
