@@ -40,7 +40,7 @@ export function StatusSelector({ gameId, currentStatus }: StatusSelectorProps) {
 
   return (
     <Select value={status} onValueChange={handleStatusChange} disabled={loading}>
-      <SelectTrigger className="w-[130px] bg-white/10 border-white/20 text-white backdrop-blur-md">
+      <SelectTrigger className="w-[130px] h-10 bg-white/10 border-white/20 text-white backdrop-blur-md">
         <SelectValue placeholder="Status" />
       </SelectTrigger>
       <SelectContent>

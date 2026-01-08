@@ -254,7 +254,8 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                     const m = parseFloat(manualTimeHours);
                     if (!isNaN(m)) effectiveMinutes = Math.round(m * 60);
                 } else {
-                    effectiveMinutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
+                    // If not manual, use Steam time (ignore item.playtimeManual as we are disabling it)
+                    effectiveMinutes = item.playtimeSteam || 0;
                 }
 
                 if (targetMinutes > 0) {
