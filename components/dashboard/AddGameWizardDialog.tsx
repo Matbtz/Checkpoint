@@ -141,7 +141,11 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         // 1. Fetch OpenCritic if not present
         let score = game.opencriticScore;
         let url = game.opencriticUrl;
-        if (!score && game.source !== 'manual') {
+
+        // Check release date to avoid fetching for future games
+        const isFutureRelease = game.releaseDate && new Date(game.releaseDate) > new Date();
+
+        if (!score && game.source !== 'manual' && !isFutureRelease) {
             try {
                 const ocResult = await fetchOpenCriticAction(game.title);
                 if (ocResult) {
