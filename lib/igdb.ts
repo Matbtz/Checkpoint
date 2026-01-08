@@ -226,8 +226,37 @@ function mapRawToEnriched(games: IgdbGame[]): EnrichedIgdbGame[] {
 export async function searchIgdbGames(query: string, limit: number = 10, filters?: SearchFilters): Promise<EnrichedIgdbGame[]> {
     let whereClause = query ? `search "${query}"` : '';
 
+    // Exclude fan-made games and mods by default
+    // Category 0 = Main Game, 1 = DLC, 2 = Expansion, 3 = Bundle, 4 = Standalone Expansion, 8 = Remake, 9 = Remaster, 10 = Expanded Game
+    // We want to exclude Mods (category ?) or just stick to known "Official" types.
+    // IGDB Categories:
+    // 0: Main Game
+    // 1: DLC Addon
+    // 2: Expansion
+    // 3: Bundle
+    // 4: Standalone Expansion
+    // 5: Mod
+    // 6: Episode
+    // 7: Season
+    // 8: Remake
+    // 9: Remaster
+    // 10: Expanded Game
+    // 11: Port
+    // 12: Fork
+    // 13: Pack
+    // 14: Update
+
+    // We filter to include only Main, DLC, Expansions, Remakes, Remasters, Expanded.
+    // Explicitly Excluding: Mod (5), Episode (6), Season (7), Port (11), Fork (12), Pack (13), Update (14)
+    // Actually, safer to just Exclude Category 5 (Mod) explicitly if we want to be broad,
+    // or Include specific list. "Official" usually implies removing Mods and maybe Forks.
+    // Let's stick to positive inclusion for safety: 0, 1, 2, 3, 4, 8, 9, 10.
+    const allowedCategories = [0, 1, 2, 3, 4, 8, 9, 10];
+    const categoryFilter = `category = (${allowedCategories.join(',')})`;
+
     // Add Filters
     if (filters) {
+        // ... (existing logic)
         const conditions: string[] = [];
 
         if (filters.genres && filters.genres.length > 0) {
@@ -326,10 +355,24 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
             // If we have a query (search "foo"), we append with &
             // If no query, we start with 'where' if it's the first condition, or just join them
             if (whereClause) {
-                whereClause += ` & ${conditions.join(' & ')}`;
+                whereClause += ` & ${categoryFilter} & ${conditions.join(' & ')}`;
             } else {
-                whereClause = `where ${conditions.join(' & ')}`;
+                whereClause = `where ${categoryFilter} & ${conditions.join(' & ')}`;
             }
+        } else {
+            // No filters provided, but we still have category filter
+             if (whereClause) {
+                whereClause += ` & ${categoryFilter}`;
+            } else {
+                whereClause = `where ${categoryFilter}`;
+            }
+        }
+    } else {
+        // No filters object provided at all
+        if (whereClause) {
+            whereClause += ` & ${categoryFilter}`;
+        } else {
+            whereClause = `where ${categoryFilter}`;
         }
     }
 
