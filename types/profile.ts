@@ -10,6 +10,8 @@ export type User = {
   username: string;
   avatarUrl: string;
   profileBackgroundUrl: string; // Large landscape artwork
+  profileBackgroundMode?: string;
+  profileBackgroundGameId?: string | null;
 };
 
 export interface PlaySession {

@@ -61,6 +61,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     // --- GENERAL TAB STATE ---
     const [status, setStatus] = useState(item.status);
     const [completionType, setCompletionType] = useState(item.targetedCompletionType || 'Main');
+    const [ownedPlatforms, setOwnedPlatforms] = useState<string[]>(item.ownedPlatforms || []);
 
     // Time
     const initialMinutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
@@ -117,6 +118,36 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     const [searchedBackgrounds, setSearchedBackgrounds] = useState<string[]>([]);
     const [searchingMedia, setSearchingMedia] = useState(false);
 
+    // Auto-calculate progress when not manual
+    useEffect(() => {
+        if (!useManualProgress) {
+            let targetMinutes = 0;
+            const normalizedTarget = completionType.toLowerCase();
+
+            // Use local state HLTB values if admin override enabled, otherwise use game default (or local state initialized from game)
+            // Actually, we initialized local state (hltbMain, etc) from item.game, and those are editable if showFixMatch is true.
+            // So we can just use the local state variables hltbMain, hltbExtra, hltbCompletionist which are numbers.
+
+            if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
+                targetMinutes = hltbCompletionist;
+            } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
+                targetMinutes = hltbExtra;
+            } else {
+                targetMinutes = hltbMain;
+            }
+
+            const currentHours = parseFloat(manualTimeHours);
+            if (!isNaN(currentHours) && targetMinutes > 0) {
+                const currentMinutes = currentHours * 60;
+                const prog = Math.min(100, Math.round((currentMinutes / targetMinutes) * 100));
+                setManualProgress(prog.toString());
+            } else if (targetMinutes === 0 && !isNaN(currentHours) && currentHours > 0) {
+                 // If no target time but we have playtime, maybe don't change progress or set to 0?
+                 // Usually 0 if undefined target.
+            }
+        }
+    }, [useManualProgress, manualTimeHours, completionType, hltbMain, hltbExtra, hltbCompletionist]);
+
 
     useEffect(() => {
         if (isOpen) {
@@ -125,6 +156,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             // Reset General
             setStatus(item.status);
             setCompletionType(item.targetedCompletionType || 'Main');
+            setOwnedPlatforms(item.ownedPlatforms || []);
             const minutes = item.playtimeManual !== null ? item.playtimeManual : (item.playtimeSteam || 0);
             setUseManualTime(item.playtimeManual !== null);
             setManualTimeHours((Math.round((minutes / 60) * 10) / 10).toString());
@@ -188,6 +220,9 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             const libData: Partial<Parameters<typeof updateLibraryEntry>[1]> = {};
             if (status !== item.status) libData.status = status;
             if (completionType !== item.targetedCompletionType) libData.targetedCompletionType = completionType;
+            if (JSON.stringify(ownedPlatforms.sort()) !== JSON.stringify((item.ownedPlatforms || []).sort())) {
+                libData.ownedPlatforms = ownedPlatforms;
+            }
 
             if (useManualTime) {
                 const m = parseFloat(manualTimeHours);
@@ -200,7 +235,40 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 const p = parseInt(manualProgress);
                 if (!isNaN(p)) libData.progressManual = Math.min(100, Math.max(0, p));
             } else {
-                libData.progressManual = null;
+                // Calculate and save progress even if not manual override
+                // Re-calculate to be sure we save the current state
+                let targetMinutes = 0;
+                const normalizedTarget = completionType.toLowerCase();
+
+                if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
+                    targetMinutes = hltbCompletionist;
+                } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
+                    targetMinutes = hltbExtra;
+                } else {
+                    targetMinutes = hltbMain;
+                }
+
+                // Determine effective playtime (manual or fallback) for calculation
+                let effectiveMinutes = 0;
+                if (useManualTime) {
+                    const m = parseFloat(manualTimeHours);
+                    if (!isNaN(m)) effectiveMinutes = Math.round(m * 60);
+                } else {
+                    // If not manual, use Steam time (ignore item.playtimeManual as we are disabling it)
+                    effectiveMinutes = item.playtimeSteam || 0;
+                }
+
+                if (targetMinutes > 0) {
+                    const calculatedProgress = Math.min(100, Math.round((effectiveMinutes / targetMinutes) * 100));
+                    libData.progressManual = calculatedProgress;
+                } else if (targetMinutes === 0 && effectiveMinutes > 0) {
+                     // If we have playtime but no target, maybe default to 0 or keep null?
+                     // Keeping null effectively means 0 in UI usually.
+                     // But user wants it saved. Let's save 0 if we can't calculate percentage.
+                     libData.progressManual = 0;
+                } else {
+                    libData.progressManual = 0;
+                }
             }
 
             // User Completion Times
@@ -385,6 +453,26 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                 </div>
                             </div>
 
+                            {/* Owned Platforms */}
+                            <div className="space-y-2">
+                                <Label>Owned Platforms</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {platforms.length > 0 ? platforms.map(p => (
+                                        <div key={p} className="flex items-center gap-2 border px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900/50">
+                                            <Checkbox
+                                                id={`op-${p}`}
+                                                checked={ownedPlatforms.includes(p)}
+                                                onCheckedChange={(c) => {
+                                                    if (c) setOwnedPlatforms([...ownedPlatforms, p]);
+                                                    else setOwnedPlatforms(ownedPlatforms.filter(op => op !== p));
+                                                }}
+                                            />
+                                            <Label htmlFor={`op-${p}`} className="text-xs cursor-pointer">{p}</Label>
+                                        </div>
+                                    )) : <span className="text-sm text-zinc-500 italic">No platforms data for this game. Add them in Metadata tab.</span>}
+                                </div>
+                            </div>
+
                             {/* Time & Progress */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -466,6 +554,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                     predictedMain={item.game.predictedMain}
                                     predictedExtra={item.game.predictedExtra}
                                     predictedCompletionist={item.game.predictedCompletionist}
+                                    targetType={completionType}
                                 />
 
                                 <div className="grid grid-cols-2 gap-4">
