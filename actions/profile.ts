@@ -77,7 +77,7 @@ export async function getUserProfileData() {
       }
   } else if (mode === "DYNAMIC_RANDOM") {
       // Pick random from BACKLOG or PLAYING
-      // Since we can't do RAND() easily in Prisma without raw query, fetch a small batch and pick random
+      // To ensure it changes "every new day", we use a seeded random based on the current date and User ID.
       const candidates = await prisma.userLibrary.findMany({
           where: {
               userId,
@@ -90,11 +90,23 @@ export async function getUserProfileData() {
               }
           },
           take: 50,
+          orderBy: { id: "asc" }, // Ensure stable order for the seed to work
           select: { game: { select: { backgroundImage: true, screenshots: true } } }
       });
 
       if (candidates.length > 0) {
-          const random = candidates[Math.floor(Math.random() * candidates.length)];
+          // Simple daily seed: YYYY-MM-DD + UserID
+          const today = new Date().toISOString().split('T')[0];
+          const seed = userId + today;
+
+          let hash = 0;
+          for (let i = 0; i < seed.length; i++) {
+            hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+            hash |= 0; // Convert to 32bit integer
+          }
+          const index = Math.abs(hash) % candidates.length;
+
+          const random = candidates[index];
           backgroundUrl = random.game.backgroundImage || (random.game.screenshots.length > 0 ? random.game.screenshots[0] : backgroundUrl);
       }
   }
