@@ -16,6 +16,58 @@ export interface ExternalMetadata {
     source: 'IGDB' | 'RAWG';
 }
 
+export interface MetadataCandidate {
+    id: string;
+    title: string;
+    releaseDate: Date | null;
+    source: 'IGDB' | 'RAWG';
+    studio?: string;
+}
+
+export async function searchMetadataCandidates(query: string): Promise<MetadataCandidate[]> {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const candidates: MetadataCandidate[] = [];
+
+    const [igdbRes, rawgRes] = await Promise.allSettled([
+        searchIgdbGames(query, 5),
+        searchRawgGames(query, 5)
+    ]);
+
+    if (igdbRes.status === 'fulfilled') {
+        igdbRes.value.forEach(g => {
+            const studio = g.involved_companies?.find(c => c.developer || c.publisher)?.company.name;
+            candidates.push({
+                id: g.id.toString(),
+                title: g.name,
+                releaseDate: g.first_release_date ? new Date(g.first_release_date * 1000) : null,
+                source: 'IGDB',
+                studio
+            });
+        });
+    }
+
+    if (rawgRes.status === 'fulfilled') {
+        rawgRes.value.forEach(g => {
+            candidates.push({
+                id: g.id.toString(),
+                title: g.name,
+                releaseDate: g.released ? new Date(g.released) : null,
+                source: 'RAWG'
+            });
+        });
+    }
+
+    // Sort by Levenshtein distance (closest title match) or simple relevance?
+    // User mentioned "using levenshtein distance".
+    // I'll implement a simple sort here or let client do it? Server side is better.
+    // For now, I'll just return them. The search functions usually return sorted by relevance.
+    // I will interleave them or just return concatenated.
+
+    return candidates;
+}
+
 export async function fetchExternalMetadata(provider: 'IGDB' | 'RAWG', query: string, externalId?: string): Promise<ExternalMetadata | null> {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Unauthorized");

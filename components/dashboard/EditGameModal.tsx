@@ -10,14 +10,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateLibraryEntry, fixGameMatch, extractColorsAction } from '@/actions/library';
 import { updateGameMetadata, searchGameImages } from '@/actions/game';
-import { fetchExternalMetadata, ExternalMetadata } from '@/actions/fetch-metadata';
+import { fetchExternalMetadata, searchMetadataCandidates, MetadataCandidate, ExternalMetadata } from '@/actions/fetch-metadata';
 import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
-import { Loader2, Plus, X, ChevronDown, ChevronRight, RefreshCw, BadgeInfo } from 'lucide-react';
+import { Loader2, Plus, X, ChevronDown, ChevronRight, RefreshCw, BadgeInfo, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { HLTBCard } from '@/components/game/HLTBCard';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type GameWithLibrary = UserLibrary & { game: Game; tags?: Tag[] };
 
@@ -77,8 +78,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
 
     // Progress
     const [isManualProgress, setIsManualProgress] = useState(item.isManualProgress || false);
-    // Note: progressManual holds the value regardless of mode.
-    // If isManualProgress=false, we calc it. If true, user inputs it.
     const [progressValue, setProgressValue] = useState(item.progressManual?.toString() || '0');
 
     // Fix Match (HLTB)
@@ -118,8 +117,14 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     const [metaSteamScore, setMetaSteamScore] = useState(item.game.steamReviewPercent?.toString() || "");
     const [metaFranchise, setMetaFranchise] = useState(item.game.franchise || "");
 
-    const [refreshProvider, setRefreshProvider] = useState<'IGDB' | 'RAWG'>('IGDB');
-    const [refreshingMetadata, setRefreshingMetadata] = useState(false);
+    // Metadata Search State
+    const [isSearchingMetadata, setIsSearchingMetadata] = useState(false);
+    const [metaSearchQuery, setMetaSearchQuery] = useState(item.game.title);
+    const [metaCandidates, setMetaCandidates] = useState<MetadataCandidate[]>([]);
+    const [metaSearchLoading, setMetaSearchLoading] = useState(false);
+    const [metaPreviewId, setMetaPreviewId] = useState<string | null>(null);
+    const [metaPreviewData, setMetaPreviewData] = useState<ExternalMetadata | null>(null);
+    const [metaPreviewLoading, setMetaPreviewLoading] = useState(false);
 
     // --- MEDIA TAB STATE ---
     const [coverImage, setCoverImage] = useState(item.customCoverImage || item.game.coverImage || "");
@@ -135,7 +140,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
 
     // Auto-calculate progress
     useEffect(() => {
-        // If Manual Mode is OFF, we calculate progress automatically
         if (!isManualProgress) {
             let targetMinutes = 0;
             const normalizedTarget = completionType.toLowerCase();
@@ -148,7 +152,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 targetMinutes = hltbMain;
             }
 
-            // Playtime source: Manual Time Override OR Steam/System Time
             let currentMinutes = 0;
             if (useManualTime) {
                 const m = parseFloat(manualTimeHours);
@@ -161,8 +164,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 const prog = Math.min(100, Math.round((currentMinutes / targetMinutes) * 100));
                 setProgressValue(prog.toString());
             } else {
-                // No target, progress is ambiguous. Default to 0? Or keep last known?
-                // Usually 0 if unknown target.
                 setProgressValue('0');
             }
         }
@@ -202,6 +203,13 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             setMetaSteamScore(item.game.steamReviewPercent?.toString() || "");
             setMetaFranchise(item.game.franchise || "");
 
+            // Reset Metadata Search
+            setIsSearchingMetadata(false);
+            setMetaSearchQuery(item.game.title);
+            setMetaCandidates([]);
+            setMetaPreviewId(null);
+            setMetaPreviewData(null);
+
             // Reset Media
             setCoverImage(item.customCoverImage || item.game.coverImage || "");
             setBackgroundImage(item.game.backgroundImage || "");
@@ -240,27 +248,53 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         setShowFoundBackgrounds(true);
     };
 
-    const handleMetadataRefresh = async () => {
-        setRefreshingMetadata(true);
+    const handleMetadataSearch = async () => {
+        if (!metaSearchQuery.trim()) return;
+        setMetaSearchLoading(true);
+        setMetaCandidates([]);
+        setMetaPreviewId(null);
+        setMetaPreviewData(null);
         try {
-            // Fix: Pass query as Title (first arg) and externalId as IGDB ID (second arg)
-            const data = await fetchExternalMetadata(refreshProvider, item.game.title, item.game.igdbId || undefined);
-            if (data) {
-                // Only update fields if new data is not null
-                if (data.title) setMetaTitle(data.title);
-                if (data.studio) setMetaStudio(data.studio);
-                if (data.releaseDate) setMetaReleaseDate(data.releaseDate.toISOString().split('T')[0]);
-                if (data.genres && data.genres.length > 0) setMetaGenres(data.genres);
-                if (data.platforms && data.platforms.length > 0) setMetaPlatforms(data.platforms);
-                if (data.igdbScore !== null) setMetaIgdbScore(data.igdbScore.toString());
-                if (data.steamReviewPercent !== null) setMetaSteamScore(data.steamReviewPercent.toString());
-                if (data.franchise) setMetaFranchise(data.franchise);
-            }
-        } catch (e) {
-            console.error("Refresh failed", e);
+            const results = await searchMetadataCandidates(metaSearchQuery);
+            setMetaCandidates(results);
+        } catch(e) {
+            console.error(e);
         } finally {
-            setRefreshingMetadata(false);
+            setMetaSearchLoading(false);
         }
+    };
+
+    const handleMetadataPreview = async (candidate: MetadataCandidate) => {
+        if (metaPreviewId === candidate.id) {
+            // Toggle off
+            setMetaPreviewId(null);
+            setMetaPreviewData(null);
+            return;
+        }
+
+        setMetaPreviewId(candidate.id);
+        setMetaPreviewLoading(true);
+        setMetaPreviewData(null);
+        try {
+            const data = await fetchExternalMetadata(candidate.source, "", candidate.id);
+            setMetaPreviewData(data);
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setMetaPreviewLoading(false);
+        }
+    };
+
+    const applyMetadata = (data: ExternalMetadata) => {
+        if (data.title) setMetaTitle(data.title);
+        if (data.studio) setMetaStudio(data.studio);
+        if (data.releaseDate) setMetaReleaseDate(data.releaseDate.toISOString().split('T')[0]);
+        if (data.genres) setMetaGenres(data.genres);
+        if (data.platforms) setMetaPlatforms(data.platforms);
+        if (data.igdbScore !== null) setMetaIgdbScore(data.igdbScore.toString());
+        if (data.steamReviewPercent !== null) setMetaSteamScore(data.steamReviewPercent.toString());
+        if (data.franchise) setMetaFranchise(data.franchise);
+        setIsSearchingMetadata(false);
     };
 
     const handleSave = async () => {
@@ -336,7 +370,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             // 2. Update Game Metadata (Metadata & Media Tabs)
             const metaData: Parameters<typeof updateGameMetadata>[1] = {};
 
-            // Only update if changed
             if (metaTitle !== item.game.title) metaData.title = metaTitle;
             if (metaStudio !== (item.game.studio || "")) metaData.studio = metaStudio;
 
@@ -353,30 +386,6 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                 ? currentPlatformsRaw.map((x: any) => typeof x === 'string' ? x : x?.name || '').filter(Boolean)
                 : [];
             if (JSON.stringify([...metaPlatforms].sort()) !== JSON.stringify([...currentPlatforms].sort())) metaData.platforms = metaPlatforms;
-
-            // Scores - OpenCritic (manual edit disabled in new design, but state is there)
-            // Wait, we made them read-only, but logic says "save fields".
-            // If the user refreshed, metaOpencritic doesn't change from refresh (excluded).
-            // But if we want to save igdbScore etc, we need updateGameMetadata to support them.
-            // Currently updateGameMetadata only supports opencriticScore.
-            // I should update updateGameMetadata if I want to save other scores, but the task says "Add IGDB and steam scores".
-            // Assuming I just display them for now or if I should persist them.
-            // The prompt says: "Upon save the fields in the DB are refreshed". So yes, persist them.
-            // But updateGameMetadata schema in my previous read_file didn't show igdbScore.
-            // I need to check actions/game.ts again. It only lists specific fields.
-            // I will add them to the payload but I might need to update the server action too.
-            // The server action updateGameMetadata accepts specific fields. I will need to update it to accept igdbScore/steam.
-            // But wait, the task implies I should be able to update them.
-            // I will update updateGameMetadata in the same step.
-
-            // Re-read prompt: "All fields from this page except OpenCritic score (for now) are refreshed by requesting the selected provider."
-            // So I should save whatever is in the state.
-
-            // NOTE: updateGameMetadata in actions/game.ts handles opencriticScore.
-            // I will rely on what is there. If igdbScore is not in updateGameMetadata signature, I can't save it yet without modifying that action.
-            // I will assume I should modify that action as well or just ignore saving them if the action doesn't support it.
-            // Given the instruction "Upon save the fields in the DB are refreshed", I must support saving them.
-            // I will update the action call here, but I must also update actions/game.ts.
 
             if (metaOpencritic) {
                 const val = parseInt(metaOpencritic);
@@ -625,23 +634,84 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                         <TabsContent value="metadata" className="mt-0 space-y-6">
 
                             {/* Refresh Controls */}
-                            <div className="flex items-center gap-2 mb-6 p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border">
-                                <BadgeInfo className="w-4 h-4 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground flex-1">Refresh metadata from external provider.</span>
-                                <Select value={refreshProvider} onValueChange={(v: 'IGDB' | 'RAWG') => setRefreshProvider(v)}>
-                                    <SelectTrigger className="w-[100px] h-8">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="IGDB">IGDB</SelectItem>
-                                        <SelectItem value="RAWG">RAWG</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Button size="sm" variant="secondary" onClick={handleMetadataRefresh} disabled={refreshingMetadata}>
-                                    <RefreshCw className={`w-3 h-3 mr-2 ${refreshingMetadata ? 'animate-spin' : ''}`} />
-                                    Refresh
+                            <div className="flex items-center justify-between mb-4">
+                                <Label className="text-base font-semibold">Game Metadata</Label>
+                                <Button size="sm" variant="outline" onClick={() => setIsSearchingMetadata(!isSearchingMetadata)}>
+                                    <Search className="h-4 w-4 mr-2" />
+                                    {isSearchingMetadata ? "Hide Search" : "Find Metadata"}
                                 </Button>
                             </div>
+
+                            {isSearchingMetadata && (
+                                <div className="mb-6 p-4 border rounded-md bg-zinc-50 dark:bg-zinc-900/50 space-y-4">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={metaSearchQuery}
+                                            onChange={(e) => setMetaSearchQuery(e.target.value)}
+                                            placeholder="Search game title..."
+                                            onKeyDown={(e) => e.key === 'Enter' && handleMetadataSearch()}
+                                        />
+                                        <Button onClick={handleMetadataSearch} disabled={metaSearchLoading}>
+                                            {metaSearchLoading && <Loader2 className="animate-spin h-4 w-4 mr-2" />}
+                                            Search
+                                        </Button>
+                                    </div>
+
+                                    {metaCandidates.length > 0 && (
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                            {metaCandidates.map((c) => (
+                                                <div key={`${c.source}-${c.id}`} className="border rounded-md bg-background p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="font-semibold text-sm flex items-center gap-2">
+                                                                {c.title}
+                                                                <Badge variant="outline" className="text-[10px] h-5">{c.source}</Badge>
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {c.releaseDate ? new Date(c.releaseDate).getFullYear() : 'TBA'}
+                                                                {c.studio ? ` • ${c.studio}` : ''}
+                                                            </div>
+                                                        </div>
+                                                        <Button size="sm" variant="ghost" onClick={() => handleMetadataPreview(c)}>
+                                                            {metaPreviewId === c.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                        </Button>
+                                                    </div>
+
+                                                    {metaPreviewId === c.id && (
+                                                        <div className="mt-3 pt-3 border-t text-sm space-y-3">
+                                                            {metaPreviewLoading ? (
+                                                                <div className="flex justify-center py-4"><Loader2 className="animate-spin h-5 w-5" /></div>
+                                                            ) : metaPreviewData ? (
+                                                                <>
+                                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                                        <div><span className="text-muted-foreground">Date:</span> {metaPreviewData.releaseDate ? new Date(metaPreviewData.releaseDate).toISOString().split('T')[0] : '-'}</div>
+                                                                        <div><span className="text-muted-foreground">Studio:</span> {metaPreviewData.studio || '-'}</div>
+                                                                        <div><span className="text-muted-foreground">Franchise:</span> {metaPreviewData.franchise || '-'}</div>
+                                                                        <div>
+                                                                            <span className="text-muted-foreground">Scores:</span> IGDB {metaPreviewData.igdbScore || '-'} / Steam {metaPreviewData.steamReviewPercent ? metaPreviewData.steamReviewPercent + '%' : '-'}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-muted-foreground text-xs">Genres:</span>
+                                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                                            {metaPreviewData.genres.map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
+                                                                        </div>
+                                                                    </div>
+                                                                    <Button size="sm" className="w-full mt-2" onClick={() => applyMetadata(metaPreviewData)}>
+                                                                        Select & Apply
+                                                                    </Button>
+                                                                </>
+                                                            ) : (
+                                                                <div className="text-destructive text-xs">Failed to load details.</div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="space-y-4">
                                 <div className="space-y-1">
@@ -687,10 +757,12 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Franchise</Label>
-                                    <div className="font-medium">{metaFranchise || "-"}</div>
-                                </div>
+                                {metaFranchise && (
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Franchise</Label>
+                                        <div className="font-medium">{metaFranchise}</div>
+                                    </div>
+                                )}
                             </div>
                         </TabsContent>
 
