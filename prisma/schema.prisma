@@ -61,7 +61,6 @@ model User {
   profileBackgroundMode String   @default("URL") // URL, DYNAMIC_LAST, DYNAMIC_RANDOM, STATIC_GAME
   profileBackgroundGameId String?
   platforms     String[]  @default([])
-  platforms            String[]  @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
