@@ -178,26 +178,29 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
 
         {/* ROW 2: Platforms (Pills) */}
         {(userLibrary.status === "PLAYING" || userLibrary.status === "BACKLOG" || userLibrary.status === "COMPLETED") && gamePlatforms && gamePlatforms.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-                {gamePlatforms.map((platform) => {
-                    const isOwned = ownedPlatforms.includes(platform);
-                    return (
-                        <button
-                            key={platform}
-                            onClick={() => togglePlatform(platform)}
-                            className={`
-                                px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 flex items-center gap-1.5
-                                ${isOwned
-                                    ? "bg-white text-black border-white hover:bg-white/90"
-                                    : "bg-transparent text-white/60 border-white/20 hover:border-white/40 hover:text-white"
-                                }
-                            `}
-                        >
-                            {isOwned && <Check className="w-3 h-3" />}
-                            {platform}
-                        </button>
-                    )
-                })}
+            <div className="space-y-1">
+                <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider pl-1">Game owned on</span>
+                <div className="flex flex-wrap gap-2">
+                    {gamePlatforms.map((platform) => {
+                        const isOwned = ownedPlatforms.includes(platform);
+                        return (
+                            <button
+                                key={platform}
+                                onClick={() => togglePlatform(platform)}
+                                className={`
+                                    px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 flex items-center gap-1.5
+                                    ${isOwned
+                                        ? "bg-white text-black border-white hover:bg-white/90"
+                                        : "bg-transparent text-white/60 border-white/20 hover:border-white/40 hover:text-white"
+                                    }
+                                `}
+                            >
+                                {isOwned && <Check className="w-3 h-3" />}
+                                {platform}
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
         )}
     </div>
