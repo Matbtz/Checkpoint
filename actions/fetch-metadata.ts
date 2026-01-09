@@ -3,6 +3,7 @@
 import { auth } from '@/auth';
 import { getIgdbGameDetails, searchIgdbGames } from '@/lib/igdb';
 import { searchRawgGames, getRawgGameDetails } from '@/lib/rawg';
+import { stringSimilarity } from '@/lib/utils';
 
 export interface ExternalMetadata {
     title: string;
@@ -31,8 +32,8 @@ export async function searchMetadataCandidates(query: string): Promise<MetadataC
     const candidates: MetadataCandidate[] = [];
 
     const [igdbRes, rawgRes] = await Promise.allSettled([
-        searchIgdbGames(query, 5),
-        searchRawgGames(query, 5)
+        searchIgdbGames(query, 20),
+        searchRawgGames(query, 20)
     ]);
 
     if (igdbRes.status === 'fulfilled') {
@@ -58,6 +59,14 @@ export async function searchMetadataCandidates(query: string): Promise<MetadataC
             });
         });
     }
+
+    // Sort by Levenshtein distance (closest title match)
+    // We calculate a score (0 to 1) and sort descending.
+    candidates.sort((a, b) => {
+        const scoreA = stringSimilarity(a.title, query);
+        const scoreB = stringSimilarity(b.title, query);
+        return scoreB - scoreA;
+    });
 
     // Sort by Levenshtein distance (closest title match) or simple relevance?
     // User mentioned "using levenshtein distance".
@@ -106,7 +115,7 @@ export async function fetchExternalMetadata(provider: 'IGDB' | 'RAWG', query: st
         };
 
     } else if (provider === 'RAWG') {
-         // Prefer ID if available
+        // Prefer ID if available
         let game = null;
         if (externalId && !isNaN(parseInt(externalId))) { // RAWG ID is int?
             game = await getRawgGameDetails(parseInt(externalId));
@@ -116,8 +125,8 @@ export async function fetchExternalMetadata(provider: 'IGDB' | 'RAWG', query: st
         if (!game && query) {
             const results = await searchRawgGames(query, 1);
             if (results.length > 0) {
-                 // Search results are partial, need details
-                 game = await getRawgGameDetails(results[0].id);
+                // Search results are partial, need details
+                game = await getRawgGameDetails(results[0].id);
             }
         }
 

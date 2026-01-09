@@ -45,12 +45,12 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
     // 2. Build Search Clause - AND condition for strict term matching
     const whereClause: any = {
         AND: [
-             // Ensure all terms are present
-             ...terms.map(term => ({
+            // Ensure all terms are present
+            ...terms.map(term => ({
                 title: { contains: term, mode: 'insensitive' as const }
-             })),
-             // Optional filters
-             ...(filters?.minScore !== undefined ? [{ opencriticScore: { gte: filters.minScore } }] : [])
+            })),
+            // Optional filters
+            ...(filters?.minScore !== undefined ? [{ opencriticScore: { gte: filters.minScore } }] : [])
         ]
     };
 
@@ -186,16 +186,16 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         if (filters.platforms && filters.platforms.length > 0) {
             filteredGames = filteredGames.filter(game => {
                 if (!game.platforms) return false;
-                 try {
-                     const p = game.platforms;
-                     if (Array.isArray(p)) {
-                         return p.some((plat: any) => {
-                             const name = typeof plat === 'string' ? plat : plat?.name;
-                             return filters.platforms?.includes(name);
-                         });
-                     }
-                     return false;
-                 } catch { return false; }
+                try {
+                    const p = game.platforms;
+                    if (Array.isArray(p)) {
+                        return p.some((plat: any) => {
+                            const name = typeof plat === 'string' ? plat : plat?.name;
+                            return filters.platforms?.includes(name);
+                        });
+                    }
+                    return false;
+                } catch { return false; }
             });
         }
     }
@@ -214,7 +214,7 @@ export async function searchLocalGames(query: string, filters?: SearchFilters): 
         // If explicit sort is requested, we trust the DB order.
     } else {
         if (query && !filters?.sortBy) {
-             scoredGames.sort((a, b) => b.matchScore - a.matchScore);
+            scoredGames.sort((a, b) => b.matchScore - a.matchScore);
         }
     }
 
@@ -265,7 +265,7 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
     const userId = session?.user?.id;
 
     // 1. Fetch from IGDB with filters
-    const igdbResults = await searchIgdbGames(query, 10, filters);
+    const igdbResults = await searchIgdbGames(query, 50, filters);
 
     if (igdbResults.length === 0) return [];
 
@@ -286,7 +286,7 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
                 case 'release_asc':
                     return (a.first_release_date || 0) - (b.first_release_date || 0);
                 case 'popularity':
-                     return ((b as any).total_rating_count || 0) - ((a as any).total_rating_count || 0);
+                    return ((b as any).total_rating_count || 0) - ((a as any).total_rating_count || 0);
                 case 'alphabetical':
                     return a.name.localeCompare(b.name);
                 default:
@@ -295,7 +295,7 @@ export async function searchOnlineGames(query: string, filters?: SearchFilters):
         });
     } else if (query) {
         // Default to relevance
-         scoredResults.sort((a, b) => b.matchScore - a.matchScore);
+        scoredResults.sort((a, b) => b.matchScore - a.matchScore);
     }
 
     // 2. Check for existence in local DB (to link to existing IDs/data)
