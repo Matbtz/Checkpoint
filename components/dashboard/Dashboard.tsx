@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { type UserLibrary, type Game, type Tag } from '@prisma/client';
 import { GameCard } from './GameCard';
 import { FilterStrip } from './FilterStrip';
@@ -86,15 +86,17 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
         setIsActionsOpen(false);
     };
 
-    const toggleSelection = (gameId: string) => {
-        const newSelected = new Set(selectedGameIds);
-        if (newSelected.has(gameId)) {
-            newSelected.delete(gameId);
-        } else {
-            newSelected.add(gameId);
-        }
-        setSelectedGameIds(newSelected);
-    };
+    const handleToggleSelection = useCallback((gameId: string) => {
+        setSelectedGameIds(prev => {
+            const newSelected = new Set(prev);
+            if (newSelected.has(gameId)) {
+                newSelected.delete(gameId);
+            } else {
+                newSelected.add(gameId);
+            }
+            return newSelected;
+        });
+    }, []);
 
     const toggleSelectAll = () => {
         if (selectedGameIds.size === filteredLibrary.length) {
@@ -187,10 +189,10 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
         }
     });
 
-    const handleGameClick = (item: GameWithLibrary) => {
+    const handleGameClick = useCallback((item: GameWithLibrary) => {
         setSelectedGame(item);
         setIsEditModalOpen(true);
-    };
+    }, []);
 
     return (
         <div className="space-y-4 md:space-y-6 px-0 md:px-2 pb-20 md:pb-0">
@@ -320,10 +322,10 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                                 key={item.id}
                                 item={item}
                                 paceFactor={userPaceFactor}
-                                onClick={() => handleGameClick(item)}
+                                onGameClick={handleGameClick}
                                 isDeleteMode={isEditMode}
                                 isSelected={selectedGameIds.has(item.gameId)}
-                                onToggleSelect={() => toggleSelection(item.gameId)}
+                                onToggleSelect={handleToggleSelection}
                             />
                         ))
                     )}
