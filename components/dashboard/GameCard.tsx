@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, memo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { type UserLibrary, type Game } from '@prisma/client';
@@ -23,15 +23,15 @@ type GameWithLibrary = UserLibrary & { game: Game };
 interface GameCardProps {
     item: GameWithLibrary;
     paceFactor?: number;
-    onClick?: () => void;
+    onGameClick?: (item: GameWithLibrary) => void;
     primaryColor?: string;
     secondaryColor?: string;
     isDeleteMode?: boolean;
     isSelected?: boolean;
-    onToggleSelect?: () => void;
+    onToggleSelect?: (gameId: string) => void;
 }
 
-export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSelected, onToggleSelect }: GameCardProps) {
+export const GameCard = memo(function GameCard({ item, paceFactor = 1.0, onGameClick, isDeleteMode, isSelected, onToggleSelect }: GameCardProps) {
     const { game } = item;
     const extendedGame = game as ExtendedGame;
 
@@ -137,7 +137,13 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
                 backgroundClip: 'padding-box, border-box',
                 border: '2px solid transparent',
             }}
-            onClick={isDeleteMode ? onToggleSelect : onClick}
+            onClick={() => {
+                if (isDeleteMode && onToggleSelect) {
+                    onToggleSelect(item.gameId);
+                } else if (onGameClick) {
+                    onGameClick(item);
+                }
+            }}
         >
             {isDeleteMode && (
                 <div className={cn(
@@ -256,4 +262,4 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
             </div>
         </motion.div>
     );
-}
+});
