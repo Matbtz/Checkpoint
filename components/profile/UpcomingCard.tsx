@@ -10,11 +10,10 @@ interface UpcomingCardProps {
 }
 
 export function UpcomingCard({ item, inWishlist = true }: UpcomingCardProps) {
-  const releaseDate = new Date(item.releaseDate);
-  const daysUntilRelease = differenceInDays(releaseDate, new Date());
+  const releaseDate = item.releaseDate ? new Date(item.releaseDate) : null;
+  const daysUntilRelease = releaseDate ? differenceInDays(releaseDate, new Date()) : null;
 
-  const isComingSoon = daysUntilRelease >= 0 && daysUntilRelease <= 7;
-  const isReleased = daysUntilRelease < 0;
+  const isComingSoon = daysUntilRelease !== null && daysUntilRelease >= 0 && daysUntilRelease <= 7;
 
   return (
     <Link href={`/game/${item.game.id}`}>
@@ -39,9 +38,13 @@ export function UpcomingCard({ item, inWishlist = true }: UpcomingCardProps) {
             {item.game.title}
           </h3>
           <p className={`text-xs ${isComingSoon ? 'text-green-600 font-semibold' : 'text-muted-foreground'}`}>
-            {isComingSoon
-              ? `Dans ${daysUntilRelease} jours`
-              : format(releaseDate, 'dd/MM/yyyy')}
+            {daysUntilRelease !== null ? (
+              isComingSoon
+                ? `In ${daysUntilRelease} Days`
+                : `${daysUntilRelease} Days`
+            ) : (
+              "No release date"
+            )}
           </p>
         </div>
       </div>

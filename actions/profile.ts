@@ -56,59 +56,59 @@ export async function getUserProfileData() {
   const mode = user.profileBackgroundMode || "URL"; // Default to URL if null
 
   if (mode === "URL" && user.profileBackgroundUrl) {
-      backgroundUrl = user.profileBackgroundUrl;
+    backgroundUrl = user.profileBackgroundUrl;
   } else if (mode === "STATIC_GAME" && user.profileBackgroundGameId) {
-      const game = await prisma.game.findUnique({
-          where: { id: user.profileBackgroundGameId },
-          select: { backgroundImage: true, screenshots: true, coverImage: true }
-      });
-      if (game) {
-          backgroundUrl = game.backgroundImage || (game.screenshots.length > 0 ? game.screenshots[0] : game.coverImage || backgroundUrl);
-      }
+    const game = await prisma.game.findUnique({
+      where: { id: user.profileBackgroundGameId },
+      select: { backgroundImage: true, screenshots: true, coverImage: true }
+    });
+    if (game) {
+      backgroundUrl = game.backgroundImage || (game.screenshots.length > 0 ? game.screenshots[0] : game.coverImage || backgroundUrl);
+    }
   } else if (mode === "DYNAMIC_LAST") {
-      // Find most recent played game
-      const lastPlayed = await prisma.userLibrary.findFirst({
-          where: { userId },
-          orderBy: { lastPlayed: "desc" },
-          include: { game: true }
-      });
-      if (lastPlayed) {
-          backgroundUrl = lastPlayed.game.backgroundImage || (lastPlayed.game.screenshots.length > 0 ? lastPlayed.game.screenshots[0] : lastPlayed.game.coverImage || backgroundUrl);
-      }
+    // Find most recent played game
+    const lastPlayed = await prisma.userLibrary.findFirst({
+      where: { userId },
+      orderBy: { lastPlayed: "desc" },
+      include: { game: true }
+    });
+    if (lastPlayed) {
+      backgroundUrl = lastPlayed.game.backgroundImage || (lastPlayed.game.screenshots.length > 0 ? lastPlayed.game.screenshots[0] : lastPlayed.game.coverImage || backgroundUrl);
+    }
   } else if (mode === "DYNAMIC_RANDOM") {
-      // Pick random from BACKLOG or PLAYING
-      // To ensure it changes "every new day", we use a seeded random based on the current date and User ID.
-      const candidates = await prisma.userLibrary.findMany({
-          where: {
-              userId,
-              status: { in: ["BACKLOG", "PLAYING"] },
-              game: {
-                 OR: [
-                     { backgroundImage: { not: null } },
-                     { screenshots: { isEmpty: false } }
-                 ]
-              }
-          },
-          take: 50,
-          orderBy: { id: "asc" }, // Ensure stable order for the seed to work
-          select: { game: { select: { backgroundImage: true, screenshots: true } } }
-      });
+    // Pick random from BACKLOG or PLAYING
+    // To ensure it changes "every new day", we use a seeded random based on the current date and User ID.
+    const candidates = await prisma.userLibrary.findMany({
+      where: {
+        userId,
+        status: { in: ["BACKLOG", "PLAYING"] },
+        game: {
+          OR: [
+            { backgroundImage: { not: null } },
+            { screenshots: { isEmpty: false } }
+          ]
+        }
+      },
+      take: 50,
+      orderBy: { id: "asc" }, // Ensure stable order for the seed to work
+      select: { game: { select: { backgroundImage: true, screenshots: true } } }
+    });
 
-      if (candidates.length > 0) {
-          // Simple daily seed: YYYY-MM-DD + UserID
-          const today = new Date().toISOString().split('T')[0];
-          const seed = userId + today;
+    if (candidates.length > 0) {
+      // Simple daily seed: YYYY-MM-DD + UserID
+      const today = new Date().toISOString().split('T')[0];
+      const seed = userId + today;
 
-          let hash = 0;
-          for (let i = 0; i < seed.length; i++) {
-            hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-            hash |= 0; // Convert to 32bit integer
-          }
-          const index = Math.abs(hash) % candidates.length;
-
-          const random = candidates[index];
-          backgroundUrl = random.game.backgroundImage || (random.game.screenshots.length > 0 ? random.game.screenshots[0] : backgroundUrl);
+      let hash = 0;
+      for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
       }
+      const index = Math.abs(hash) % candidates.length;
+
+      const random = candidates[index];
+      backgroundUrl = random.game.backgroundImage || (random.game.screenshots.length > 0 ? random.game.screenshots[0] : backgroundUrl);
+    }
   }
 
   // Final fallback to ensure we don't return null if logic fails
@@ -166,25 +166,25 @@ export async function getUserProfileData() {
   const gameIds = topRecent.map(r => r.gameId);
 
   const activityLogs = await prisma.activityLog.findMany({
-      where: {
-          userId,
-          gameId: { in: gameIds },
-          type: "PLAY_SESSION",
-          createdAt: { gte: twoWeeksAgo }
-      },
-      select: {
-          gameId: true,
-          details: true
-      }
+    where: {
+      userId,
+      gameId: { in: gameIds },
+      type: "PLAY_SESSION",
+      createdAt: { gte: twoWeeksAgo }
+    },
+    select: {
+      gameId: true,
+      details: true
+    }
   });
 
   // Helper to sum minutes from logs
   const getManualRecentMinutes = (gameId: string) => {
-      const logs = activityLogs.filter(l => l.gameId === gameId);
-      return logs.reduce((acc, log) => {
-          const details = log.details as { durationMinutes?: number } | null;
-          return acc + (details?.durationMinutes || 0);
-      }, 0);
+    const logs = activityLogs.filter(l => l.gameId === gameId);
+    return logs.reduce((acc, log) => {
+      const details = log.details as { durationMinutes?: number } | null;
+      return acc + (details?.durationMinutes || 0);
+    }, 0);
   };
 
   const recentPlays: PlaySession[] = topRecent.map((entry) => {
@@ -208,9 +208,9 @@ export async function getUserProfileData() {
     // But strictly speaking, we trust `playtime2weeks` if it's > 0 or if it's a Steam game.
     // However, entry.playtime2weeks is explicitly "Steam Recent".
     if (entry.game.steamAppId) {
-        recentMinutes = entry.playtime2weeks ?? 0;
+      recentMinutes = entry.playtime2weeks ?? 0;
     } else {
-        recentMinutes = getManualRecentMinutes(entry.gameId);
+      recentMinutes = getManualRecentMinutes(entry.gameId);
     }
 
     let duration = "";
@@ -277,8 +277,16 @@ export async function getUserProfileData() {
       coverUrl: entry.game.coverImage || "/placeholder-game.png",
       slug: entry.game.title.toLowerCase().replace(/ /g, "-"),
     },
-    releaseDate: entry.game.releaseDate ? entry.game.releaseDate.toISOString() : new Date().toISOString(),
+    releaseDate: entry.game.releaseDate ? entry.game.releaseDate.toISOString() : null,
   }));
+
+  // Sort manually: TBA (null) first, then by date ASC
+  upcomingGames.sort((a, b) => {
+    if (!a.releaseDate && !b.releaseDate) return 0;
+    if (!a.releaseDate) return -1; // a is TBA -> comes first
+    if (!b.releaseDate) return 1;  // b is TBA -> comes first
+    return new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime();
+  });
 
   // 5. Friends Activity
   const friendActivities: FriendActivity[] = [];
@@ -313,10 +321,10 @@ export async function getUserProfileData() {
 }
 
 export async function updateUserProfile(data: {
-    avatarUrl?: string;
-    backgroundUrl?: string;
-    backgroundMode?: string;
-    backgroundGameId?: string;
+  avatarUrl?: string;
+  backgroundUrl?: string;
+  backgroundMode?: string;
+  backgroundGameId?: string;
 }) {
   const session = await auth();
   if (!session?.user?.id) {

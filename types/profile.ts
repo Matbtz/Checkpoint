@@ -23,7 +23,7 @@ export interface PlaySession {
 
 export interface UpcomingGame {
   game: Game;
-  releaseDate: string; // ISO Date
+  releaseDate: string | null; // ISO Date or null
 }
 
 export interface FriendActivity {
