@@ -65,7 +65,9 @@ export function TopPlayedGames({ stats }: TopPlayedGamesProps) {
                 </div>
               </div>
               <div className="flex flex-1 flex-col justify-center gap-1 overflow-hidden">
-                <span className="truncate text-sm font-medium">{game.title}</span>
+                <span className="line-clamp-2 text-sm font-medium leading-tight">
+                  {game.title}
+                </span>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
                   <div
                     className="h-full bg-primary transition-all duration-500"
