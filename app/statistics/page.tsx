@@ -1,13 +1,12 @@
+
 import { getUserStatistics } from "@/actions/statistics";
 import { KPICards } from "@/components/statistics/KPICards";
-import {
-  StatusDonut,
-  TopPlayedList,
-  GenresBarChart,
-  PlatformsBarChart,
-} from "@/components/statistics/StatsCharts";
+import { StatusDonut } from "@/components/statistics/StatsCharts";
 import { CommunityPercentiles } from "@/components/statistics/CommunityPercentiles";
-import { ReleaseYearChart, ScoreVsPlaytimeChart } from "@/components/statistics/AdvancedCharts";
+import { ReleaseYearChart } from "@/components/statistics/AdvancedCharts";
+import { TopPlayedGames } from "@/components/statistics/TopPlayedGames";
+import { MetricCard } from "@/components/statistics/MetricCard";
+import { QualityQuantity } from "@/components/statistics/QualityQuantity";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Metadata } from "next";
 
@@ -46,10 +45,11 @@ export default async function StatisticsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 lg:col-span-3">
           <CardHeader>
-            <CardTitle>Top 5 Most Played</CardTitle>
+            <CardTitle>Top Played Games</CardTitle>
+            <CardDescription>Most played titles (merging DLCs)</CardDescription>
           </CardHeader>
           <CardContent>
-            <TopPlayedList stats={stats} />
+            <TopPlayedGames stats={stats} />
           </CardContent>
         </Card>
 
@@ -69,35 +69,47 @@ export default async function StatisticsPage() {
         <Card className="col-span-4 lg:col-span-4">
           <CardHeader>
             <CardTitle>Top Genres</CardTitle>
+            <CardDescription>Explore your genre preferences</CardDescription>
           </CardHeader>
           <CardContent className="pl-2">
-            <GenresBarChart stats={stats} />
+            <MetricCard data={stats.genreStats} title="Genres" />
           </CardContent>
         </Card>
 
         <Card className="col-span-4 lg:col-span-3">
           <CardHeader>
-            <CardTitle>Top Platforms (Owned)</CardTitle>
-            <CardDescription>Based on your owned platforms.</CardDescription>
+            <CardTitle>Top Platforms</CardTitle>
+            <CardDescription>Your gaming ecosystem</CardDescription>
           </CardHeader>
           <CardContent>
-            <PlatformsBarChart stats={stats} />
+             <MetricCard data={stats.platformStats} title="Platforms" />
           </CardContent>
         </Card>
       </div>
 
-      {/* Row 4: Scatter Plot */}
+      {/* Row 4: Franchises */}
+      <div className="grid gap-4">
+        <Card>
+            <CardHeader>
+                <CardTitle>Top Franchises</CardTitle>
+                <CardDescription>Your favorite game series</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <MetricCard data={stats.franchiseStats} title="Franchises" />
+            </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 5: Quality vs Quantity */}
       <Card>
         <CardHeader>
           <CardTitle>Quality vs. Quantity</CardTitle>
-          <CardDescription>Do you spend more time on higher rated games?</CardDescription>
+          <CardDescription>Analyze your playtime habits vs ratings</CardDescription>
         </CardHeader>
         <CardContent>
-          <ScoreVsPlaytimeChart stats={stats} />
+          <QualityQuantity stats={stats} />
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
