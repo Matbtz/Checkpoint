@@ -1,5 +1,5 @@
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -19,7 +19,7 @@ async function main() {
         take: 5,
         where: {
             description: { not: null },
-            platforms: { not: null }
+            platforms: { not: Prisma.DbNull }
         }
     });
 

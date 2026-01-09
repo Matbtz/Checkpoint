@@ -26,7 +26,7 @@ async function main() {
 
     // Deduplicate records by ID
     const uniqueRecords = new Map();
-    for (const row of records) {
+    for (const row of records as any[]) {
         if (row.id) {
             uniqueRecords.set(row.id, row);
         }
@@ -133,7 +133,7 @@ async function main() {
                 hltbMain: hoursToMinutes(row.hltbMain),
                 hltbExtra: hoursToMinutes(row.hltbExtra),
                 hltbCompletionist: hoursToMinutes(row.hltbCompletionist),
-                hltbUrl: row.hltbUrl || null,
+                // hltbUrl already defined above
 
                 // Extended Metadata
                 franchise: row.franchise || null,
