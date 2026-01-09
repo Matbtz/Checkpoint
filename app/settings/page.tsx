@@ -13,14 +13,17 @@ export default async function SettingsPage() {
     let userSteamId: string | null | undefined = null;
     let userPlatforms: string[] = [];
 
+    let mobileKey: string | null = null;
+
     if (session?.user?.id) {
-        // Fetch User to get steamId and platforms
+        // Fetch User to get steamId, platforms, and mobileKey
         const user = await prisma.user.findUnique({
             where: { id: session.user.id },
-            select: { steamId: true, platforms: true }
+            select: { steamId: true, platforms: true, mobileKey: true }
         });
         userSteamId = user?.steamId;
         userPlatforms = user?.platforms || [];
+        mobileKey = user?.mobileKey || null;
 
         // Fetch Accounts
         accounts = await prisma.account.findMany({
@@ -37,6 +40,7 @@ export default async function SettingsPage() {
             initialAccounts={accounts}
             userSteamId={userSteamId}
             initialPlatforms={userPlatforms}
+            initialMobileKey={mobileKey}
         />
     );
 }

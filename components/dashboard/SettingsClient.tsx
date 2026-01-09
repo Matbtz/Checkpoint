@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { updateUserPace, updateUserPlatforms, updateUserDefaultCompletionGoal } from '@/actions/user';
 import { createTag, deleteTag } from '@/actions/tag';
 import { disconnectAccount } from '@/actions/settings';
+import { generateMobileKey } from '@/actions/mobile-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Trash2, Unplug, Info } from 'lucide-react';
+import { Trash2, Unplug, Info, Smartphone, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { Tag } from '@prisma/client';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -44,9 +45,10 @@ interface SettingsProps {
     initialAccounts: { provider: string; providerAccountId: string }[];
     userSteamId?: string | null;
     initialPlatforms: string[];
+    initialMobileKey?: string | null;
 }
 
-export default function SettingsClient({ initialPace, initialDefaultCompletionGoal, initialTags, initialAccounts, userSteamId, initialPlatforms }: SettingsProps) {
+export default function SettingsClient({ initialPace, initialDefaultCompletionGoal, initialTags, initialAccounts, userSteamId, initialPlatforms, initialMobileKey }: SettingsProps) {
     const router = useRouter();
     const [pace, setPace] = useState(initialPace);
     const [defaultCompletionGoal, setDefaultCompletionGoal] = useState(initialDefaultCompletionGoal || 'Main');
@@ -57,6 +59,11 @@ export default function SettingsClient({ initialPace, initialDefaultCompletionGo
 
     const [platforms, setPlatforms] = useState<string[]>(initialPlatforms || []);
     const [isSavingPlatforms, setIsSavingPlatforms] = useState(false);
+
+    // Mobile Key State
+    const [mobileKey, setMobileKey] = useState<string | null>(initialMobileKey || null);
+    const [isGeneratingKey, setIsGeneratingKey] = useState(false);
+    const [isKeyVisible, setIsKeyVisible] = useState(false);
 
     // Connection State
     const steamAccount = initialAccounts.find(a => a.provider === 'steam' || a.provider === 'steamcommunity');
@@ -117,6 +124,16 @@ export default function SettingsClient({ initialPace, initialDefaultCompletionGo
         if (res.success) {
             setTags(tags.filter(t => t.id !== id));
         }
+    };
+
+    const handleGenerateKey = async () => {
+        setIsGeneratingKey(true);
+        const res = await generateMobileKey();
+        if (res.success && res.mobileKey) {
+            setMobileKey(res.mobileKey);
+            setIsKeyVisible(true);
+        }
+        setIsGeneratingKey(false);
     };
 
     const handleDisconnect = async () => {
@@ -278,6 +295,59 @@ export default function SettingsClient({ initialPace, initialDefaultCompletionGo
                                 </button>
                             </div>
                         ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* Widget Mobile & API Section */}
+            <section className="space-y-4">
+                <h2 className="text-xl font-semibold">Widget Mobile & API</h2>
+                <p className="text-zinc-500 text-sm">Connect the Checkpoint Widget Android app to your library.</p>
+
+                <div className="bg-white dark:bg-zinc-900 p-6 rounded-lg border border-zinc-200 dark:border-zinc-800 space-y-6">
+                    <div className="space-y-4">
+                        <Label htmlFor="mobile-key">API Key</Label>
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <Smartphone className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+                                <Input
+                                    id="mobile-key"
+                                    value={mobileKey || "No key generated"}
+                                    readOnly
+                                    type={isKeyVisible ? "text" : "password"}
+                                    className="pl-9 pr-10 font-mono"
+                                />
+                                {mobileKey && (
+                                    <button
+                                        onClick={() => setIsKeyVisible(!isKeyVisible)}
+                                        className="absolute right-3 top-2.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                    >
+                                        {isKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                )}
+                            </div>
+                            <Button
+                                variant="outline"
+                                onClick={handleGenerateKey}
+                                disabled={isGeneratingKey}
+                            >
+                                {isGeneratingKey ? (
+                                    <>
+                                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                        {mobileKey ? 'Regenerate' : 'Generate'}
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                        <div className="bg-zinc-100 dark:bg-zinc-950 p-3 rounded text-xs text-zinc-500 flex items-start gap-2">
+                             <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                             <p>Copiez cette clé dans les paramètres de l'application Android Checkpoint Widget.</p>
+                        </div>
                     </div>
                 </div>
             </section>
