@@ -476,7 +476,7 @@ export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number =
  */
 export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGame | null> {
     const body = `
-        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
+        fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, hypes,
         involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
         screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
         game_type, status, storyline,

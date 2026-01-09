@@ -1,0 +1,63 @@
+Analyzing scripts/csv/enriched_clean_dataset.csv...
+
+Total Rows: 10837
+--------------------------------------------------
+Column                         | Filled     | %     
+--------------------------------------------------
+id                             | 10837      / 10837 | 100.0%
+title                          | 10837      / 10837 | 100.0%
+coverImage                     | 10385      / 10837 | 95.8%
+backgroundImage                | 10385      / 10837 | 95.8%
+releaseDate                    | 10837      / 10837 | 100.0%
+description                    | 10172      / 10837 | 93.9%
+screenshots                    | 10837      / 10837 | 100.0%
+videos                         | 10837      / 10837 | 100.0%
+steamUrl                       | 7780       / 10837 | 71.8%
+opencriticUrl                  | 10837      / 10837 | 100.0%
+igdbUrl                        | 9744       / 10837 | 89.9%
+hltbUrl                        | 3160       / 10837 | 29.2%
+opencriticScore                | 9253       / 10837 | 85.4%
+igdbScore                      | 7660       / 10837 | 70.7%
+steamAppId                     | 7780       / 10837 | 71.8%
+steamReviewScore               | 7647       / 10837 | 70.6%
+steamReviewCount               | 7647       / 10837 | 70.6%
+steamReviewPercent             | 7639       / 10837 | 70.5%
+isDlc                          | 10837      / 10837 | 100.0%
+igdbId                         | 9744       / 10837 | 89.9%
+studio                         | 5714       / 10837 | 52.7%
+genres                         | 10837      / 10837 | 100.0%
+platforms                      | 10837      / 10837 | 100.0%
+igdbTime                       | 10837      / 10837 | 100.0%
+dataMissing                    | 10837      / 10837 | 100.0%
+dataFetched                    | 10837      / 10837 | 100.0%
+hltbMain                       | 6743       / 10837 | 62.2%
+hltbExtra                      | 6201       / 10837 | 57.2%
+hltbCompletionist              | 5891       / 10837 | 54.4%
+storyline                      | 2864       / 10837 | 26.4%
+status                         | 345        / 10837 | 3.2%
+gameType                       | 9744       / 10837 | 89.9%
+parentId                       | 145        / 10837 | 1.3%
+relatedGames                   | 0          / 10837 | 0.0%
+franchise                      | 1866       / 10837 | 17.2%
+hypes                          | 0          / 10837 | 0.0%
+keywords                       | 6801       / 10837 | 62.8%
+themes                         | 0          / 10837 | 0.0%
+dlcs                           | 1074       / 10837 | 9.9%
+ports                          | 219        / 10837 | 2.0%
+remakes                        | 32         / 10837 | 0.3%
+remasters                      | 88         / 10837 | 0.8%
+--------------------------------------------------
+
+Potential Gaps (< 50% filled):
+- hltbUrl: 29.2%
+- storyline: 26.4%
+- status: 3.2%
+- parentId: 1.3%
+- relatedGames: 0.0%
+- franchise: 17.2%
+- hypes: 0.0%
+- themes: 0.0%
+- dlcs: 9.9%
+- ports: 2.0%
+- remakes: 0.3%
+- remasters: 0.8%

@@ -4,9 +4,9 @@ import { Clock, ExternalLink, TriangleAlert, Check } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
-    HoverCard,
-    HoverCardContent,
-    HoverCardTrigger,
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
 } from "@/components/ui/hover-card"
 
 interface HLTBCardProps {
@@ -68,10 +68,10 @@ export function HLTBCard({
     if (users && count && count > USER_THRESHOLD) {
       val = users / 60;
       label = "Community Average";
-      if (hltb) secondary = `HLTB: ${Math.round(hltb / 60)}h`;
+      if (hltb) secondary = `HLTB: ${Math.round(hltb)}h`;
     }
     else if (hltb) {
-      val = hltb / 60;
+      val = hltb;
       label = "HowLongToBeat";
       if (users && count) secondary = `Users: ${Math.round(users / 60)}h (${count})`;
     }
@@ -96,11 +96,11 @@ export function HLTBCard({
   let referenceTime = 0;
 
   if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
-      referenceTime = compData.val;
+    referenceTime = compData.val;
   } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
-      referenceTime = extraData.val;
+    referenceTime = extraData.val;
   } else {
-      referenceTime = mainData.val;
+    referenceTime = mainData.val;
   }
 
   // Fallback if selected target has no data, default to Main?
@@ -108,7 +108,7 @@ export function HLTBCard({
   // Usually Main is the baseline. If user selected Extra but Extra is missing, maybe fallback to Main?
   // For now strict adherence to target, unless 0, then maybe try Main as backup?
   if (referenceTime === 0 && mainData.val > 0) {
-      referenceTime = mainData.val;
+    referenceTime = mainData.val;
   }
 
   const progressPercent = referenceTime > 0
@@ -183,27 +183,27 @@ export function HLTBCard({
               <span className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
                 Your Progress
                 {isOverLimit ? (
-                    <HoverCard>
-                        <HoverCardTrigger asChild>
-                             <TriangleAlert className="w-3.5 h-3.5 text-amber-500 cursor-help" />
-                        </HoverCardTrigger>
-                        <HoverCardContent className="w-64 text-xs bg-zinc-900 text-white border-zinc-800 p-2">
-                             You have exceeded 130% of the estimated time for {targetType}. Is this the correct goal?
-                        </HoverCardContent>
-                    </HoverCard>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <TriangleAlert className="w-3.5 h-3.5 text-amber-500 cursor-help" />
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-64 text-xs bg-zinc-900 text-white border-zinc-800 p-2">
+                      You have exceeded 130% of the estimated time for {targetType}. Is this the correct goal?
+                    </HoverCardContent>
+                  </HoverCard>
                 ) : isCompleted ? <Check className="w-3.5 h-3.5 text-yellow-500" /> : null}
               </span>
               <span>{userHours}h / {Math.round(referenceTime)}h</span>
             </div>
             {/* Override Shadcn Progress indicator color */}
             <Progress
-                value={Math.min(100, progressPercent)}
-                className={cn(
-                    "h-2",
-                    isCompleted
-                        ? "[&>div]:bg-yellow-500"
-                        : "[&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-cyan-400"
-                )}
+              value={Math.min(100, progressPercent)}
+              className={cn(
+                "h-2",
+                isCompleted
+                  ? "[&>div]:bg-yellow-500"
+                  : "[&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-cyan-400"
+              )}
             />
           </div>
         )}

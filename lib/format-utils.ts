@@ -64,16 +64,16 @@ export function calculateProgress(playedMinutes: number, hltbTimes: HLTBTimes | 
 
     switch (targetType) {
         case 'Main':
-            targetMinutes = hltbTimes.main || 0;
+            targetMinutes = (hltbTimes.main || 0) * 60;
             break;
         case 'Extra':
-            targetMinutes = hltbTimes.extra || 0;
+            targetMinutes = (hltbTimes.extra || 0) * 60;
             break;
         case '100%':
-            targetMinutes = hltbTimes.completionist || 0;
+            targetMinutes = (hltbTimes.completionist || 0) * 60;
             break;
         default:
-            targetMinutes = hltbTimes.main || 0;
+            targetMinutes = (hltbTimes.main || 0) * 60;
     }
 
     if (targetMinutes === 0) return 0;

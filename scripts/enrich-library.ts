@@ -83,7 +83,7 @@ function parseCsvLine(line: string, delimiter: string): string[] {
 }
 
 function readCsv(filePath: string): any[] {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, 'utf-8').replace(/X\|S/g, 'X/S');
     const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
     if (lines.length === 0) return [];
 
@@ -153,14 +153,14 @@ async function main() {
 
     // Parse Input
     const inputArg = args.find(a => a.startsWith('--input='));
-    const inputPath = inputArg ? inputArg.split('=')[1] : (args.includes('--csv') ? 'scripts/csv/deduplicated_games.csv' : undefined);
+    const inputPath = inputArg ? inputArg.split('=')[1] : (args.includes('--csv') ? 'scripts/csv/enriched_clean_dataset.csv' : undefined);
 
     // Parse Arguments
     const options: EnrichmentOptions = {
-        art: args.includes('--full') || args.includes('--quick') || args.includes('--art') || args.includes('--refresh-recent') || (!args.length),
+        art: args.includes('--full') || args.includes('--quick') || args.includes('--art') || (!args.length),
         metadata: args.includes('--full') || args.includes('--metadata') || args.includes('--refresh-recent') || (!args.length),
-        steam: args.includes('--full') || args.includes('--reviews') || args.includes('--steam') || args.includes('--refresh-recent') || (!args.length),
-        opencritic: args.includes('--full') || args.includes('--opencritic') || args.includes('--refresh-recent'),
+        steam: args.includes('--full') || args.includes('--reviews') || args.includes('--steam') || (!args.length),
+        opencritic: args.includes('--full') || args.includes('--opencritic'),
         hltb: args.includes('--hltb'),
         csv: args.includes('--csv') || !!inputPath, // Force CSV export if input is CSV
         input: inputPath,
@@ -201,7 +201,7 @@ async function main() {
 
     if (isContinue) {
         // Priority 1: Check CSV Output if in CSV mode
-        const csvOutPath = path.join(process.cwd(), 'scripts', 'csv', 'enriched_all_games.csv');
+        const csvOutPath = path.join(process.cwd(), 'scripts', 'csv', 'enriched_library.csv');
         if (options.csv && fs.existsSync(csvOutPath)) {
             console.log(`📂 Reading existing output CSV to resume: ${csvOutPath}`);
             processedIds = loadCsvIds(csvOutPath);
@@ -250,13 +250,13 @@ async function main() {
         "steamReviewPercent", "isDlc", "igdbId", "studio", "genres", "platforms",
         "igdbTime", "dataMissing", "dataFetched", "hltbMain", "hltbExtra", "hltbCompletionist",
         "storyline", "summary", "status", "gameType", "parentId", "relatedGames", "franchise",
-        "hypes", "keywords", "themes", "dlcs", "ports", "remakes", "remasters"
+        "hypes", "keywords", "dlcs", "ports", "remakes", "remasters"
     ];
 
     // --- CSV SETUP ---
     let csvStream: fs.WriteStream | null = null;
     if (options.csv) {
-        const csvPath = path.join(process.cwd(), 'scripts', 'csv', 'enriched_all_games.csv');
+        const csvPath = path.join(process.cwd(), 'scripts', 'csv', 'enriched_library.csv');
         // Ensure dir
         if (!fs.existsSync(path.dirname(csvPath))) fs.mkdirSync(path.dirname(csvPath), { recursive: true });
 
@@ -309,7 +309,7 @@ async function main() {
         } else {
             const conditions = [];
             if (options.art) conditions.push({ coverImage: null }, { backgroundImage: null });
-            if (options.metadata) conditions.push({ description: null }, { description: "" }, { igdbId: null });
+            if (options.metadata) conditions.push({ description: null }, { description: "" }, { igdbId: null }, { studio: null });
             if (options.steam) conditions.push({ steamAppId: null }, { steamReviewScore: null });
             if (options.hltb) {
                 if (options.refresh) {
@@ -404,25 +404,110 @@ async function main() {
                             const cat = igdbData.game_type ?? igdbData.category ?? 0;
                             const catName = cat === 0 ? 'Main' : (cat === 1 ? 'DLC' : (cat === 2 ? 'Expansion' : cat));
                             console.log(`   🔎 IGDB Check: ${catName} | Parent: ${igdbData.parent_game?.name || 'None'}`);
-                        }
-                    }
-                    else if (art?.source === 'igdb' && art.originalData) {
-                        igdbData = art.originalData as EnrichedIgdbGame;
-                    }
-                    else if (options.metadata && !game.igdbId) {
-                        const igdbResults = await searchIgdbGames(game.title, 5);
-                        if (igdbResults.length > 0) {
-                            let candidate = null;
-                            for (const res of igdbResults) {
-                                const cYear = res.first_release_date ? new Date(res.first_release_date * 1000).getFullYear() : null;
-                                const match = isMatch(game.title, res.name, game.releaseDate, cYear);
-                                if (match) {
-                                    candidate = res;
-                                    break;
+
+                            // NEW: If we found a Bundle, Pack, or Update (and didn't ask for one), assume ID is wrong and re-search.
+                            // Types: 3=Bundle, 13=Pack, 14=Update. Also 1=DLC (if title doesn't say DLC).
+                            const badTypes = [3, 13, 14];
+                            let isBad = badTypes.includes(cat);
+
+                            // Check DLC/Expansion mismatch
+                            if (!isBad && (cat === 1 || cat === 2)) {
+                                const nLocal = normalize(game.title);
+                                const nRemote = normalize(igdbData.name);
+                                // If titles are significantly different, assume it's a wrong match (e.g. matching a random DLC for the same game).
+                                // But if matches, KEEP IT (e.g. Shadowbringers is a valid Expansion).
+                                if (nLocal !== nRemote && !nLocal.includes(nRemote) && !nRemote.includes(nLocal)) {
+                                    // Check similarity just in case
+                                    const { stringSimilarity } = require('../lib/utils');
+                                    if (stringSimilarity(nLocal, nRemote) < 0.9) {
+                                        isBad = true;
+                                    }
                                 }
                             }
-                            if (candidate) {
-                                igdbData = candidate;
+
+                            if (isBad) {
+                                console.log(`   ⚠️ Existing ID points to Type ${cat} (${catName}). Re-searching for Main Game...`);
+                                game.igdbId = null; // Clear ID to force search
+                                igdbData = null;    // Clear data
+                            }
+                        }
+                    }
+
+                    if (art?.source === 'igdb' && art.originalData && !igdbData) {
+                        igdbData = art.originalData as EnrichedIgdbGame;
+                    }
+
+                    if (options.metadata && !igdbData) {
+                        const igdbResults = await searchIgdbGames(game.title, 25);
+                        // Implement Scored Selection
+                        if (igdbResults.length > 0) {
+                            let bestCandidate = null;
+                            let bestScore = -1;
+
+                            for (const res of igdbResults) {
+                                const cYear = res.first_release_date ? new Date(res.first_release_date * 1000).getFullYear() : null;
+                                const titleMatch = isMatch(game.title, res.name, game.releaseDate, cYear);
+
+                                let score = 0; // Initialize score for the current candidate
+
+                                // Simplified Rules:
+                                // 1. Game Type Filter/Penalty
+                                // 0=Main, 4=Standalone, 10=Expanded, 8=Remake, 9=Remaster
+                                // 1=DLC, 2=Expansion
+                                // 3=Bundle, 11=Port, 12=Fork, 13=Pack, 14=Update
+
+                                const type = res.category ?? res.game_type ?? 0;
+                                let typeScore = 0;
+
+                                // Heavy Penalty for Bundles/Packs to ensure Main game wins even with date mismatch
+                                if (type === 3 || type === 13 || type === 14) {
+                                    typeScore = -100;
+                                } else if (type === 1 || type === 2) {
+                                    // Soft penalty for DLC (unless name match overrides later)
+                                    typeScore = -20;
+                                }
+
+                                score += typeScore;
+
+                                // 3. Date Match Bonus (+50/-30)
+                                if (cYear && game.releaseDate) {
+                                    const localYear = new Date(game.releaseDate).getFullYear();
+                                    const diff = Math.abs(localYear - cYear);
+                                    if (diff === 0) score += 60; // Perfect Year Match
+                                    else if (diff <= 1) score += 50; // Close Match
+                                    else score -= 30;
+                                }
+
+                                // Special Case: If local title contains "DLC" or "Pass", offset DLC penalty
+                                if (game.title.toLowerCase().includes('dlc') || game.title.toLowerCase().includes('season pass')) {
+                                    if (type === 1 || type === 2) score += 50;
+                                }
+
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    bestCandidate = res;
+                                } else if (score === bestScore) {
+                                    // Tie-breaker: Prefer Main Game (0) > Remake (8) > DLC (1) > Bundle (14)
+                                    const typeA = bestCandidate ? (bestCandidate.category ?? bestCandidate.game_type ?? 0) : 100;
+                                    const typeB = res.category ?? res.game_type ?? 0;
+
+                                    // Priority Map (Lower is better)
+                                    const priority = (t: number) => {
+                                        if (t === 0) return 0; // Main
+                                        if (t === 8 || t === 9) return 1; // Remake/Remaster
+                                        if (t === 4 || t === 10) return 2; // Standalone/Expanded
+                                        if (t === 1 || t === 2) return 3; // DLC
+                                        return 4; // Other (Bundles/Ports)
+                                    };
+
+                                    if (priority(typeB) < priority(typeA)) {
+                                        bestCandidate = res;
+                                    }
+                                }
+                            }
+
+                            if (bestCandidate) {
+                                igdbData = bestCandidate;
                             }
                         }
                     }
@@ -456,7 +541,7 @@ async function main() {
                         }
 
                         // Release Date Update (Important for delays)
-                        if (options.refresh && igdbData.first_release_date) {
+                        if ((!game.releaseDate || options.refresh) && igdbData.first_release_date) {
                             const newDate = new Date(igdbData.first_release_date * 1000);
                             // Compare just the days to avoid time drift issues
                             if (!game.releaseDate || newDate.toISOString().split('T')[0] !== game.releaseDate.toISOString().split('T')[0]) {
@@ -469,12 +554,12 @@ async function main() {
 
                         // Videos / Screens / TimeToBeat
                         // Only update specialized fields on refresh or if empty? Let's be aggressive if we found data.
-                        if (igdbData.screenshots?.length) {
+                        if ((!game.screenshots || options.refresh) && igdbData.screenshots?.length) {
                             updateData.screenshots = igdbData.screenshots.map(s => getIgdbImageUrl(s.image_id, '1080p'));
                             dataFound = true;
                             updatesLog.push("Screenshots");
                         }
-                        if (igdbData.videos?.length) {
+                        if ((!game.videos || options.refresh) && igdbData.videos?.length) {
                             updateData.videos = igdbData.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`);
                             dataFound = true;
                             updatesLog.push("Videos");
@@ -482,64 +567,81 @@ async function main() {
 
                         // Time To Beat (from IGDB)
                         try {
-                            const timeData = await getIgdbTimeToBeat(igdbData.id);
-                            if (timeData) {
-                                updateData.igdbTime = {
-                                    hastly: timeData.hastly,
-                                    normally: timeData.normally,
-                                    completely: timeData.completely
-                                };
-                                dataFound = true;
-                                updatesLog.push("IGDB Time");
+                            if (!game.igdbTime || options.refresh) {
+                                const timeData = await getIgdbTimeToBeat(igdbData.id);
+                                if (timeData) {
+                                    updateData.igdbTime = {
+                                        hastly: timeData.hastly,
+                                        normally: timeData.normally,
+                                        completely: timeData.completely
+                                    };
+                                    dataFound = true;
+                                    updatesLog.push("IGDB Time");
+                                }
                             }
                         } catch (e) { /* ignore */ }
 
-                        if (igdbData.storyline) {
+                        if ((!game.storyline || options.refresh) && igdbData.storyline) {
                             updateData.storyline = igdbData.storyline; dataFound = true; updatesLog.push("Storyline");
                         }
-                        if (igdbData.status !== undefined) {
+                        if ((game.status === undefined || game.status === null || options.refresh) && igdbData.status !== undefined) {
                             updateData.status = igdbData.status; dataFound = true; updatesLog.push(`Status (${igdbData.status})`);
                         }
-                        if (igdbData.game_type !== undefined) {
+                        if ((game.gameType === undefined || game.gameType === null || options.refresh) && igdbData.game_type !== undefined) {
                             updateData.gameType = igdbData.game_type; dataFound = true; updatesLog.push(`Game Type (${igdbData.game_type})`);
                         }
 
                         // Consolidated Related Games JSON
-                        const relatedGames: any = {};
-                        if (igdbData.dlcs?.length) relatedGames.dlcs = igdbData.dlcs;
-                        if (igdbData.expansions?.length) relatedGames.expansions = igdbData.expansions;
-                        if (igdbData.remakes?.length) relatedGames.remakes = igdbData.remakes;
-                        if (igdbData.remasters?.length) relatedGames.remasters = igdbData.remasters;
-                        if (igdbData.expanded_games?.length) relatedGames.expanded_games = igdbData.expanded_games; // Inverse of expansion
+                        if (!game.relatedGames || options.refresh) {
+                            const relatedGames: any = {};
+                            if (igdbData.dlcs?.length) relatedGames.dlcs = igdbData.dlcs;
+                            if (igdbData.expansions?.length) relatedGames.expansions = igdbData.expansions;
+                            if (igdbData.remakes?.length) relatedGames.remakes = igdbData.remakes;
+                            if (igdbData.remasters?.length) relatedGames.remasters = igdbData.remasters;
+                            if (igdbData.expanded_games?.length) relatedGames.expanded_games = igdbData.expanded_games; // Inverse of expansion
 
-                        // Add Franchise Games
-                        const franchiseGames = igdbData.franchises?.[0]?.games || igdbData.collection?.games;
-                        if (franchiseGames?.length) {
-                            relatedGames.franchise_games = franchiseGames.map(fg => ({ id: fg.id, name: fg.name }));
-                        }
+                            // Add Franchise Games
+                            const franchiseGames = igdbData.franchises?.[0]?.games || igdbData.collection?.games;
+                            if (franchiseGames?.length) {
+                                relatedGames.franchise_games = franchiseGames.map(fg => ({ id: fg.id, name: fg.name }));
+                            }
 
-                        if (Object.keys(relatedGames).length > 0) {
-                            updateData.relatedGames = relatedGames;
-                            dataFound = true;
-                            updatesLog.push("Related Games");
+                            if (Object.keys(relatedGames).length > 0) {
+                                updateData.relatedGames = relatedGames;
+                                dataFound = true;
+                                updatesLog.push("Related Games");
+                            }
                         }
 
                         // --- NEW: Extended Metadata ---
-                        if (igdbData.hypes !== undefined) { updateData.hypes = igdbData.hypes; }
-                        if (igdbData.summary) { updateData.summary = igdbData.summary; }
-                        if (igdbData.keywords?.length) { updateData.keywords = igdbData.keywords.map(k => k.name); }
-                        if (igdbData.themes?.length) { updateData.themes = igdbData.themes.map(t => t.name); }
+                        // --- NEW: Extended Metadata ---
+                        if ((game.hypes === undefined || game.hypes === null || options.refresh) && igdbData.hypes !== undefined) {
+                            updateData.hypes = igdbData.hypes;
+                            dataFound = true;
+                        }
+                        if ((!game.summary || options.refresh) && igdbData.summary) { updateData.summary = igdbData.summary; }
+                        if ((!game.keywords || options.refresh) && igdbData.keywords?.length) { updateData.keywords = igdbData.keywords.map(k => k.name); }
+                        // Themes managed via Genres merge below
 
                         // Explicit Relations Columns (JSON)
-                        if (igdbData.dlcs?.length) { updateData.dlcs = igdbData.dlcs.map(d => ({ id: d.id, name: d.name })); }
-                        if (igdbData.ports?.length) { updateData.ports = igdbData.ports.map(p => ({ id: p.id, name: p.name })); }
-                        if (igdbData.remakes?.length) { updateData.remakes = igdbData.remakes.map(r => ({ id: r.id, name: r.name })); }
-                        if (igdbData.remasters?.length) { updateData.remasters = igdbData.remasters.map(r => ({ id: r.id, name: r.name })); }
+                        if ((!game.dlcs || options.refresh) && igdbData.dlcs?.length) { updateData.dlcs = igdbData.dlcs.map(d => ({ id: d.id, name: d.name })); }
+                        if ((!game.ports || options.refresh) && igdbData.ports?.length) { updateData.ports = igdbData.ports.map(p => ({ id: p.id, name: p.name })); }
+                        if ((!game.remakes || options.refresh) && igdbData.remakes?.length) { updateData.remakes = igdbData.remakes.map(r => ({ id: r.id, name: r.name })); }
+                        if ((!game.remasters || options.refresh) && igdbData.remasters?.length) { updateData.remasters = igdbData.remasters.map(r => ({ id: r.id, name: r.name })); }
 
                         // --- NEW: Themes & Franchise ---
                         // Merge Themes into Genres
-                        const existingGenres = (game.genres || []) as string[];
-                        const newGenres = new Set<string>(existingGenres.map(normalizeGenre)); // Normalize existing
+                        let existingGenres: string[] = [];
+                        try {
+                            if (Array.isArray(game.genres)) existingGenres = game.genres;
+                            else if (typeof game.genres === 'string') {
+                                // Try JSON parse first
+                                if (game.genres.trim().startsWith('[')) existingGenres = JSON.parse(game.genres);
+                                else existingGenres = [game.genres]; // Single string?
+                            }
+                        } catch (e) { existingGenres = []; }
+
+                        const newGenres = new Set<string>(existingGenres.map(g => normalizeGenre(g))); // Normalize existing
 
                         let genresAdded = 0;
                         if (igdbData.genres) {
@@ -560,15 +662,31 @@ async function main() {
                             updatesLog.push(`Genres (+${genresAdded})`);
                         }
 
-                        // Franchise / Series / Collection
-                        let franchiseName: string | null = null;
-                        if (igdbData.collection) franchiseName = igdbData.collection.name;
-                        else if (igdbData.franchises && igdbData.franchises.length > 0) franchiseName = igdbData.franchises[0].name;
+                        // Studio / Developer
+                        if ((!game.studio || options.refresh) && igdbData.involved_companies) {
+                            const developers = igdbData.involved_companies
+                                .filter(c => c.developer)
+                                .map(c => c.company.name);
 
-                        if (franchiseName) {
-                            updateData.franchise = franchiseName;
-                            dataFound = true;
-                            updatesLog.push(`Franchise: ${franchiseName}`);
+                            if (developers.length > 0) {
+                                // Join multiple developers with comma if needed, or just take first
+                                updateData.studio = developers.join(', ');
+                                dataFound = true;
+                                updatesLog.push(`Studio (${updateData.studio})`);
+                            }
+                        }
+
+                        // Franchise / Series / Collection
+                        if (!game.franchise || options.refresh) {
+                            let franchiseName: string | null = null;
+                            if (igdbData.collection) franchiseName = igdbData.collection.name;
+                            else if (igdbData.franchises && igdbData.franchises.length > 0) franchiseName = igdbData.franchises[0].name;
+
+                            if (franchiseName) {
+                                updateData.franchise = franchiseName;
+                                dataFound = true;
+                                updatesLog.push(`Franchise: ${franchiseName}`);
+                            }
                         }
 
                         // 4. DLC / Parent Linking (New)

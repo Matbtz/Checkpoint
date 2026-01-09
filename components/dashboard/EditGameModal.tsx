@@ -145,11 +145,11 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
             const normalizedTarget = completionType.toLowerCase();
 
             if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
-                targetMinutes = hltbCompletionist;
+                targetMinutes = hltbCompletionist * 60;
             } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
-                targetMinutes = hltbExtra;
+                targetMinutes = hltbExtra * 60;
             } else {
-                targetMinutes = hltbMain;
+                targetMinutes = hltbMain * 60;
             }
 
             let currentMinutes = 0;
@@ -257,7 +257,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         try {
             const results = await searchMetadataCandidates(metaSearchQuery);
             setMetaCandidates(results);
-        } catch(e) {
+        } catch (e) {
             console.error(e);
         } finally {
             setMetaSearchLoading(false);
@@ -278,7 +278,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
         try {
             const data = await fetchExternalMetadata(candidate.source, "", candidate.id);
             setMetaPreviewData(data);
-        } catch(e) {
+        } catch (e) {
             console.error(e);
         } finally {
             setMetaPreviewLoading(false);
@@ -799,7 +799,7 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
 
                                         {showFoundCovers && (
                                             <div className="p-2 bg-background border-t">
-                                                 <ScrollArea className={`${showFoundBackgrounds ? 'h-[200px]' : 'h-[350px]'} transition-all`}>
+                                                <ScrollArea className={`${showFoundBackgrounds ? 'h-[200px]' : 'h-[350px]'} transition-all`}>
                                                     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
                                                         {searchedCovers.map((src, i) => (
                                                             <button

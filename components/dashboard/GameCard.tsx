@@ -66,20 +66,23 @@ export function GameCard({ item, paceFactor = 1.0, onClick, isDeleteMode, isSele
 
     // Normalize target selection
     const normalizedTarget = targetType.toLowerCase();
-    let targetMinutes = 0;
+    let targetHours = 0;
     if (normalizedTarget === '100%' || normalizedTarget === 'completionist') {
-        targetMinutes = adjustedHltbTimes.completionist;
+        targetHours = adjustedHltbTimes.completionist;
     } else if (normalizedTarget === 'extra' || normalizedTarget === 'main + extra') {
-        targetMinutes = adjustedHltbTimes.extra;
+        targetHours = adjustedHltbTimes.extra;
     } else {
-        targetMinutes = adjustedHltbTimes.main;
+        targetHours = adjustedHltbTimes.main;
     }
+
+    // Convert target hours to minutes for progress calculation
+    const targetMinutes = targetHours * 60;
 
     const rawProgress = targetMinutes > 0 ? (playedMinutes / targetMinutes) * 100 : 0;
     const progress = Math.min(rawProgress, 100);
 
     const playedHours = Math.round(playedMinutes / 60);
-    const totalHours = targetMinutes ? Math.round(targetMinutes / 60) : null;
+    const totalHours = targetHours ? Math.round(targetHours) : null;
 
     const releaseYear = game.releaseDate ? new Date(game.releaseDate).getFullYear() : null;
     const developer = extendedGame.studio || "Unknown Studio";
