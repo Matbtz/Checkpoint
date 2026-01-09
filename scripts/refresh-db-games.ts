@@ -56,7 +56,9 @@ async function main() {
         let processed = 0;
         let errors = 0;
 
-        for (const row of records) {
+        for (const record of records) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const row = record as any;
             try {
                 if (!row.id || !row.title) {
                     console.warn('Skipping invalid row (missing id or title):', row);
@@ -171,7 +173,9 @@ async function main() {
         console.log('\nStep 4: Linking DLCs (Pass 2)...');
         let linked = 0;
 
-        for (const row of records) {
+        for (const record of records) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const row = record as any;
             if (row.parentId && row.parentId !== 'null' && row.parentId.trim() !== '') {
                 try {
                     // Check if parent exists first to avoid error? Or just try update.
