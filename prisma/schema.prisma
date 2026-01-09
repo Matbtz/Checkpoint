@@ -163,7 +163,6 @@ model Game {
   ports          Json?         // [{ id, name }]
   remakes        Json?
   remasters      Json?
-  remasters      Json?
 
   updatedAt    DateTime      @updatedAt
   users        UserLibrary[]
