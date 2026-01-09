@@ -9,11 +9,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { updateLibraryEntry, fixGameMatch, extractColorsAction } from '@/actions/library';
-import { updateGameMetadata, searchGameImages } from '@/actions/game';
+import { updateGameMetadata, searchGameImages, getRelatedGamesStructured } from '@/actions/game';
 import { fetchExternalMetadata, searchMetadataCandidates, MetadataCandidate, ExternalMetadata } from '@/actions/fetch-metadata';
 import { assignTag, removeTag, getUserTags, createTag } from '@/actions/tag';
 import { Game, UserLibrary, Tag } from '@prisma/client';
-import { Loader2, Plus, X, ChevronDown, ChevronRight, RefreshCw, BadgeInfo, Search } from 'lucide-react';
+import { Loader2, Plus, X, ChevronDown, ChevronRight, RefreshCw, BadgeInfo, Search, Gamepad2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { HLTBCard } from '@/components/game/HLTBCard';
@@ -137,6 +137,16 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
     // Collapsible states
     const [showFoundCovers, setShowFoundCovers] = useState(true);
     const [showFoundBackgrounds, setShowFoundBackgrounds] = useState(true);
+
+    // Franchise / Related Games
+    const [relatedGamesBuckets, setRelatedGamesBuckets] = useState<Awaited<ReturnType<typeof getRelatedGamesStructured>>>(null);
+
+    // Fetch related games when metadata tab is active
+    useEffect(() => {
+        if (activeTab === 'metadata' && !relatedGamesBuckets && item.gameId) {
+            getRelatedGamesStructured(item.gameId).then(setRelatedGamesBuckets);
+        }
+    }, [activeTab, relatedGamesBuckets, item.gameId]);
 
     // Auto-calculate progress
     useEffect(() => {
@@ -761,6 +771,66 @@ export function EditGameModal({ item, isOpen, onClose }: EditGameModalProps) {
                                     <div className="space-y-1">
                                         <Label className="text-xs text-muted-foreground uppercase tracking-wider">Franchise</Label>
                                         <div className="font-medium">{metaFranchise}</div>
+                                    </div>
+                                )}
+
+                                {relatedGamesBuckets && (
+                                    <div className="space-y-4 pt-4 border-t">
+                                        {(relatedGamesBuckets.dlcs.length > 0 || relatedGamesBuckets.expansions.length > 0) && (
+                                            <div className="space-y-2">
+                                                <Label className="text-sm font-semibold text-purple-600 flex items-center gap-2">
+                                                    <Gamepad2 className="w-4 h-4" /> Same Universe
+                                                </Label>
+                                                {relatedGamesBuckets.dlcs.length > 0 && (
+                                                    <div className="pl-4 border-l-2 border-zinc-200 dark:border-zinc-800">
+                                                        <Label className="text-xs text-muted-foreground block mb-1">DLCs</Label>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {relatedGamesBuckets.dlcs.map(g => (
+                                                                <Badge key={g.id} variant="outline" className="text-xs font-normal">{g.title}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {relatedGamesBuckets.expansions.length > 0 && (
+                                                    <div className="pl-4 border-l-2 border-zinc-200 dark:border-zinc-800">
+                                                        <Label className="text-xs text-muted-foreground block mb-1">Expansions & Remakes</Label>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {relatedGamesBuckets.expansions.map(g => (
+                                                                <Badge key={g.id} variant="outline" className="text-xs font-normal">{g.title}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {(relatedGamesBuckets.main.length > 0 || relatedGamesBuckets.spinoffs.length > 0) && (
+                                            <div className="space-y-2">
+                                                <Label className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                                                    <Gamepad2 className="w-4 h-4" /> Franchise Games
+                                                </Label>
+                                                {relatedGamesBuckets.main.length > 0 && (
+                                                    <div className="pl-4 border-l-2 border-zinc-200 dark:border-zinc-800">
+                                                        <Label className="text-xs text-muted-foreground block mb-1">Main Games</Label>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {relatedGamesBuckets.main.map(g => (
+                                                                <Badge key={g.id} variant="outline" className="text-xs font-normal">{g.title}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {relatedGamesBuckets.spinoffs.length > 0 && (
+                                                    <div className="pl-4 border-l-2 border-zinc-200 dark:border-zinc-800">
+                                                        <Label className="text-xs text-muted-foreground block mb-1">Spinoffs</Label>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {relatedGamesBuckets.spinoffs.map(g => (
+                                                                <Badge key={g.id} variant="outline" className="text-xs font-normal">{g.title}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

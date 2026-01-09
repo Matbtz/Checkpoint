@@ -9,55 +9,55 @@ import { searchSteamStore } from '@/lib/steam-store';
 import { getIgdbGameDetails } from '@/lib/igdb';
 
 export async function updateGameMetadata(gameId: string, data: {
-  title?: string;
-  studio?: string;
-  genres?: string[]; // Expecting array, will JSON.stringify
-  platforms?: string[]; // Expecting array, will JSON.stringify
-  opencriticScore?: number | null;
-  opencriticUrl?: string | null;
-  igdbScore?: number | null;
-  steamReviewPercent?: number | null;
-  franchise?: string | null;
-  releaseDate?: Date | null;
-  coverImage?: string;
-  backgroundImage?: string;
+    title?: string;
+    studio?: string;
+    genres?: string[]; // Expecting array, will JSON.stringify
+    platforms?: string[]; // Expecting array, will JSON.stringify
+    opencriticScore?: number | null;
+    opencriticUrl?: string | null;
+    igdbScore?: number | null;
+    steamReviewPercent?: number | null;
+    franchise?: string | null;
+    releaseDate?: Date | null;
+    coverImage?: string;
+    backgroundImage?: string;
 }) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
 
-  // Verify user has this game in library to allow editing
-  const userLib = await prisma.userLibrary.findUnique({
-    where: {
-      userId_gameId: {
-        userId: session.user.id,
-        gameId: gameId,
-      },
-    },
-  });
+    // Verify user has this game in library to allow editing
+    const userLib = await prisma.userLibrary.findUnique({
+        where: {
+            userId_gameId: {
+                userId: session.user.id,
+                gameId: gameId,
+            },
+        },
+    });
 
-  if (!userLib) throw new Error("Game not in library");
+    if (!userLib) throw new Error("Game not in library");
 
-  const updateData: any = {};
-  if (data.title !== undefined) updateData.title = data.title;
-  if (data.studio !== undefined) updateData.studio = data.studio;
-  if (data.genres !== undefined) updateData.genres = JSON.stringify(data.genres);
-  // platforms is now Json type in schema (array of objects or strings), passing array directly
-  if (data.platforms !== undefined) updateData.platforms = data.platforms;
-  if (data.opencriticScore !== undefined) updateData.opencriticScore = data.opencriticScore;
-  if (data.opencriticUrl !== undefined) updateData.opencriticUrl = data.opencriticUrl;
-  if (data.igdbScore !== undefined) updateData.igdbScore = data.igdbScore;
-  if (data.steamReviewPercent !== undefined) updateData.steamReviewPercent = data.steamReviewPercent;
-  if (data.franchise !== undefined) updateData.franchise = data.franchise;
-  if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate;
-  if (data.coverImage !== undefined) updateData.coverImage = data.coverImage;
-  if (data.backgroundImage !== undefined) updateData.backgroundImage = data.backgroundImage;
+    const updateData: any = {};
+    if (data.title !== undefined) updateData.title = data.title;
+    if (data.studio !== undefined) updateData.studio = data.studio;
+    if (data.genres !== undefined) updateData.genres = JSON.stringify(data.genres);
+    // platforms is now Json type in schema (array of objects or strings), passing array directly
+    if (data.platforms !== undefined) updateData.platforms = data.platforms;
+    if (data.opencriticScore !== undefined) updateData.opencriticScore = data.opencriticScore;
+    if (data.opencriticUrl !== undefined) updateData.opencriticUrl = data.opencriticUrl;
+    if (data.igdbScore !== undefined) updateData.igdbScore = data.igdbScore;
+    if (data.steamReviewPercent !== undefined) updateData.steamReviewPercent = data.steamReviewPercent;
+    if (data.franchise !== undefined) updateData.franchise = data.franchise;
+    if (data.releaseDate !== undefined) updateData.releaseDate = data.releaseDate;
+    if (data.coverImage !== undefined) updateData.coverImage = data.coverImage;
+    if (data.backgroundImage !== undefined) updateData.backgroundImage = data.backgroundImage;
 
-  await prisma.game.update({
-    where: { id: gameId },
-    data: updateData,
-  });
+    await prisma.game.update({
+        where: { id: gameId },
+        data: updateData,
+    });
 
-  revalidatePath('/dashboard');
+    revalidatePath('/dashboard');
 }
 
 /**
@@ -148,8 +148,8 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
     // 2. RAWG
     const rawgPromise = searchRawgGames(targetTitle, 5).then(games => {
         return games.filter(g => {
-             const year = g.released ? new Date(g.released).getFullYear() : undefined;
-             return isStrictMatch(targetTitle, targetYear, g.name, year);
+            const year = g.released ? new Date(g.released).getFullYear() : undefined;
+            return isStrictMatch(targetTitle, targetYear, g.name, year);
         });
     });
 
@@ -164,16 +164,16 @@ export async function searchGameImages(query: string, options?: { igdbId?: strin
 
     // Helper to add images
     const addImages = (c: string[], b: string[]) => {
-        c.forEach(img => { if(img) covers.add(img); });
-        b.forEach(img => { if(img) backgrounds.add(img); });
+        c.forEach(img => { if (img) covers.add(img); });
+        b.forEach(img => { if (img) backgrounds.add(img); });
     };
 
     // Process IGDB
     if (igdbRes.status === 'fulfilled') {
         igdbRes.value.forEach((game: any) => {
-             const c = game.possibleCovers || game.availableCovers || [];
-             const b = game.possibleBackgrounds || game.availableBackgrounds || [];
-             addImages(c, b);
+            const c = game.possibleCovers || game.availableCovers || [];
+            const b = game.possibleBackgrounds || game.availableBackgrounds || [];
+            addImages(c, b);
         });
     }
 
@@ -238,4 +238,85 @@ async function filterValidUrls(urls: string[]): Promise<string[]> {
     return results
         .map(r => r.status === 'fulfilled' ? r.value : null)
         .filter((url): url is string => url !== null);
+}
+
+export async function getRelatedGamesStructured(gameId: string) {
+    const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        select: {
+            id: true,
+            franchise: true,
+            relatedGames: true
+        }
+    });
+
+    if (!game) return null;
+
+    // Parse Related Games
+    // We will bucket them into specific categories for display
+    const relatedIds = new Set<string>();
+
+    // 1. Gather IDs from JSON 'relatedGames'
+    if (game.relatedGames) {
+        const rg = game.relatedGames as Record<string, { id: number, name: string }[]>;
+        Object.values(rg).forEach(list => {
+            list.forEach(item => relatedIds.add(String(item.id)));
+        });
+    }
+
+    // 2. Fetch Franchise Games (Filtered)
+    if (game.franchise) {
+        const franchiseGames = await prisma.game.findMany({
+            where: {
+                franchise: game.franchise,
+                id: { not: game.id },
+                gameType: { in: [0, 1, 2, 4, 8, 9, 10] } // Main, DLC, Exp, Standalone, Remake, Remaster, Expanded
+            },
+            select: { id: true },
+            orderBy: { releaseDate: 'desc' },
+            take: 100
+        });
+        franchiseGames.forEach(g => relatedIds.add(g.id));
+    }
+
+    // 3. Fetch Details for ALL related candidates ensuring we have gameType
+    const knownRelatedGames = await prisma.game.findMany({
+        where: { id: { in: Array.from(relatedIds) } },
+        select: { id: true, title: true, opencriticScore: true, releaseDate: true, gameType: true },
+        orderBy: { releaseDate: 'desc' }
+    });
+
+    // 4. Bucket them
+    const buckets = {
+        dlcs: [] as typeof knownRelatedGames,
+        expansions: [] as typeof knownRelatedGames, // Expansions, Remakes, Remasters
+        main: [] as typeof knownRelatedGames,
+        spinoffs: [] as typeof knownRelatedGames,
+    };
+
+    knownRelatedGames.forEach(g => {
+        // Exclude unwanted types
+        if (!g.gameType && g.gameType !== 0) return; // Allow 0!
+        if ([5, 6, 7, 11, 12, 13, 14].includes(g.gameType!)) return;
+
+        switch (g.gameType) {
+            case 1: // DLC Addon
+                buckets.dlcs.push(g);
+                break;
+            case 2: // Expansion
+            case 8: // Remake
+            case 9: // Remaster
+            case 10: // Expanded Game
+                buckets.expansions.push(g);
+                break;
+            case 0: // Main
+                buckets.main.push(g);
+                break;
+            case 4: // Standalone Expansion (Spinoff)
+                buckets.spinoffs.push(g);
+                break;
+        }
+    });
+
+    return buckets;
 }

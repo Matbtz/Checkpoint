@@ -12,6 +12,7 @@ import { RefreshButton } from "@/components/game/RefreshButton";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Building2, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getRelatedGamesStructured } from "@/actions/game";
 // ... (existing imports)
 
 import { format } from "date-fns";
@@ -98,84 +99,13 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
         }
     }
 
-    // Parse Related Games
-    let relatedGames: Record<string, { id: string | number, name: string }[]> = {};
-    if (game.relatedGames) {
-        // It might be a JSON object from Prisma
-        relatedGames = game.relatedGames as Record<string, { id: number, name: string }[]>;
-    }
-
-    // Fetch Franchise Games (if applicable)
-    if (game.franchise) {
-        const franchiseGames = await prisma.game.findMany({
-            where: {
-                franchise: game.franchise,
-                id: { not: game.id }
-            },
-            select: { id: true, title: true, opencriticScore: true, releaseDate: true, gameType: true },
-            orderBy: { releaseDate: 'desc' },
-            take: 100
-        });
-
-        if (franchiseGames.length > 0) {
-            const existingIds = new Set<string>();
-            Object.values(relatedGames).forEach(list => {
-                list.forEach(item => existingIds.add(String(item.id)));
-            });
-
-            const newFranchiseGames = franchiseGames.filter(g => !existingIds.has(g.id));
-
-            newFranchiseGames.forEach(g => {
-                let category = 'main_games';
-
-                // Map gameType to category buckets
-                switch (g.gameType) {
-                    case 0: // Main
-                        category = 'main_games';
-                        break;
-                    case 1: // DLC
-                    case 2: // Expansion
-                    case 4: // Standalone Expansion
-                    case 10: // Expanded Game
-                        category = 'dlcs_and_expansions';
-                        break;
-                    case 8: // Remake
-                        category = 'remakes';
-                        break;
-                    case 9: // Remaster
-                        category = 'remasters';
-                        break;
-                    case 3: // Bundle
-                        category = 'bundles';
-                        break;
-                    default:
-                        category = 'others_in_franchise';
-                        break;
-                }
-
-                if (!relatedGames[category]) {
-                    relatedGames[category] = [];
-                }
-                relatedGames[category].push({
-                    id: g.id,
-                    name: g.title
-                });
-            });
-        }
-    }
-
-    // Collect all related IDs to check for existence in DB
-    const relatedIds = new Set<string>();
-    Object.values(relatedGames).forEach(list => {
-        list.forEach(item => relatedIds.add(String(item.id)));
-    });
-
-    const knownRelatedGames = await prisma.game.findMany({
-        where: { id: { in: Array.from(relatedIds) } },
-        select: { id: true, title: true, opencriticScore: true, releaseDate: true }
-    });
-
-    const knownGamesMap = new Map(knownRelatedGames.map(g => [g.id, g]));
+    // Fetch Related Games (Bucketed)
+    const buckets = await getRelatedGamesStructured(id) || {
+        dlcs: [],
+        expansions: [],
+        main: [],
+        spinoffs: []
+    };
 
     // Prepare fallback for cover image
     const coverImage = game.coverImage || "/placeholder-game.png"; // You might want a real placeholder
@@ -401,61 +331,164 @@ export default async function GameDetailsPage({ params }: { params: Promise<{ id
                             />
                         </div>
 
-                        {/* Related Games (DLCs, Remakes, etc) */}
-                        {Object.keys(relatedGames).length > 0 && (
-                            <div className="bg-white dark:bg-zinc-900 rounded-xl p-6 shadow-sm border border-zinc-200 dark:border-zinc-800 space-y-4">
-                                <h3 className="text-lg font-semibold flex items-center gap-2">
-                                    <Gamepad2 className="w-5 h-5 text-purple-600" />
-                                    Same Universe
-                                </h3>
-                                <div className="space-y-4">
-                                    {Object.entries(relatedGames).map(([type, list]) => (
-                                        <div key={type} className="space-y-2">
-                                            <h4 className="text-xs uppercase tracking-wider text-zinc-500 font-bold">
-                                                {type.replace('_', ' ')}
-                                            </h4>
-                                            <ul className="space-y-1">
-                                                {list.map(g => {
-                                                    const knownGame = knownGamesMap.get(String(g.id));
-
-                                                    if (knownGame) {
-                                                        return (
+                        {/* Related Games (Grouped) */}
+                        {(buckets.dlcs.length > 0 || buckets.expansions.length > 0 || buckets.main.length > 0 || buckets.spinoffs.length > 0) && (
+                            <div className="space-y-6">
+                                {/* Same Universe Section */}
+                                {(buckets.dlcs.length > 0 || buckets.expansions.length > 0) && (
+                                    <div className="bg-white dark:bg-zinc-900 rounded-xl p-6 shadow-sm border border-zinc-200 dark:border-zinc-800 space-y-4">
+                                        <h3 className="text-lg font-semibold flex items-center gap-2 text-purple-600">
+                                            <Gamepad2 className="w-5 h-5" />
+                                            Same Universe
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {/* DLCs */}
+                                            {buckets.dlcs.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-xs uppercase tracking-wider text-zinc-500 font-bold">DLCs</h4>
+                                                    <ul className="space-y-1">
+                                                        {buckets.dlcs.map(g => (
                                                             <li key={g.id} className="flex items-center justify-between gap-2">
                                                                 <Link
-                                                                    href={`/game/${knownGame.id}`}
+                                                                    href={`/game/${g.id}`}
                                                                     className="block text-sm font-medium hover:text-purple-600 dark:hover:text-purple-400 truncate transition-colors flex-1"
                                                                 >
-                                                                    {g.name}
+                                                                    {g.title}
                                                                 </Link>
-                                                                {knownGame.opencriticScore && (
+                                                                {g.opencriticScore && (
                                                                     <Badge
                                                                         variant="outline"
                                                                         className={cn(
                                                                             "text-[10px] h-5 px-1.5 min-w-[32px] justify-center",
-                                                                            knownGame.opencriticScore >= 84
+                                                                            g.opencriticScore >= 84
                                                                                 ? "border-green-500/30 text-green-600 bg-green-50/50 dark:bg-green-950/20"
-                                                                                : knownGame.opencriticScore >= 74
+                                                                                : g.opencriticScore >= 74
                                                                                     ? "border-yellow-500/30 text-yellow-600 bg-yellow-50/50 dark:bg-yellow-950/20"
                                                                                     : "border-zinc-300 text-zinc-500 bg-zinc-100 dark:bg-zinc-800"
                                                                         )}
                                                                     >
-                                                                        {knownGame.opencriticScore}
+                                                                        {g.opencriticScore}
                                                                     </Badge>
                                                                 )}
                                                             </li>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <li key={g.id} className="text-sm text-zinc-600 dark:text-zinc-400 truncate">
-                                                            {g.name}
-                                                        </li>
-                                                    );
-                                                })}
-                                            </ul>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            {/* Expansions / Remakes */}
+                                            {buckets.expansions.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-xs uppercase tracking-wider text-zinc-500 font-bold">Expansions & Remakes</h4>
+                                                    <ul className="space-y-1">
+                                                        {buckets.expansions.map(g => (
+                                                            <li key={g.id} className="flex items-center justify-between gap-2">
+                                                                <Link
+                                                                    href={`/game/${g.id}`}
+                                                                    className="block text-sm font-medium hover:text-purple-600 dark:hover:text-purple-400 truncate transition-colors flex-1"
+                                                                >
+                                                                    {g.title}
+                                                                </Link>
+                                                                {g.opencriticScore && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            "text-[10px] h-5 px-1.5 min-w-[32px] justify-center",
+                                                                            g.opencriticScore >= 84
+                                                                                ? "border-green-500/30 text-green-600 bg-green-50/50 dark:bg-green-950/20"
+                                                                                : g.opencriticScore >= 74
+                                                                                    ? "border-yellow-500/30 text-yellow-600 bg-yellow-50/50 dark:bg-yellow-950/20"
+                                                                                    : "border-zinc-300 text-zinc-500 bg-zinc-100 dark:bg-zinc-800"
+                                                                        )}
+                                                                    >
+                                                                        {g.opencriticScore}
+                                                                    </Badge>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                )}
+
+                                {/* Franchise Games Section */}
+                                {(buckets.main.length > 0 || buckets.spinoffs.length > 0) && (
+                                    <div className="bg-white dark:bg-zinc-900 rounded-xl p-6 shadow-sm border border-zinc-200 dark:border-zinc-800 space-y-4">
+                                        <h3 className="text-lg font-semibold flex items-center gap-2 text-blue-600">
+                                            <Gamepad2 className="w-5 h-5" />
+                                            Franchise Games
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {/* Main Games */}
+                                            {buckets.main.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-xs uppercase tracking-wider text-zinc-500 font-bold">Main Games</h4>
+                                                    <ul className="space-y-1">
+                                                        {buckets.main.map(g => (
+                                                            <li key={g.id} className="flex items-center justify-between gap-2">
+                                                                <Link
+                                                                    href={`/game/${g.id}`}
+                                                                    className="block text-sm font-medium hover:text-purple-600 dark:hover:text-purple-400 truncate transition-colors flex-1"
+                                                                >
+                                                                    {g.title}
+                                                                </Link>
+                                                                {g.opencriticScore && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            "text-[10px] h-5 px-1.5 min-w-[32px] justify-center",
+                                                                            g.opencriticScore >= 84
+                                                                                ? "border-green-500/30 text-green-600 bg-green-50/50 dark:bg-green-950/20"
+                                                                                : g.opencriticScore >= 74
+                                                                                    ? "border-yellow-500/30 text-yellow-600 bg-yellow-50/50 dark:bg-yellow-950/20"
+                                                                                    : "border-zinc-300 text-zinc-500 bg-zinc-100 dark:bg-zinc-800"
+                                                                        )}
+                                                                    >
+                                                                        {g.opencriticScore}
+                                                                    </Badge>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            {/* Spinoffs */}
+                                            {buckets.spinoffs.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-xs uppercase tracking-wider text-zinc-500 font-bold">Spinoffs</h4>
+                                                    <ul className="space-y-1">
+                                                        {buckets.spinoffs.map(g => (
+                                                            <li key={g.id} className="flex items-center justify-between gap-2">
+                                                                <Link
+                                                                    href={`/game/${g.id}`}
+                                                                    className="block text-sm font-medium hover:text-purple-600 dark:hover:text-purple-400 truncate transition-colors flex-1"
+                                                                >
+                                                                    {g.title}
+                                                                </Link>
+                                                                {g.opencriticScore && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            "text-[10px] h-5 px-1.5 min-w-[32px] justify-center",
+                                                                            g.opencriticScore >= 84
+                                                                                ? "border-green-500/30 text-green-600 bg-green-50/50 dark:bg-green-950/20"
+                                                                                : g.opencriticScore >= 74
+                                                                                    ? "border-yellow-500/30 text-yellow-600 bg-yellow-50/50 dark:bg-yellow-950/20"
+                                                                                    : "border-zinc-300 text-zinc-500 bg-zinc-100 dark:bg-zinc-800"
+                                                                        )}
+                                                                    >
+                                                                        {g.opencriticScore}
+                                                                    </Badge>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
