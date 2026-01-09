@@ -158,10 +158,7 @@ export async function addGameExtended(payload: any) {
             openCriticScore = payload.opencritic;
         }
 
-        // Only fetch if game is already released (has date and date <= today)
-        const isReleased = payload.releaseDate && new Date(payload.releaseDate) <= new Date();
-
-        if ((openCriticScore === undefined || openCriticScore === null) && isReleased) {
+        if (openCriticScore === undefined || openCriticScore === null) {
             try {
                 const ocResult = await getOpenCriticScore(payload.title);
                 openCriticScore = ocResult.score;

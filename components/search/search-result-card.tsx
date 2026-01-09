@@ -31,14 +31,12 @@ export function SearchResultCard({ game }: SearchResultCardProps) {
         setIsAdding(true);
         try {
             // ... logic ...
-            // Default to WISHLIST for TBA or future games
-            let status = 'WISHLIST';
+            let status = 'BACKLOG';
             if (game.releaseDate) {
                 const releaseDate = new Date(game.releaseDate);
                 const today = new Date();
-                // If release date is valid and in the past (or today), set to BACKLOG
-                if (!isNaN(releaseDate.getTime()) && releaseDate <= today) {
-                    status = 'BACKLOG';
+                if (releaseDate > today) {
+                    status = 'WISHLIST';
                 }
             }
 

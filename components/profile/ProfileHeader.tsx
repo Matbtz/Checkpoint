@@ -42,8 +42,6 @@ export function ProfileHeader({ user, isOwnProfile = false }: ProfileHeaderProps
           <EditProfileDialog
             currentAvatarUrl={user.avatarUrl}
             currentBackgroundUrl={user.profileBackgroundUrl || ""}
-            currentBackgroundMode={user.profileBackgroundMode}
-            currentBackgroundGameId={user.profileBackgroundGameId}
           />
         </div>
       )}

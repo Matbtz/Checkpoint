@@ -141,11 +141,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         // 1. Fetch OpenCritic if not present
         let score = game.opencriticScore;
         let url = game.opencriticUrl;
-
-        // Only fetch if game is already released (has date and date <= today)
-        const isReleased = game.releaseDate && new Date(game.releaseDate) <= new Date();
-
-        if (!score && game.source !== 'manual' && isReleased) {
+        if (!score && game.source !== 'manual') {
             try {
                 const ocResult = await fetchOpenCriticAction(game.title);
                 if (ocResult) {
@@ -224,16 +220,7 @@ export function AddGameWizardDialog({ isOpen, onClose }: AddGameWizardDialogProp
         setCustomCoverUrl('');
         setCustomBackgroundUrl('');
 
-        // Default to WISHLIST for TBA/Future, BACKLOG for Released
-        let defaultStatus = 'WISHLIST';
-        if (game.releaseDate) {
-            const rDate = new Date(game.releaseDate);
-            const today = new Date();
-            if (!isNaN(rDate.getTime()) && rDate <= today) {
-                defaultStatus = 'BACKLOG';
-            }
-        }
-        setStatus(defaultStatus);
+        setStatus('BACKLOG');
         setCompletionTarget('MAIN');
 
         setFetchedOpenCritic(score || null);

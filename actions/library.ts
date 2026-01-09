@@ -45,6 +45,7 @@ export async function updateLibraryEntry(
     playtimeExtra?: number | null,
     playtimeCompletionist?: number | null,
     ownedPlatforms?: string[],
+    isManualProgress?: boolean
   }
 ) {
   const session = await auth();
@@ -58,26 +59,6 @@ export async function updateLibraryEntry(
   if (!currentEntry) throw new Error("Entry not found");
 
   const updateData: any = { ...data };
-
-  // Playtime History Tracking for Manual Updates
-  if (data.playtimeManual !== undefined && data.playtimeManual !== null) {
-      const oldTime = currentEntry.playtimeManual || 0;
-      const newTime = data.playtimeManual;
-      const diff = newTime - oldTime;
-
-      // Only record positive increments as play sessions
-      if (diff > 0) {
-          await prisma.activityLog.create({
-              data: {
-                  userId: session.user.id,
-                  gameId: currentEntry.gameId,
-                  type: "PLAY_SESSION",
-                  details: { durationMinutes: diff }
-              }
-          });
-          updateData.lastPlayed = new Date();
-      }
-  }
 
   // Logic: Auto-Capture Time on Completion
   if (data.status === 'COMPLETED' && currentEntry.status !== 'COMPLETED') {
@@ -119,6 +100,11 @@ export async function updateLibraryEntry(
   // Explicitly handle ownedPlatforms
   if (data.ownedPlatforms !== undefined) {
       updateData.ownedPlatforms = data.ownedPlatforms;
+  }
+
+  // Handle isManualProgress
+  if (data.isManualProgress !== undefined) {
+      updateData.isManualProgress = data.isManualProgress;
   }
 
   await prisma.userLibrary.update({

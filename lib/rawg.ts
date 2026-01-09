@@ -31,7 +31,8 @@ export async function searchRawgGames(query: string, limit: number = 10): Promis
   }
 
   try {
-    const url = `${BASE_URL}/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=${limit}`;
+    // Add filters to exclude additions/series to reduce noise, though RAWG search is still broad
+    const url = `${BASE_URL}/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(query)}&page_size=${limit * 2}&exclude_additions=true&exclude_game_series=true`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -41,7 +42,33 @@ export async function searchRawgGames(query: string, limit: number = 10): Promis
     const data: RawgSearchResponse = await response.json();
 
     if (data.results && data.results.length > 0) {
-      return data.results;
+      // Post-fetch filtering to remove low-quality "fan" games
+      // Strategy:
+      // 1. Must have a release date (fan games often don't, or it's just a year) - but RAWG dates vary.
+      // 2. Filter out items with 0 rating AND 0 ratings_count if they are not very new.
+      // 3. Filter out items with "Mod" in the name if it's not the query.
+
+      const filtered = data.results.filter(g => {
+        // Exclude if no release date (often garbage)
+        if (!g.released) return false;
+
+        // Exclude if rating is 0 (and no one rated it) - likely obscure fan content
+        // Exception: Recent games (last 3 months) might not have ratings yet.
+        // We can check if date is valid.
+        const releaseDate = new Date(g.released);
+        const now = new Date();
+        const isRecent = (now.getTime() - releaseDate.getTime()) < (90 * 24 * 60 * 60 * 1000); // 90 days
+
+        if (g.rating === 0 && !isRecent) {
+             // Check if it has any added count (popularity)? RAWG API returns 'added' field usually but not in our interface?
+             // Let's assume rating=0 on old game = junk.
+             return false;
+        }
+
+        return true;
+      });
+
+      return filtered.slice(0, limit);
     }
 
     return [];

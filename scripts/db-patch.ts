@@ -13,7 +13,7 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  console.log('Running DB Patch: Ensure platforms column exists...');
+  console.log('Running DB Patch: Ensure missing columns exist...');
   console.log('Using connection string:', connectionString ? 'Defined' : 'Undefined');
 
   try {
@@ -24,6 +24,19 @@ async function main() {
       ALTER TABLE "Game" ADD COLUMN IF NOT EXISTS "platforms" TEXT;
     `);
     console.log('Successfully patched "Game" table (ensure "platforms" exists).');
+
+    // Add UserLibrary.isManualProgress (Boolean default false)
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "UserLibrary" ADD COLUMN IF NOT EXISTS "isManualProgress" BOOLEAN DEFAULT false;
+    `);
+    console.log('Successfully patched "UserLibrary" table (ensure "isManualProgress" exists).');
+
+    // Add UserLibrary.progressManual (Int nullable)
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "UserLibrary" ADD COLUMN IF NOT EXISTS "progressManual" INTEGER;
+    `);
+    console.log('Successfully patched "UserLibrary" table (ensure "progressManual" exists).');
+
   } catch (error) {
     console.error('Failed to patch DB:', error);
     // Don't exit with error, as this is a "best effort" patch.
