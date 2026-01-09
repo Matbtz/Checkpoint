@@ -25,6 +25,17 @@ export function ProfileHeader({ user, isOwnProfile = false }: ProfileHeaderProps
       {/* Gradient Overlay */}
       <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-background to-transparent" />
 
+      {/* Settings Button (Mobile) */}
+      {isOwnProfile && (
+        <div className="absolute left-4 top-4 z-10 md:hidden">
+          <Link href="/settings">
+            <Button variant="secondary" size="icon" className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-0">
+               <Settings className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Edit Profile Button */}
       {isOwnProfile && (
         <div className="absolute right-4 top-4 z-10">
