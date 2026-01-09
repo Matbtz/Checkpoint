@@ -117,6 +117,12 @@ export async function getUserStatistics(): Promise<UserStatistics> {
   const scoreData: ScoreStat[] = []; // For Scatter Plot
   const scoreBuckets: Record<string, number> = {}; // For Bar Chart (Completed Games)
 
+  // Initialize score buckets 0-100
+  for (let i = 0; i < 100; i += 10) {
+    const label = `${i}-${i + 9}`;
+    scoreBuckets[label] = 0;
+  }
+
   // Top Played Preparation (Map gameId -> merged data)
   const gameMap = new Map<string, {
     title: string;
