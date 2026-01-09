@@ -251,9 +251,13 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
     // Actually, safer to just Exclude Category 5 (Mod) explicitly if we want to be broad,
     // or Include specific list. "Official" usually implies removing Mods and maybe Forks.
     // Let's stick to positive inclusion for safety: 0, 1, 2, 3, 4, 8, 9, 10.
+    // We filter to include only Main, DLC, Expansions, Remakes, Remasters, Expanded.
+    // Explicitly Excluding: Mod (5), Episode (6), Season (7), Port (11), Fork (12), Pack (13), Update (14)
     const allowedCategories = [0, 1, 2, 3, 4, 8, 9, 10];
-    const categoryFilter = `category = (${allowedCategories.join(',')})`;
-    let whereClause = `where ${categoryFilter}`;
+
+    // NOTE: Filtering by game_type (prev category) in 'where' clause combined with 'search' seems to return 0 results for some valid games.
+    // To fix this, we allow all types in the query and filter in memory.
+    let whereClause = '';
 
     // Add Filters
     if (filters) {
@@ -352,7 +356,7 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
         }
 
         if (conditions.length > 0) {
-            whereClause += ` & ${conditions.join(' & ')}`;
+            whereClause = `where ${conditions.join(' & ')}`;
         }
     }
 
@@ -383,18 +387,26 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
 
     const body = `
         ${searchClause}
-        ${whereClause};
+        ${whereClause ? whereClause + ';' : ''}
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, total_rating_count,
                involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
                screenshots.image_id, artworks.image_id, videos.video_id, videos.name, 
-               genres.name, platforms.name, themes.name, collection.name, franchises.name, game_type, category,
+               genres.name, platforms.name, themes.name, collection.name, franchises.name, game_type,
                keywords.name, ports.name, remakes.name, remasters.name, dlcs.name, expansions.name;
         ${sortClause}
         limit ${limit};
     `;
 
     const games = await fetchIgdb<IgdbGame>('games', body);
-    return mapRawToEnriched(games);
+
+    // Client-side category/game_type filtering
+    const filteredGames = games.filter(g => {
+        // Use game_type instead of category
+        if (g.game_type === undefined) return true;
+        return allowedCategories.includes(g.game_type);
+    });
+
+    return mapRawToEnriched(filteredGames);
 }
 
 /**
@@ -432,7 +444,7 @@ export async function getDiscoveryGamesIgdb(type: DiscoveryType, limit: number =
     const body = `
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating, hypes,
         involved_companies.company.name, genres.name, platforms.name, screenshots.image_id,
-        videos.video_id, videos.name, storyline, game_type, category, status,
+        videos.video_id, videos.name, storyline, game_type, status,
         keywords.name, themes.name,
         dlcs.name, dlcs.id, expansions.name, expansions.id, expanded_games.name, expanded_games.id,
         remakes.name, remakes.id, remasters.name, remasters.id, ports.name, ports.id,
@@ -455,7 +467,7 @@ export async function getIgdbGameDetails(gameId: number): Promise<EnrichedIgdbGa
         fields name, slug, url, cover.image_id, first_release_date, summary, aggregated_rating, total_rating,
         involved_companies.company.name, involved_companies.developer, involved_companies.publisher,
         screenshots.image_id, artworks.image_id, videos.video_id, videos.name, genres.name, platforms.name,
-        category, game_type, status, storyline,
+        game_type, status, storyline,
         parent_game.name, parent_game.id,
         dlcs.name, dlcs.id,
         expansions.name, expansions.id,
