@@ -255,6 +255,10 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
     // Explicitly Excluding: Mod (5), Episode (6), Season (7), Port (11), Fork (12), Pack (13), Update (14)
     const allowedCategories = [0, 1, 2, 3, 4, 8, 9, 10];
 
+    // Statuses to exclude: Cancelled (6), Rumored (7)
+    // 0: Released, 2: Alpha, 3: Beta, 4: Early Access, 5: Offline, 6: Cancelled, 7: Rumored
+    const excludedStatuses = [6, 7];
+
     // NOTE: Filtering by game_type (prev category) in 'where' clause combined with 'search' seems to return 0 results for some valid games.
     // To fix this, we allow all types in the query and filter in memory.
     let whereClause = '';
@@ -401,9 +405,17 @@ export async function searchIgdbGames(query: string, limit: number = 10, filters
 
     // Client-side category/game_type filtering
     const filteredGames = games.filter(g => {
-        // Use game_type instead of category
-        if (g.game_type === undefined) return true;
-        return allowedCategories.includes(g.game_type);
+        // Filter by Game Type
+        if (g.game_type !== undefined && !allowedCategories.includes(g.game_type)) {
+            return false;
+        }
+
+        // Filter by Status (if present)
+        if (g.status !== undefined && excludedStatuses.includes(g.status)) {
+            return false;
+        }
+
+        return true;
     });
 
     return mapRawToEnriched(filteredGames);
