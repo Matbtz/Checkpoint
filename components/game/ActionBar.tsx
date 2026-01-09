@@ -153,6 +153,7 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
                                 onBlur={savePlaytime}
                                 className="w-full h-8 bg-transparent border-none text-white placeholder:text-white/50 focus-visible:ring-0 p-0 text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 placeholder="0"
+                                aria-label="Hours played"
                             />
                             <span className="text-sm text-white/70 font-medium">hrs</span>
                         </div>
@@ -162,7 +163,10 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
                     <div className="space-y-1">
                         <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider pl-1">Objective</span>
                         <Select defaultValue={userLibrary.targetedCompletionType || "Main"} onValueChange={handleCompletionChange}>
-                            <SelectTrigger className="w-[130px] h-10 bg-white/10 border-white/20 text-white backdrop-blur-md">
+                            <SelectTrigger
+                                className="w-[130px] h-10 bg-white/10 border-white/20 text-white backdrop-blur-md"
+                                aria-label="Select completion objective"
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -187,6 +191,8 @@ export function ActionBar({ gameId, userLibrary, isLoggedIn, gamePlatforms }: Ac
                             <button
                                 key={platform}
                                 onClick={() => togglePlatform(platform)}
+                                aria-pressed={isOwned}
+                                aria-label={`Toggle ownership for ${platform}`}
                                 className={`
                                     px-3 py-1 rounded-full text-xs font-medium border transition-all duration-200 flex items-center gap-1.5
                                     ${isOwned
