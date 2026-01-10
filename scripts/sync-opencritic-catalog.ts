@@ -83,17 +83,24 @@ async function main() {
   const isContinue = args.includes('--continue') || args.includes('continue');
   const isCsv = args.includes('--csv');
 
-  // Parse Sort Mode
+  // Parse Endpoint Mode
+  const isUpcoming = args.includes('--upcoming');
+  const isRecent = args.includes('--recent');
+  const isReviewedThisWeek = args.includes('--reviewed-this-week');
+
+  // Parse Sort Mode (only for default endpoint)
   let sortMode = 'newest';
-  const sortArg = args.find(a => a.startsWith('--sort='));
-  if (sortArg) {
-    const val = sortArg.split('=')[1];
-    if (val === 'popular') sortMode = 'popularity';
-    else sortMode = val;
-  } else if (args.includes('score') || args.includes('--score')) {
-    sortMode = 'score';
-  } else if (args.includes('popular') || args.includes('--popular')) {
-    sortMode = 'popularity';
+  if (!isUpcoming && !isRecent && !isReviewedThisWeek) {
+    const sortArg = args.find(a => a.startsWith('--sort='));
+    if (sortArg) {
+      const val = sortArg.split('=')[1];
+      if (val === 'popular') sortMode = 'popularity';
+      else sortMode = val;
+    } else if (args.includes('score') || args.includes('--score')) {
+      sortMode = 'score';
+    } else if (args.includes('popular') || args.includes('--popular')) {
+      sortMode = 'popularity';
+    }
   }
 
   // Parse Platform
@@ -105,16 +112,15 @@ async function main() {
     platformMode = platArg.split('=')[1].toLowerCase();
   }
 
-  // Platform Mapping (OpenCritic IDs)
-  // PC=27, PS5=39, Switch=26, XBXS=40, PS4=6, XB1=7
+  // Platform Mapping
+  // ... (Mapping logic unchanged)
   if (platformMode) {
     switch (platformMode) {
       case 'pc': platformId = '27'; break;
       case 'ps5': platformId = '39'; break;
       case 'ps4': platformId = '6'; break;
       case 'switch': platformId = '26'; break;
-      // "switch 2" is speculative, mapping to Switch (26) or unknown. ignoring for now or mapping specific if verified.
-      case 'xbox': platformId = '7,40'; break; // Xbox One + Series
+      case 'xbox': platformId = '7,40'; break;
       case 'series': platformId = '40'; break;
       default:
         console.warn(`⚠️ Unknown platform "${platformMode}". Ignoring filter.`);
@@ -122,7 +128,8 @@ async function main() {
     }
   }
 
-  const stateSuffix = platformMode ? `-${sortMode}-${platformMode}` : `-${sortMode}`;
+  const endpointSuffix = isUpcoming ? '-upcoming' : (isRecent ? '-recent' : (isReviewedThisWeek ? '-reviewed-week' : ''));
+  const stateSuffix = platformMode ? `${endpointSuffix}-${sortMode}-${platformMode}` : `${endpointSuffix}-${sortMode}`;
   const STATE_FILE = path.resolve(process.cwd(), `scripts/sync-state${stateSuffix}${isCsv ? '-csv' : ''}.json`);
 
   // --- CSV SETUP ---
@@ -149,7 +156,7 @@ async function main() {
     const headers = [
       "id", "title", "coverImage", "backgroundImage", "releaseDate", "description",
       "screenshots", "videos", "steamUrl", "opencriticUrl", "igdbUrl", "hltbUrl",
-      "opencriticScore", "igdbScore", "steamAppId", "steamReviewScore", "steamReviewCount",
+      "opencriticScore", "opencriticScoreUpdatedAt", "igdbScore", "steamAppId", "steamReviewScore", "steamReviewCount",
       "steamReviewPercent", "isDlc", "igdbId", "studio", "genres", "platforms",
       "igdbTime", "dataMissing", "dataFetched", "hltbMain", "hltbExtra", "hltbCompletionist",
       "storyline", "status", "gameType", "parentId", "relatedGames", "franchise",
@@ -161,7 +168,6 @@ async function main() {
     }
     console.log(`📝 CSV Export enabled: ${csvPath} (Append: ${fileExists})`);
   }
-
 
   let startSkip = 0;
   if (isContinue) {
@@ -183,8 +189,6 @@ async function main() {
     console.log(`🆕 NEW MODE (${sortMode}${platformMode ? '/' + platformMode : ''}): Starting from 0.`);
   }
 
-  console.log(`🚀 Starting OpenCritic Discovery & Sync (Sort: ${sortMode}${platformMode ? ', Platform: ' + platformMode : ''})...`);
-
   // 1. Pré-chargement des jeux locaux pour éviter des milliers de requêtes DB - ONLY IF NOT CSV
   let knownGames: any[] = [];
   if (!isCsv) {
@@ -200,14 +204,27 @@ async function main() {
   let pagesProcessed = 0;
   let gamesCreated = 0;
   let gamesUpdated = 0;
+  let skipRawg = false;
 
-  for (let i = 0; i < MAX_PAGES; i++) {
+  // Determine Max Pages based on mode (1 for special endpoints)
+  const effectiveMaxPages = (isUpcoming || isRecent || isReviewedThisWeek) ? 1 : MAX_PAGES;
+
+  for (let i = 0; i < effectiveMaxPages; i++) {
     const currentSkip = startSkip + (i * 20);
 
-    // URL construction with sort mode and platform
-    let url = `https://opencritic-api.p.rapidapi.com/game?skip=${currentSkip}&sort=${sortMode}`;
-    if (platformId) {
-      url += `&platforms=${platformId}`;
+    // URL construction
+    let url = '';
+    if (isUpcoming) {
+      url = `https://opencritic-api.p.rapidapi.com/game/upcoming`;
+    } else if (isRecent) {
+      url = `https://opencritic-api.p.rapidapi.com/game/recently-released`;
+    } else if (isReviewedThisWeek) {
+      url = `https://opencritic-api.p.rapidapi.com/game/reviewed-this-week`;
+    } else {
+      url = `https://opencritic-api.p.rapidapi.com/game?skip=${currentSkip}&sort=${sortMode}`;
+      if (platformId) {
+        url += `&platforms=${platformId}`;
+      }
     }
 
     console.log(`\n📄 Fetching page ${i + 1} (skip: ${currentSkip})...`);
@@ -267,6 +284,7 @@ async function main() {
                 where: { id: match.id },
                 data: {
                   opencriticScore: newScore,
+                  opencriticScoreUpdatedAt: isReviewedThisWeek ? new Date() : ((apiReleaseDateStr && !isNaN(new Date(apiReleaseDateStr).getTime())) ? new Date(apiReleaseDateStr) : new Date()),
                   // Also update URL if available, as user script missed it
                   ...(apiGame.url ? { opencriticUrl: apiGame.url } : {})
                 }
@@ -285,7 +303,7 @@ async function main() {
           // --- FULL ENRICHMENT (Adapted from enrich-library.ts) ---
 
           // 1. Art & Basic Source (IGDB prefered)
-          const art = await findBestGameArt(cleanTitle, releaseYear);
+          const art = await findBestGameArt(cleanTitle, releaseYear, skipRawg ? ['rawg'] : []);
 
           // 2. Resolve IGDB Data (Full Details)
           let igdbData: EnrichedIgdbGame | IgdbGame | null = null;
@@ -322,15 +340,24 @@ async function main() {
 
           // 3. Fallback RAWG if IGDB missing (for Genres/Desc)
           let rawgData: RawgGame | null = null;
-          if (!igdbData) {
-            const rawgResults = await searchRawgGames(cleanTitle, 1);
-            if (rawgResults.length > 0) {
-              const res = rawgResults[0];
-              const cYear = res.released ? new Date(res.released).getFullYear() : null;
-              if (isExternalMatch(cleanTitle, res.name, apiReleaseDateStr ? new Date(apiReleaseDateStr) : null, cYear)) {
-                // Get full details
-                const details = await getRawgGameDetails(res.id);
-                rawgData = details || res;
+          if (!igdbData && !skipRawg) {
+            try {
+              const rawgResults = await searchRawgGames(cleanTitle, 1);
+              if (rawgResults.length > 0) {
+                const res = rawgResults[0];
+                const cYear = res.released ? new Date(res.released).getFullYear() : null;
+                if (isExternalMatch(cleanTitle, res.name, apiReleaseDateStr ? new Date(apiReleaseDateStr) : null, cYear)) {
+                  // Get full details
+                  const details = await getRawgGameDetails(res.id);
+                  rawgData = details || res;
+                }
+              }
+            } catch (e: any) {
+              if (e.message?.includes('401') || e.message?.includes('429')) {
+                console.warn(`⚠️ RAWG Error: ${e.message}. Disabling RAWG for remainder.`);
+                skipRawg = true;
+              } else {
+                console.warn(`⚠️ RAWG Error: ${e.message}`);
               }
             }
           }
@@ -448,6 +475,7 @@ async function main() {
           const videos = (igdbData as EnrichedIgdbGame)?.videos?.map(v => `https://www.youtube.com/watch?v=${v.video_id}`) || [];
 
           const opencriticScore = (apiGame.topCriticScore && apiGame.topCriticScore !== -1) ? Math.round(apiGame.topCriticScore) : null;
+          const opencriticScoreUpdatedAt = isReviewedThisWeek ? new Date() : ((opencriticScore && releaseDate && !isNaN(releaseDate.getTime())) ? releaseDate : (opencriticScore ? new Date() : null));
 
           // Studio Extraction
           let studio: string | null = null;
@@ -465,6 +493,7 @@ async function main() {
             title: cleanTitle,
             releaseDate: releaseDate,
             opencriticScore: opencriticScore,
+            opencriticScoreUpdatedAt: opencriticScoreUpdatedAt,
             opencriticUrl: apiGame.url || `https://opencritic.com/game/${apiGame.id}/${normalize(cleanTitle)}`,
             coverImage: art?.cover || null,
             backgroundImage: art?.background || null,
@@ -513,7 +542,7 @@ async function main() {
               gameData.releaseDate ? gameData.releaseDate.toISOString() : '',
               gameData.description,
               gameData.screenshots, gameData.videos, gameData.steamUrl, gameData.opencriticUrl, gameData.igdbUrl, gameData.hltbUrl,
-              gameData.opencriticScore, gameData.igdbScore, gameData.steamAppId,
+              gameData.opencriticScore, gameData.opencriticScoreUpdatedAt ? gameData.opencriticScoreUpdatedAt.toISOString() : '', gameData.igdbScore, gameData.steamAppId,
               gameData.steamReviewScore, gameData.steamReviewCount, gameData.steamReviewPercent,
               gameData.isDlc, gameData.igdbId, gameData.studio, gameData.genres,
               JSON.stringify(gameData.platforms),
@@ -543,6 +572,7 @@ async function main() {
                 title: gameData.title,
                 releaseDate: gameData.releaseDate,
                 opencriticScore: gameData.opencriticScore,
+                opencriticScoreUpdatedAt: gameData.opencriticScoreUpdatedAt,
                 opencriticUrl: gameData.opencriticUrl,
                 coverImage: gameData.coverImage,
                 backgroundImage: gameData.backgroundImage,

@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_POSTGRES_PRISMA_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -99,6 +99,7 @@ model Game {
 
   // Scores
   opencriticScore Int?
+  opencriticScoreUpdatedAt DateTime?
   igdbScore       Int?
 
   // Steam Specific
@@ -127,8 +128,6 @@ model Game {
   gameType       Int?    // IGDB Game Type
   relatedGames   Json?   // { dlcs, expansions, remakes, remasters, expanded_games } (IDs & Names)
 
-  dataMissing Boolean   @default(false)
-  dataFetched Boolean   @default(false)
 
   hltbMain          Int? // En minutes
   hltbExtra         Int?
@@ -157,9 +156,9 @@ model Game {
   hypes          Int?
   summary        String?       @db.Text // Distinct from description?
   keywords       String[]      // Array of strings
-  themes         String[]      // Array of strings (IGDB Themes specific)
 
   // JSON lists for explicit tracking if not using Relations
+
   ports          Json?         // [{ id, name }]
   remakes        Json?
   remasters      Json?

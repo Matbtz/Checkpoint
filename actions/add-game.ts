@@ -179,6 +179,7 @@ export async function addGameExtended(payload: any) {
                 releaseDate: payload.releaseDate ? new Date(payload.releaseDate) : null,
                 studio: payload.studio,
                 opencriticScore: openCriticScore,
+                opencriticScoreUpdatedAt: openCriticScore ? new Date() : null,
                 opencriticUrl: openCriticUrl,
                 genres: payload.genres, // Stringified JSON
                 platforms: Array.isArray(payload.platforms)
@@ -204,7 +205,10 @@ export async function addGameExtended(payload: any) {
                 backgroundImage: payload.backgroundImage,
                 studio: payload.studio,
                 // Only update opencritic if payload has it (it might be null if not fetched)
-                ...(openCriticScore !== undefined && { opencriticScore: openCriticScore }),
+                ...(openCriticScore !== undefined && {
+                    opencriticScore: openCriticScore,
+                    opencriticScoreUpdatedAt: openCriticScore ? new Date() : null
+                }),
                 ...(openCriticUrl !== undefined && { opencriticUrl: openCriticUrl }),
                 genres: payload.genres,
                 platforms: Array.isArray(payload.platforms)

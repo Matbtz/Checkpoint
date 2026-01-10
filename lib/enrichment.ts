@@ -185,6 +185,7 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
                 // Iterate through candidates to find one with a valid image
                 for (const steamMatch of matches) {
                     const coverUrl = steamMatch.library_cover;
+                    const headerUrl = steamMatch.header_image;
 
                     // Verify image exists (Steam Store search constructs URL blindly)
                     // Use a short timeout to avoid hanging
@@ -198,7 +199,18 @@ export async function findBestGameArt(title: string, releaseYear?: number | null
                                 originalData: steamMatch
                             };
                         } else {
-                            console.log(`[Enrichment] Steam image 404 for ${steamMatch.name} (ID: ${steamMatch.id}): ${coverUrl}`);
+                            console.log(`[Enrichment] Steam library_cover 404 for ${steamMatch.name}. Trying header_image...`);
+                            // Fallback to header_image (460x215)
+                            const checkHeader = await fetch(headerUrl, { method: 'HEAD', signal: AbortSignal.timeout(1500) });
+                            if (checkHeader.ok) {
+                                return {
+                                    cover: steamMatch.header_image,
+                                    background: steamMatch.library_hero,
+                                    source: 'steam',
+                                    originalData: steamMatch
+                                };
+                            }
+                            console.log(`[Enrichment] Steam images failed for ${steamMatch.name} (ID: ${steamMatch.id})`);
                         }
                     } catch (err) {
                         console.log(`[Enrichment] Steam image verification failed for ${steamMatch.name}:`, err);
