@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { type UserLibrary, type Game } from '@prisma/client';
@@ -35,6 +35,13 @@ export function GameListRow({
 }: GameListRowProps) {
     const { game } = item;
     const [isHovered, setIsHovered] = useState(false);
+
+    // Image fallback logic
+    const [currentCoverImage, setCurrentCoverImage] = useState(item.customCoverImage || game.coverImage || '/placeholder.png');
+
+    useEffect(() => {
+        setCurrentCoverImage(item.customCoverImage || game.coverImage || '/placeholder.png');
+    }, [item.customCoverImage, game.coverImage]);
 
     // Derived state
     const targetType = item.targetedCompletionType || 'Main';
@@ -93,24 +100,30 @@ export function GameListRow({
         }
     };
 
+    const handleRowClick = () => {
+        if (isDeleteMode && onToggleSelect) {
+            onToggleSelect(item.gameId);
+        } else if (onGameClick) {
+            onGameClick(item);
+        }
+    };
+
     return (
         <motion.tr
             layoutId={game.id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className={cn(
-                "group border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+                "group border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted cursor-pointer",
                 isSelected && "bg-muted"
             )}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            onClick={() => {
-                if(isDeleteMode && onToggleSelect) onToggleSelect(item.gameId);
-            }}
+            onClick={handleRowClick}
         >
             {/* Selection Checkbox (Visible in Delete Mode) */}
             {isDeleteMode && (
-                <td className="w-12 px-4 py-2">
+                <td className="w-12 px-4 py-2" onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect?.(item.gameId)} />
                 </td>
             )}
@@ -128,14 +141,23 @@ export function GameListRow({
                 <div className="flex items-center gap-3">
                     <div className="relative h-10 w-8 shrink-0 overflow-hidden rounded shadow-sm">
                         <Image
-                            src={item.customCoverImage || game.coverImage || '/placeholder.png'}
+                            src={currentCoverImage}
                             alt={game.title}
                             fill
                             className="object-cover"
+                            onError={() => {
+                                if (currentCoverImage.includes('library_600x900.jpg')) {
+                                    setCurrentCoverImage(currentCoverImage.replace('library_600x900.jpg', 'portrait.png'));
+                                }
+                            }}
                         />
                     </div>
                     <div>
-                        <Link href={`/game/${game.id}`} className="font-medium hover:underline block truncate max-w-[150px] sm:max-w-[200px] md:max-w-xs" onClick={(e) => e.stopPropagation()}>
+                        <Link
+                            href={`/game/${game.id}`}
+                            className="font-medium hover:underline block truncate max-w-[150px] sm:max-w-[200px] md:max-w-xs"
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             {game.title}
                         </Link>
                          {/* Mobile: Show minimal status info */}
@@ -157,7 +179,7 @@ export function GameListRow({
             </td>
 
             {/* Status (Hidden on Mobile) */}
-            <td className="hidden md:table-cell px-4 py-2">
+            <td className="hidden md:table-cell px-4 py-2" onClick={(e) => e.stopPropagation()}>
                 <Select defaultValue={item.status} onValueChange={handleStatusChange}>
                     <SelectTrigger className="h-8 w-[130px] text-xs">
                         <SelectValue />
@@ -173,7 +195,7 @@ export function GameListRow({
             </td>
 
              {/* Objective (Hidden on Mobile) */}
-             <td className="hidden lg:table-cell px-4 py-2">
+             <td className="hidden lg:table-cell px-4 py-2" onClick={(e) => e.stopPropagation()}>
                 <Select defaultValue={targetType} onValueChange={handleTargetChange}>
                     <SelectTrigger className="h-8 w-[110px] text-xs">
                         <SelectValue />
@@ -187,7 +209,7 @@ export function GameListRow({
             </td>
 
             {/* Playtime (Editable) */}
-            <td className="hidden sm:table-cell px-4 py-2">
+            <td className="hidden sm:table-cell px-4 py-2" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                     <Input
                         type="number"
@@ -249,7 +271,7 @@ export function GameListView({
             <table className="w-full caption-bottom text-sm text-left">
                 <thead className="[&_tr]:border-b">
                     <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                        {isDeleteMode && <th className="h-12 px-4 align-middle font-medium text-muted-foreground"></th>}
+                        {isDeleteMode && <th className="h-12 px-4 align-middle font-medium text-muted-foreground w-12"></th>}
                         <th className="h-12 w-1 p-0"></th>
                         <th className="h-12 px-4 align-middle font-medium text-muted-foreground">Game</th>
                         <th className="hidden md:table-cell h-12 px-4 align-middle font-medium text-muted-foreground">Release</th>
