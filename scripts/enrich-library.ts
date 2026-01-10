@@ -377,11 +377,14 @@ async function main() {
 
             let hltbRequestMade = false;
             let rawgRequestMade = false;
+            let forceRefresh = false;
 
             // --- A. IGDB & ART ENRICHMENT ---
             if (options.art || options.metadata || options.scanDlc) {
                 try {
-                    const art = !options.scanDlc ? await findBestGameArt(game.title, releaseYear) : null;
+                    // Check if we should skip RAWG in findBestGameArt
+                    const excluded = skipRawg ? ['rawg'] : [];
+                    const art = !options.scanDlc ? await findBestGameArt(game.title, releaseYear, excluded) : null;
 
                     if (art) {
                         if (options.art) {
@@ -396,6 +399,7 @@ async function main() {
 
                     // 2. Resolve IGDB Data
                     let igdbData: EnrichedIgdbGame | IgdbGame | null = null;
+
 
                     if ((options.scanDlc || options.refresh) && game.igdbId) {
                         const { getIgdbGameDetails } = require('../lib/igdb');
@@ -429,6 +433,7 @@ async function main() {
                                 console.log(`   ⚠️ Existing ID points to Type ${cat} (${catName}). Re-searching for Main Game...`);
                                 game.igdbId = null; // Clear ID to force search
                                 igdbData = null;    // Clear data
+                                forceRefresh = true; // Force overwrite of metadata since ID was wrong
                             }
                         }
                     }
@@ -514,7 +519,7 @@ async function main() {
 
                     // 3. Apply IGDB Metadata
                     if (igdbData && (options.metadata || options.scanDlc)) {
-                        if ((!game.description || options.refresh) && igdbData.summary) {
+                        if ((!game.description || options.refresh || forceRefresh) && igdbData.summary) {
                             updateData.description = igdbData.summary; dataFound = true; updatesLog.push("Description");
                         }
 
@@ -530,18 +535,18 @@ async function main() {
                             }
                         }
 
-                        if ((!game.igdbScore || options.refresh) && (igdbData.total_rating || igdbData.aggregated_rating)) {
+                        if ((!game.igdbScore || options.refresh || forceRefresh) && (igdbData.total_rating || igdbData.aggregated_rating)) {
                             updateData.igdbScore = Math.round(igdbData.total_rating || igdbData.aggregated_rating!);
                             dataFound = true;
                             updatesLog.push(`IGDB Score (${updateData.igdbScore})`);
                         }
 
-                        if ((!game.igdbUrl || options.refresh) && igdbData.url) {
+                        if ((!game.igdbUrl || options.refresh || forceRefresh) && igdbData.url) {
                             updateData.igdbUrl = igdbData.url; dataFound = true; updatesLog.push("IGDB URL");
                         }
 
                         // Release Date Update (Important for delays)
-                        if ((!game.releaseDate || options.refresh) && igdbData.first_release_date) {
+                        if ((!game.releaseDate || options.refresh || forceRefresh) && igdbData.first_release_date) {
                             const newDate = new Date(igdbData.first_release_date * 1000);
                             // Compare just the days to avoid time drift issues
                             if (!game.releaseDate || newDate.toISOString().split('T')[0] !== game.releaseDate.toISOString().split('T')[0]) {
@@ -554,12 +559,12 @@ async function main() {
 
                         // Videos / Screens / TimeToBeat
                         // Only update specialized fields on refresh or if empty? Let's be aggressive if we found data.
-                        if ((!game.screenshots || options.refresh) && igdbData.screenshots?.length) {
+                        if ((!game.screenshots || options.refresh || forceRefresh) && igdbData.screenshots?.length) {
                             updateData.screenshots = igdbData.screenshots.map(s => getIgdbImageUrl(s.image_id, '1080p'));
                             dataFound = true;
                             updatesLog.push("Screenshots");
                         }
-                        if ((!game.videos || options.refresh) && igdbData.videos?.length) {
+                        if ((!game.videos || options.refresh || forceRefresh) && igdbData.videos?.length) {
                             updateData.videos = igdbData.videos.map(v => `https://www.youtube.com/watch?v=${v.video_id}`);
                             dataFound = true;
                             updatesLog.push("Videos");
@@ -581,18 +586,18 @@ async function main() {
                             }
                         } catch (e) { /* ignore */ }
 
-                        if ((!game.storyline || options.refresh) && igdbData.storyline) {
+                        if ((!game.storyline || options.refresh || forceRefresh) && igdbData.storyline) {
                             updateData.storyline = igdbData.storyline; dataFound = true; updatesLog.push("Storyline");
                         }
-                        if ((game.status === undefined || game.status === null || options.refresh) && igdbData.status !== undefined) {
+                        if ((game.status === undefined || game.status === null || options.refresh || forceRefresh) && igdbData.status !== undefined) {
                             updateData.status = igdbData.status; dataFound = true; updatesLog.push(`Status (${igdbData.status})`);
                         }
-                        if ((game.gameType === undefined || game.gameType === null || options.refresh) && igdbData.game_type !== undefined) {
+                        if ((game.gameType === undefined || game.gameType === null || options.refresh || forceRefresh) && igdbData.game_type !== undefined) {
                             updateData.gameType = igdbData.game_type; dataFound = true; updatesLog.push(`Game Type (${igdbData.game_type})`);
                         }
 
                         // Consolidated Related Games JSON
-                        if (!game.relatedGames || options.refresh) {
+                        if (!game.relatedGames || options.refresh || forceRefresh) {
                             const relatedGames: any = {};
                             if (igdbData.dlcs?.length) relatedGames.dlcs = igdbData.dlcs;
                             if (igdbData.expansions?.length) relatedGames.expansions = igdbData.expansions;
@@ -615,19 +620,19 @@ async function main() {
 
                         // --- NEW: Extended Metadata ---
                         // --- NEW: Extended Metadata ---
-                        if ((game.hypes === undefined || game.hypes === null || options.refresh) && igdbData.hypes !== undefined) {
+                        if ((game.hypes === undefined || game.hypes === null || options.refresh || forceRefresh) && igdbData.hypes !== undefined) {
                             updateData.hypes = igdbData.hypes;
                             dataFound = true;
                         }
-                        if ((!game.summary || options.refresh) && igdbData.summary) { updateData.summary = igdbData.summary; }
-                        if ((!game.keywords || options.refresh) && igdbData.keywords?.length) { updateData.keywords = igdbData.keywords.map(k => k.name); }
+                        if ((!game.summary || options.refresh || forceRefresh) && igdbData.summary) { updateData.summary = igdbData.summary; }
+                        if ((!game.keywords || options.refresh || forceRefresh) && igdbData.keywords?.length) { updateData.keywords = igdbData.keywords.map(k => k.name); }
                         // Themes managed via Genres merge below
 
                         // Explicit Relations Columns (JSON)
-                        if ((!game.dlcs || options.refresh) && igdbData.dlcs?.length) { updateData.dlcs = igdbData.dlcs.map(d => ({ id: d.id, name: d.name })); }
-                        if ((!game.ports || options.refresh) && igdbData.ports?.length) { updateData.ports = igdbData.ports.map(p => ({ id: p.id, name: p.name })); }
-                        if ((!game.remakes || options.refresh) && igdbData.remakes?.length) { updateData.remakes = igdbData.remakes.map(r => ({ id: r.id, name: r.name })); }
-                        if ((!game.remasters || options.refresh) && igdbData.remasters?.length) { updateData.remasters = igdbData.remasters.map(r => ({ id: r.id, name: r.name })); }
+                        if ((!game.dlcs || options.refresh || forceRefresh) && igdbData.dlcs?.length) { updateData.dlcs = igdbData.dlcs.map(d => ({ id: d.id, name: d.name })); }
+                        if ((!game.ports || options.refresh || forceRefresh) && igdbData.ports?.length) { updateData.ports = igdbData.ports.map(p => ({ id: p.id, name: p.name })); }
+                        if ((!game.remakes || options.refresh || forceRefresh) && igdbData.remakes?.length) { updateData.remakes = igdbData.remakes.map(r => ({ id: r.id, name: r.name })); }
+                        if ((!game.remasters || options.refresh || forceRefresh) && igdbData.remasters?.length) { updateData.remasters = igdbData.remasters.map(r => ({ id: r.id, name: r.name })); }
 
                         // --- NEW: Themes & Franchise ---
                         // Merge Themes into Genres
@@ -663,7 +668,7 @@ async function main() {
                         }
 
                         // Studio / Developer
-                        if ((!game.studio || options.refresh) && igdbData.involved_companies) {
+                        if ((!game.studio || options.refresh || forceRefresh) && igdbData.involved_companies) {
                             const developers = igdbData.involved_companies
                                 .filter(c => c.developer)
                                 .map(c => c.company.name);
@@ -677,7 +682,7 @@ async function main() {
                         }
 
                         // Franchise / Series / Collection
-                        if (!game.franchise || options.refresh) {
+                        if (!game.franchise || options.refresh || forceRefresh) {
                             let franchiseName: string | null = null;
                             if (igdbData.collection) franchiseName = igdbData.collection.name;
                             else if (igdbData.franchises && igdbData.franchises.length > 0) franchiseName = igdbData.franchises[0].name;
@@ -727,6 +732,15 @@ async function main() {
                         }
                     }
 
+                    // Fallback: If we have no background yet, use a screenshot from IGDB
+                    if (igdbData && igdbData.screenshots && igdbData.screenshots.length > 0) {
+                        const hasBg = updateData.backgroundImage || game.backgroundImage;
+                        if (!hasBg) {
+                            updateData.backgroundImage = getIgdbImageUrl(igdbData.screenshots[0].image_id, '1080p');
+                            dataFound = true;
+                            updatesLog.push("Background (Fallback IGDB Screen)");
+                        }
+                    }
                 } catch (e) {
                     console.error(`   ⚠️ Error in Art/Metadata enrichment:`, e);
                 }
@@ -792,8 +806,8 @@ async function main() {
                         }
                     }
                 } catch (e: any) {
-                    if (e.message && e.message.includes('429')) {
-                        console.warn(`   🛑 RAWG Rate Limit hit. Disabling RAWG for the rest of this run.`);
+                    if (e.message && (e.message.includes('429') || e.message.includes('401'))) {
+                        console.warn(`   🛑 RAWG Error (${e.message}). Disabling RAWG for the rest of this run.`);
                         skipRawg = true;
                     } else {
                         console.error(`   ⚠️ RAWG Error:`, e.message || e);

@@ -37,6 +37,12 @@ export async function searchRawgGames(query: string, limit: number = 10): Promis
     const response = await fetch(url);
 
     if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error('RAWG API Rate Limit 429');
+      }
+      if (response.status === 401) {
+        throw new Error('RAWG API Unauthorized 401');
+      }
       throw new Error(`RAWG API error: ${response.status} ${response.statusText}`);
     }
 
@@ -80,7 +86,10 @@ export async function searchRawgGames(query: string, limit: number = 10): Promis
     }
 
     return [];
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message && (error.message.includes('429') || error.message.includes('401'))) {
+      throw error;
+    }
     console.error('Error fetching from RAWG:', error);
     return [];
   }

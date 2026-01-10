@@ -1,0 +1,244 @@
+=== RAPPORT ANALYSE V24 FINAL (Optimized) ===
+
+Global MAE: 6.63h
+Global Precision: 33.96%
+
+     Genre       MAE  Precision  Count
+ SoulsLike 12.993228  50.639208      4
+   Shooter  4.408098  46.226345     93
+Platformer  3.091314  38.813981     20
+  Strategy 10.161679  25.230831    139
+       RPG  8.823553  24.602401    173
+   3D Plat  4.388828  18.635434     10
+      JRPG 12.452270   0.000000     30
+
+Title                          | Act    | Pred   | Diff   | St | JRPG | Sls
+--------------------------------------------------------------------------------
+Tom Clancy's Rainbow Six Siege | 3.6    | 28.8   | +25.1  | ❌ |        | 
+Black Myth: Wukong             | 38.6   | 30.6   | -8.0   | ⚠️ |        | 
+Elden Ring                     | 59.7   | 35.7   | -24.0  | ❌ |        | YES
+Cyberpunk 2077                 | 26.8   | 26.8   | -0.0   | ✅ |        | 
+Red Dead Redemption 2          | 51.2   | 35.5   | -15.7  | ❌ |        | 
+Baldur's Gate 3                | 74.0   | 50.7   | -23.4  | ❌ |        | 
+Phasmophobia                   | 23.1   | 18.9   | -4.2   | ⚠️ |        | 
+The Forest                     | 16.3   | 22.9   | +6.7   | ❌ | YES    | 
+Warframe                       | 127.2  | 37.0   | -90.2  | ❌ |        | 
+Hollow Knight                  | 28.3   | 15.9   | -12.4  | ❌ |        | 
+Monster Hunter World           | 46.9   | 46.2   | -0.7   | ✅ |        | 
+Dark Souls III: The Fire Fades | 33.8   | 37.0   | +3.2   | ✅ |        | 
+Dark Souls III                 | 32.2   | 33.8   | +1.6   | ✅ |        | YES
+Brawlhalla                     | 61.4   | 18.7   | -42.7  | ❌ |        | 
+Deep Rock Galactic             | 48.9   | 16.5   | -32.5  | ❌ |        | 
+Hogwarts Legacy                | 27.4   | 28.2   | +0.8   | ✅ |        | 
+Hearts of Iron IV              | 53.2   | 37.0   | -16.2  | ❌ |        | 
+Sekiro: Shadows Die Twice      | 30.3   | 19.6   | -10.7  | ❌ |        | 
+Risk of Rain 2                 | 11.4   | 17.3   | +5.9   | ❌ |        | 
+Subnautica                     | 30.5   | 17.0   | -13.5  | ❌ |        | 
+Undertale                      | 7.2    | 26.3   | +19.1  | ❌ |        | 
+Ready or Not                   | 17.2   | 18.9   | +1.7   | ✅ |        | 
+Monster Hunter Wilds           | 18.4   | 34.2   | +15.8  | ❌ |        | 
+Hades                          | 24.3   | 24.4   | +0.1   | ✅ |        | 
+Sons of the Forest             | 16.3   | 17.5   | +1.2   | ✅ |        | 
+Mount & Blade II: Bannerlord   | 52.6   | 40.1   | -12.5  | ⚠️ |        | 
+Vampire Survivors              | 16.4   | 19.5   | +3.2   | ⚠️ |        | 
+It Takes Two                   | 12.9   | 16.9   | +4.1   | ❌ |        | 
+Clair Obscur: Expedition 33    | 28.4   | 28.4   | -0.0   | ✅ | YES    | YES
+RimWorld                       | 65.4   | 23.9   | -41.5  | ❌ |        | 
+Call of Duty: Black Ops III    | 9.1    | 16.5   | +7.5   | ❌ |        | 
+Doki Doki Literature Club      | 4.4    | 19.0   | +14.6  | ❌ |        | 
+Doom Eternal                   | 14.6   | 14.6   | -0.0   | ✅ |        | 
+Dying Light 2: Stay Human      | 24.6   | 30.6   | +6.0   | ⚠️ |        | 
+Lost Ark                       | 56.2   | 34.7   | -21.5  | ❌ |        | 
+Path of Exile 2                | 36.0   | 32.3   | -3.7   | ⚠️ |        | 
+Slay The Spire                 | 13.2   | 24.6   | +11.4  | ❌ |        | 
+Far Cry 5                      | 18.4   | 19.0   | +0.6   | ✅ |        | 
+Assassin's Creed Odyssey       | 46.1   | 18.6   | -27.4  | ❌ |        | 
+Balatro                        | 8.2    | 14.8   | +6.6   | ❌ |        | 
+Dead Cells                     | 15.1   | 13.2   | -1.8   | ⚠️ |        | 
+Kingdom Come: Deliverance      | 42.7   | 34.0   | -8.6   | ⚠️ |        | 
+Age of Empires II: Definitive  | 45.9   | 32.7   | -13.2  | ❌ |        | 
+Elden Ring: Nightreign         | 29.8   | 31.2   | +1.4   | ✅ |        | 
+Stray                          | 5.2    | 28.6   | +23.4  | ❌ |        | 
+Star Wars Jedi: Fallen Order   | 17.5   | 16.5   | -1.0   | ✅ |        | 
+Borderlands 3                  | 23.8   | 26.7   | +2.9   | ⚠️ |        | 
+Kingdom Come: Deliverance II   | 54.5   | 29.7   | -24.9  | ❌ |        | 
+The Elder Scrolls Online: Morr | 7.3    | 21.9   | +14.6  | ❌ |        | 
+The Elder Scrolls Online: Murk | 3.0    | 17.5   | +14.5  | ❌ |        | 
+Devil May Cry 5                | 11.3   | 12.9   | +1.6   | ⚠️ |        | 
+For Honor                      | 7.1    | 15.6   | +8.5   | ❌ |        | 
+Darkest Dungeon                | 56.7   | 27.8   | -28.9  | ❌ |        | 
+Batman: Arkham Knight          | 17.3   | 11.5   | -5.8   | ❌ |        | 
+Nier: Automata                 | 21.5   | 21.4   | -0.1   | ✅ | YES    | 
+Rise of the Tomb Raider        | 13.7   | 19.8   | +6.1   | ❌ |        | 
+Rise of the Tomb Raider: 20 Ye | 14.5   | 19.6   | +5.1   | ❌ |        | 
+Warhammer: Vermintide 2        | 11.5   | 13.5   | +1.9   | ⚠️ |        | 
+Dark Souls Remastered          | 28.7   | 31.9   | +3.1   | ⚠️ |        | YES
+Ori and the Will of the Wisps  | 11.9   | 11.9   | -0.0   | ✅ |        | 
+Inscryption                    | 13.1   | 13.4   | +0.4   | ✅ |        | 
+Black Mesa                     | 15.3   | 9.6    | -5.7   | ❌ |        | 
+Total War: Warhammer III       | 35.0   | 22.8   | -12.3  | ❌ |        | 
+Celeste                        | 8.6    | 8.3    | -0.3   | ✅ |        | 
+Resident Evil Village          | 10.1   | 10.0   | -0.1   | ✅ |        | 
+Outlast                        | 5.3    | 5.9    | +0.6   | ⚠️ |        | 
+Frostpunk                      | 11.0   | 13.7   | +2.8   | ❌ |        | 
+Killing Floor 2                | 17.6   | 14.9   | -2.7   | ⚠️ |        | 
+Metro Exodus                   | 16.1   | 13.0   | -3.1   | ⚠️ |        | 
+S.T.A.L.K.E.R. 2: Heart of Cho | 36.4   | 36.3   | -0.0   | ✅ |        | 
+Metro: 2033 Redux              | 9.1    | 24.1   | +15.0  | ❌ |        | 
+Dark Souls II: Scholar of the  | 36.1   | 22.1   | -14.0  | ❌ |        | YES
+Assassin's Creed Origins       | 30.2   | 30.3   | +0.0   | ✅ |        | 
+Disco Elysium                  | 24.3   | 24.2   | -0.1   | ✅ |        | 
+Total War: Warhammer II        | 43.1   | 26.9   | -16.2  | ❌ |        | 
+FIFA 22                        | 92.1   | 40.3   | -51.9  | ❌ |        | 
+Muse Dash                      | 7.4    | 7.4    | +0.0   | ✅ | YES    | 
+Monster Hunter Rise            | 24.6   | 28.8   | +4.2   | ⚠️ |        | 
+The Long Dark                  | 22.8   | 12.9   | -9.9   | ❌ |        | 
+Little Nightmares              | 3.6    | 6.9    | +3.3   | ❌ |        | 
+Cult of the Lamb               | 14.8   | 23.4   | +8.6   | ❌ |        | 
+Middle-earth: Shadow of War    | 21.5   | 26.8   | +5.2   | ⚠️ |        | 
+Mortal Kombat 11               | 6.6    | 9.8    | +3.3   | ❌ |        | 
+Conan Exiles                   | 46.3   | 34.2   | -12.1  | ❌ |        | 
+Split Fiction                  | 13.5   | 16.2   | +2.8   | ⚠️ |        | 
+Hades II                       | 20.1   | 19.9   | -0.1   | ✅ |        | 
+The First Descendant           | 38.1   | 28.5   | -9.6   | ❌ |        | 
+Resident Evil 7: Biohazard - N | 1.5    | 12.1   | +10.6  | ❌ |        | 
+Resident Evil 7 Biohazard      | 9.4    | 9.8    | +0.3   | ✅ |        | 
+Brotato                        | 6.1    | 17.0   | +10.9  | ❌ |        | 
+XCOM 2                         | 34.0   | 33.4   | -0.6   | ✅ |        | 
+Metal Gear Solid V: The Phanto | 46.3   | 36.8   | -9.5   | ⚠️ |        | 
+Elden Ring: Shadow of the Erdt | 26.7   | 26.6   | -0.1   | ✅ |        | YES
+Grim Dawn                      | 21.9   | 19.3   | -2.6   | ⚠️ |        | 
+Mafia: Definitive Edition      | 10.7   | 13.4   | +2.7   | ❌ |        | 
+EA Sports FC 24                | 45.9   | 19.7   | -26.2  | ❌ |        | 
+EA Sports FC 25                | 55.9   | 18.0   | -37.9  | ❌ |        | 
+Gunfire Reborn                 | 14.6   | 16.2   | +1.6   | ⚠️ |        | 
+Tom Clancy's Ghost Recon: Wild | 27.3   | 28.0   | +0.7   | ✅ |        | 
+Half-Life: Alyx                | 12.4   | 14.6   | +2.2   | ⚠️ |        | 
+House Flipper                  | 12.9   | 11.8   | -1.1   | ✅ |        | 
+Subnautica: Below Zero         | 20.6   | 10.8   | -9.8   | ❌ |        | 
+Wuchang: Fallen Feathers       | 30.6   | 30.9   | +0.2   | ✅ |        | YES
+This War of Mine               | 11.3   | 9.5    | -1.8   | ⚠️ |        | 
+Firewatch                      | 4.1    | 6.1    | +2.0   | ❌ |        | 
+Yu-Gi-Oh! Master Duel          | 47.9   | 26.4   | -21.6  | ❌ |        | 
+The Last of Us Part I          | 14.5   | 15.9   | +1.4   | ✅ |        | 
+Tekken 7                       | 3.7    | 9.8    | +6.1   | ❌ |        | 
+Enshrouded                     | 46.8   | 26.5   | -20.3  | ❌ |        | 
+GRIS                           | 3.6    | 9.3    | +5.8   | ❌ |        | 
+Total War: THREE KINGDOMS      | 55.4   | 29.8   | -25.6  | ❌ |        | 
+Grounded                       | 33.7   | 25.9   | -7.8   | ⚠️ |        | 
+Naruto Shippuden: Ultimate Nin | 35.5   | 14.8   | -20.7  | ❌ | YES    | 
+Naruto Shippuden: Ultimate Nin | 9.0    | 21.0   | +12.0  | ❌ | YES    | 
+The Outlast Trials             | 14.3   | 11.4   | -2.9   | ⚠️ |        | 
+Age of Empires IV              | 28.2   | 29.1   | +0.9   | ✅ |        | 
+Green Hell                     | 17.6   | 17.6   | -0.0   | ✅ |        | 
+Enter the Gungeon              | 24.2   | 9.4    | -14.8  | ❌ |        | 
+Omori                          | 21.7   | 21.7   | +0.0   | ✅ | YES    | 
+To The Moon                    | 4.2    | 11.9   | +7.7   | ❌ |        | 
+Persona 4 Golden               | 68.0   | 46.5   | -21.5  | ❌ |        | 
+Shadow of the Tomb Raider      | 12.9   | 11.4   | -1.5   | ⚠️ |        | 
+Manor Lords                    | 11.0   | 26.2   | +15.2  | ❌ |        | 
+Armored Core VI: Fires of Rubi | 18.3   | 13.0   | -5.3   | ❌ |        | 
+Assassin's Creed Unity         | 17.4   | 26.9   | +9.5   | ❌ |        | 
+Getting Over it with Bennett F | 6.6    | 7.6    | +1.0   | ⚠️ |        | 
+Stellar Blade                  | 22.5   | 20.3   | -2.2   | ✅ |        | 
+Overcooked 2                   | 7.2    | 11.0   | +3.8   | ❌ |        | 
+Fallout Shelter                | 19.6   | 12.1   | -7.6   | ❌ |        | 
+Star Wars Jedi: Survivor       | 20.7   | 13.0   | -7.7   | ❌ |        | YES
+Beat Saber                     | 6.7    | 7.9    | +1.2   | ⚠️ |        | 
+Farming Simulator 19           | 117.8  | 14.2   | -103.5 | ❌ |        | 
+Hotline Miami 2: Wrong Number  | 8.8    | 8.8    | -0.1   | ✅ |        | 
+Hellblade: Senua's Sacrifice   | 7.5    | 8.3    | +0.7   | ✅ |        | 
+Dragon Ball FighterZ           | 12.2   | 12.3   | +0.2   | ✅ |        | 
+Party Animals                  | 8.8    | 13.5   | +4.7   | ❌ |        | 
+Katana Zero                    | 4.8    | 12.0   | +7.2   | ❌ |        | 
+Metro: Last Light Redux        | 9.9    | 17.8   | +7.9   | ❌ |        | 
+Inside                         | 3.6    | 7.1    | +3.5   | ❌ |        | 
+Lies of P                      | 29.1   | 22.2   | -6.9   | ⚠️ |        | YES
+BattleBlock Theater            | 10.3   | 8.0    | -2.3   | ⚠️ |        | 
+Back 4 Blood                   | 12.1   | 13.3   | +1.3   | ⚠️ |        | 
+Dune: Awakening                | 57.5   | 27.0   | -30.5  | ❌ |        | 
+Golf With Your Friends         | 6.3    | 8.5    | +2.2   | ❌ |        | 
+Pizza Tower                    | 6.5    | 14.5   | +8.0   | ❌ |        | 
+Street Fighter 6               | 17.6   | 12.5   | -5.1   | ❌ |        | 
+Dragon Ball Sparking! Zero     | 11.2   | 13.2   | +2.0   | ⚠️ |        | 
+Wolcen: Lords of Mayhem        | 18.4   | 20.9   | +2.6   | ⚠️ |        | 
+Northgard                      | 14.8   | 20.5   | +5.7   | ❌ |        | 
+Throne and Liberty             | 90.9   | 24.0   | -66.9  | ❌ |        | 
+A Plague Tale: Innocence       | 11.0   | 11.5   | +0.5   | ✅ |        | 
+Ghostrunner                    | 7.2    | 11.8   | +4.6   | ❌ |        | 
+Dishonored 2                   | 12.9   | 17.8   | +4.9   | ❌ |        | 
+GTFO                           | 10.4   | 11.1   | +0.7   | ✅ |        | 
+Remnant II                     | 18.3   | 21.5   | +3.3   | ⚠️ |        | YES
+Alien: Isolation               | 18.6   | 17.7   | -1.0   | ✅ |        | 
+Guilty Gear -Strive-           | 4.9    | 11.3   | +6.4   | ❌ |        | 
+PAYDAY 3                       | 7.5    | 16.1   | +8.6   | ❌ |        | 
+Gang Beasts                    | 2.8    | 10.3   | +7.5   | ❌ |        | 
+Mass Effect Legendary Edition  | 61.2   | 45.5   | -15.7  | ❌ |        | 
+Sniper Elite 4                 | 10.9   | 20.0   | +9.1   | ❌ |        | 
+Mafia III: Definitive Edition  | 25.0   | 19.8   | -5.1   | ⚠️ |        | 
+Outriders                      | 16.7   | 23.1   | +6.4   | ❌ |        | 
+Code Vein                      | 27.2   | 23.2   | -4.0   | ⚠️ |        | 
+Broforce                       | 7.3    | 6.3    | -1.0   | ⚠️ |        | 
+Blasphemous                    | 14.0   | 13.5   | -0.5   | ✅ |        | YES
+AdVenture Capitalist           | 48.0   | 19.4   | -28.5  | ❌ |        | 
+Wolfenstein: The New Order     | 11.6   | 11.3   | -0.3   | ✅ |        | 
+Hitman: Absolution             | 12.7   | 21.0   | +8.3   | ❌ |        | 
+Battlerite                     | 39.6   | 23.8   | -15.8  | ❌ |        | 
+Ori and the Blind Forest       | 8.4    | 9.4    | +1.0   | ⚠️ |        | 
+Plague Inc: Evolved            | 4.2    | 10.9   | +6.7   | ❌ |        | 
+Mortal Kombat X                | 5.9    | 23.2   | +17.3  | ❌ |        | 
+The Hungry Lamb: Traveling in  | 7.0    | 9.4    | +2.4   | ❌ |        | 
+Control                        | 11.8   | 23.9   | +12.1  | ❌ |        | 
+Control: Ultimate Edition      | 13.0   | 12.4   | -0.6   | ✅ |        | 
+Dragon Ball Z: Kakarot         | 30.9   | 30.2   | -0.8   | ✅ | YES    | 
+Skul: The Hero Slayer          | 23.3   | 6.8    | -16.5  | ❌ |        | 
+Five Nights at Freddy's        | 2.4    | 6.5    | +4.1   | ❌ |        | 
+Death Stranding Director's Cut | 38.3   | 48.0   | +9.7   | ❌ |        | 
+Dragon Ball Xenoverse 2        | 19.3   | 25.1   | +5.9   | ❌ |        | 
+Jurassic World Evolution       | 26.0   | 12.6   | -13.5  | ❌ |        | 
+Alan Wake                      | 11.3   | 11.4   | +0.0   | ✅ |        | 
+Remnant: From the Ashes        | 13.6   | 22.0   | +8.5   | ❌ |        | YES
+Little Nightmares II           | 5.7    | 11.9   | +6.2   | ❌ |        | 
+A Hat in Time                  | 9.9    | 8.0    | -1.8   | ⚠️ |        | 
+PC Building Simulator          | 22.9   | 13.9   | -9.0   | ❌ |        | 
+Age of Empires III: Definitive | 21.0   | 21.9   | +0.9   | ✅ |        | 
+Sid Meier's Civilization VII   | 24.6   | 25.4   | +0.8   | ✅ |        | 
+Persona 3 Reload               | 65.2   | 33.6   | -31.6  | ❌ |        | 
+Dredge                         | 9.8    | 17.8   | +8.1   | ❌ |        | 
+Granblue Fantasy: Relink       | 15.9   | 18.9   | +3.0   | ⚠️ | YES    | 
+They Are Billions              | 68.6   | 20.7   | -47.9  | ❌ |        | 
+SOMA                           | 9.2    | 9.1    | -0.0   | ✅ |        | 
+Medieval Dynasty               | 28.2   | 19.6   | -8.6   | ❌ |        | 
+What Remains of Edith Finch    | 2.2    | 7.4    | +5.2   | ❌ |        | 
+Watch Dogs                     | 19.6   | 12.6   | -7.0   | ❌ |        | 
+Rain World                     | 21.5   | 17.3   | -4.3   | ⚠️ |        | 
+Lego Star Wars: The Skywalker  | 19.2   | 13.9   | -5.3   | ❌ |        | 
+Graveyard Keeper               | 46.7   | 21.7   | -25.0  | ❌ |        | 
+
+
+             Feature  Importance
+  franchise_momentum    0.263794
+     INT_Quality_RPG    0.063151
+    log_review_count    0.053895
+        KW_TurnBased    0.031868
+INT_Quality_Strategy    0.024791
+     studio_avg_time    0.021393
+              studio    0.014565
+        is_AAA_proxy    0.011548
+             KW_JRPG    0.010991
+is_content_expansion    0.007259
+       KW_PartyBased    0.002080
+       KW_Management    0.001057
+               KW_2D    0.000938
+              is_rpg    0.000767
+        KW_SoulsLike    0.000174
+      KW_SideContent    0.000115
+       KW_Platformer    0.000059
+   INT_3D_Platformer    0.000011
+        INT_JRPG_AAA    0.000000
+               KW_4X    0.000000
+           log_hypes    0.000000
+         KW_Strategy   -0.000048
+               KW_3D   -0.000092
+   KW_DungeonCrawler   -0.000375
+       quality_index   -0.000579
