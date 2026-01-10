@@ -9,10 +9,12 @@ import { AddGameWizardDialog } from './AddGameWizardDialog';
 import SteamImportModal from './SteamImportModal';
 import { EditGameModal } from './EditGameModal';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Trash2, X, CheckSquare, Square, Pencil, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Trash2, X, CheckSquare, Square, Pencil, MoreHorizontal, LayoutGrid, StretchHorizontal, List } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { AnimatePresence, motion } from 'framer-motion';
 import { removeGamesFromLibrary, updateGamesStatus } from '@/actions/library';
+import { VerticalGameCard } from './VerticalGameCard';
+import { GameListView } from './GameListView';
 import {
     Dialog,
     DialogContent,
@@ -64,6 +66,22 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('PLAYING');
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<SortOption>('dateAdded');
+
+    // Layout State
+    const [layoutMode, setLayoutMode] = useState<'grid' | 'vertical' | 'list'>('grid');
+
+    // Load layout preference on mount
+    useEffect(() => {
+        const savedLayout = localStorage.getItem('dashboardLayout');
+        if (savedLayout && ['grid', 'vertical', 'list'].includes(savedLayout)) {
+            setLayoutMode(savedLayout as any);
+        }
+    }, []);
+
+    const handleLayoutChange = (mode: 'grid' | 'vertical' | 'list') => {
+        setLayoutMode(mode);
+        localStorage.setItem('dashboardLayout', mode);
+    };
 
     // Modal states
     const [isAddGameOpen, setIsAddGameOpen] = useState(false);
@@ -212,7 +230,38 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                     />
                 </div>
 
-                <div className="flex gap-2 w-full md:w-auto">
+                <div className="flex gap-2 w-full md:w-auto items-center flex-wrap sm:flex-nowrap">
+                    {/* Layout Toggle */}
+                    <div className="flex items-center rounded-lg border bg-background p-1 mr-2 shrink-0">
+                        <Button
+                            variant={layoutMode === 'grid' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-8 w-8 px-0"
+                            onClick={() => handleLayoutChange('grid')}
+                            title="Grid View"
+                        >
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant={layoutMode === 'vertical' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-8 w-8 px-0"
+                            onClick={() => handleLayoutChange('vertical')}
+                            title="Vertical Cards"
+                        >
+                            <StretchHorizontal className="h-4 w-4 rotate-90" />
+                        </Button>
+                        <Button
+                            variant={layoutMode === 'list' ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-8 w-8 px-0"
+                            onClick={() => handleLayoutChange('list')}
+                            title="List View"
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                    </div>
+
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as SortOption)}
@@ -299,42 +348,76 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
                 onFilterChange={(id) => setStatusFilter(id as StatusFilter)}
             />
 
-            {/* Grid/List Layout */}
-            <motion.div
-                layout
-                className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4"
-            >
-                <AnimatePresence mode="popLayout">
+            {/* Main Content Area */}
+            {layoutMode === 'list' ? (
+                <div className="w-full">
                     {sortedLibrary.length === 0 ? (
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="col-span-full py-12 text-center text-muted-foreground"
-                        >
-                            <p className="text-lg">No games found in {statusFilter === 'All' ? 'your library' : statusFilter}.</p>
-                            {statusFilter === 'All' && (
-                                <Button variant="link" onClick={() => setIsAddGameOpen(true)} className="mt-2">
-                                    Add your first game
-                                </Button>
-                            )}
-                        </motion.div>
+                         <div className="py-12 text-center text-muted-foreground">
+                            <p className="text-lg">No games found.</p>
+                        </div>
                     ) : (
-                        sortedLibrary.map((item) => (
-                            <GameCard
-                                key={item.id}
-                                item={item}
-                                paceFactor={userPaceFactor}
-                                onGameClick={handleGameClick}
-                                isDeleteMode={isEditMode}
-                                isSelected={selectedGameIds.has(item.gameId)}
-                                onToggleSelect={handleToggleSelection}
-                            />
-                        ))
+                        <GameListView
+                            items={sortedLibrary}
+                            paceFactor={userPaceFactor}
+                            onGameClick={handleGameClick}
+                            isDeleteMode={isEditMode}
+                            selectedGameIds={selectedGameIds}
+                            onToggleSelect={handleToggleSelection}
+                        />
                     )}
-                </AnimatePresence>
-            </motion.div>
+                </div>
+            ) : (
+                <motion.div
+                    layout
+                    className={layoutMode === 'vertical'
+                        ? "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4"
+                        : "grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-4"
+                    }
+                >
+                    <AnimatePresence mode="popLayout">
+                        {sortedLibrary.length === 0 ? (
+                            <motion.div
+                                layout
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="col-span-full py-12 text-center text-muted-foreground"
+                            >
+                                <p className="text-lg">No games found in {statusFilter === 'All' ? 'your library' : statusFilter}.</p>
+                                {statusFilter === 'All' && (
+                                    <Button variant="link" onClick={() => setIsAddGameOpen(true)} className="mt-2">
+                                        Add your first game
+                                    </Button>
+                                )}
+                            </motion.div>
+                        ) : (
+                            sortedLibrary.map((item) => (
+                                layoutMode === 'vertical' ? (
+                                    <VerticalGameCard
+                                        key={item.id}
+                                        item={item}
+                                        paceFactor={userPaceFactor}
+                                        onGameClick={handleGameClick}
+                                        isDeleteMode={isEditMode}
+                                        isSelected={selectedGameIds.has(item.gameId)}
+                                        onToggleSelect={handleToggleSelection}
+                                    />
+                                ) : (
+                                    <GameCard
+                                        key={item.id}
+                                        item={item}
+                                        paceFactor={userPaceFactor}
+                                        onGameClick={handleGameClick}
+                                        isDeleteMode={isEditMode}
+                                        isSelected={selectedGameIds.has(item.gameId)}
+                                        onToggleSelect={handleToggleSelection}
+                                    />
+                                )
+                            ))
+                        )}
+                    </AnimatePresence>
+                </motion.div>
+            )}
 
             {/* Modals */}
             <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
