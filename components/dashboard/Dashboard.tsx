@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { type UserLibrary, type Game, type Tag } from '@prisma/client';
 import { GameCard } from './GameCard';
 import { FilterStrip } from './FilterStrip';
@@ -102,7 +102,7 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
         if (selectedGameIds.size === filteredLibrary.length) {
             setSelectedGameIds(new Set());
         } else {
-            setSelectedGameIds(new Set(filteredLibrary.map(g => g.gameId)));
+            setSelectedGameIds(new Set(filteredLibrary.map((g: GameWithLibrary) => g.gameId)));
         }
     };
 
@@ -150,44 +150,48 @@ export function Dashboard({ initialLibrary, userPaceFactor = 1.0 }: DashboardPro
     };
 
     // Filter Logic
-    const filteredLibrary = library.filter(item => {
-        // Status
-        if (statusFilter !== 'All' && item.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
+    const filteredLibrary = useMemo<GameWithLibrary[]>(() => {
+        return library.filter(item => {
+            // Status
+            if (statusFilter !== 'All' && item.status.toUpperCase() !== statusFilter.toUpperCase()) return false;
 
-        // Search
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            if (!item.game.title.toLowerCase().includes(query)) return false;
-        }
+            // Search
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                if (!item.game.title.toLowerCase().includes(query)) return false;
+            }
 
-        return true;
-    });
+            return true;
+        });
+    }, [library, statusFilter, searchQuery]);
 
     // Sort Logic
-    const sortedLibrary = [...filteredLibrary].sort((a, b) => {
-        switch (sortBy) {
-            case 'dateAdded':
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-            case 'progress':
-                const progressA = calculateProgress(a.playtimeManual ?? a.playtimeSteam ?? 0, {
-                    main: a.game.hltbMain,
-                    extra: a.game.hltbExtra,
-                    completionist: a.game.hltbCompletionist
-                }, a.targetedCompletionType || 'Main');
-                const progressB = calculateProgress(b.playtimeManual ?? b.playtimeSteam ?? 0, {
-                    main: b.game.hltbMain,
-                    extra: b.game.hltbExtra,
-                    completionist: b.game.hltbCompletionist
-                }, b.targetedCompletionType || 'Main');
-                return progressB - progressA;
-            case 'releaseDate':
-                const dateA = a.game.releaseDate ? new Date(a.game.releaseDate).getTime() : 0;
-                const dateB = b.game.releaseDate ? new Date(b.game.releaseDate).getTime() : 0;
-                return dateB - dateA;
-            default:
-                return 0;
-        }
-    });
+    const sortedLibrary = useMemo(() => {
+        return [...filteredLibrary].sort((a, b) => {
+            switch (sortBy) {
+                case 'dateAdded':
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                case 'progress':
+                    const progressA = calculateProgress(a.playtimeManual ?? a.playtimeSteam ?? 0, {
+                        main: a.game.hltbMain,
+                        extra: a.game.hltbExtra,
+                        completionist: a.game.hltbCompletionist
+                    }, a.targetedCompletionType || 'Main');
+                    const progressB = calculateProgress(b.playtimeManual ?? b.playtimeSteam ?? 0, {
+                        main: b.game.hltbMain,
+                        extra: b.game.hltbExtra,
+                        completionist: b.game.hltbCompletionist
+                    }, b.targetedCompletionType || 'Main');
+                    return progressB - progressA;
+                case 'releaseDate':
+                    const dateA = a.game.releaseDate ? new Date(a.game.releaseDate).getTime() : 0;
+                    const dateB = b.game.releaseDate ? new Date(b.game.releaseDate).getTime() : 0;
+                    return dateB - dateA;
+                default:
+                    return 0;
+            }
+        });
+    }, [filteredLibrary, sortBy]);
 
     const handleGameClick = useCallback((item: GameWithLibrary) => {
         setSelectedGame(item);
