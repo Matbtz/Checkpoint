@@ -63,8 +63,28 @@ export function CommunityPercentiles({ stats }: CommunityPercentilesProps) {
                             />
                             <YAxis />
                             <Tooltip
-                                formatter={(value: any) => [value, metricLabel] as [number, string]}
-                                labelFormatter={(label) => `${label}th Percentile`}
+                                content={({ active, payload, label }) => {
+                                    if (active && payload && payload.length) {
+                                        return (
+                                            <div className="rounded-lg border bg-background p-2 shadow-sm">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-medium text-muted-foreground">
+                                                        {label}th Percentile
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold">
+                                                            {payload[0].value}
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {metricLabel.toLowerCase()}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    }
+                                    return null
+                                }}
                             />
                             <Area
                                 type="monotone"
@@ -73,7 +93,18 @@ export function CommunityPercentiles({ stats }: CommunityPercentilesProps) {
                                 fillOpacity={1}
                                 fill="url(#colorValue)"
                             />
-                            <ReferenceLine x={data.userPercentile} stroke="red" label={{ position: 'top', value: 'You', fill: 'red' }} />
+                            <ReferenceLine
+                                x={data.userPercentile}
+                                stroke="red"
+                                label={{
+                                    position: 'insideTopLeft',
+                                    value: 'YOU',
+                                    fill: 'red',
+                                    fontSize: 12,
+                                    fontWeight: 'bold',
+                                    dy: 10 // push it down a bit
+                                }}
+                            />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
