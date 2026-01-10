@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_POSTGRES_URL")
 }
 
 model Account {
@@ -14,19 +14,15 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  // Champ spécifique pour supporter le provider Steam qui envoie parfois cette donnée en doublon.
-  // Fix: Ensure this field is present for NextAuth Steam provider.
-  steamId String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steamId           String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -48,152 +44,117 @@ model VerificationToken {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  steamId       String?   @unique
-  preferences   String? // JSON string
-  isPublic      Boolean   @default(false)
-  profileBackgroundUrl String?
-  profileBackgroundMode String   @default("URL") // URL, DYNAMIC_LAST, DYNAMIC_RANDOM, STATIC_GAME
+  id                      String        @id @default(cuid())
+  name                    String?
+  email                   String?       @unique
+  emailVerified           DateTime?
+  image                   String?
+  password                String?
+  steamId                 String?       @unique
+  preferences             String?
+  isPublic                Boolean       @default(false)
+  profileBackgroundUrl    String?
+  platforms               String[]      @default([])
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  mobileKey               String?       @unique
   profileBackgroundGameId String?
-  platforms            String[]  @default([])
-  mobileKey            String?   @unique
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  accounts Account[]
-  sessions Session[]
-  library  UserLibrary[]
-  tags     Tag[]
-
-  // Social
-  followedBy User[] @relation("UserFollows")
-  following  User[] @relation("UserFollows")
-
-  // Activity
-  activityLogs ActivityLog[]
+  profileBackgroundMode   String        @default("URL")
+  accounts                Account[]
+  activityLogs            ActivityLog[]
+  sessions                Session[]
+  tags                    Tag[]
+  library                 UserLibrary[]
+  User_A                  User[]        @relation("UserFollows")
+  User_B                  User[]        @relation("UserFollows")
 }
 
 model Game {
-  id              String    @id // ID externe (IGDB ou Steam généré)
-  title           String
-  coverImage      String?
-  backgroundImage String? // Image de fond haute qualité (RAWG)
-  releaseDate     DateTime?
-  description     String?   @db.Text
-
-  // Media
-  screenshots String[]
-  videos      String[] // trailers
-
-  // External Links
-  steamUrl      String?
-  opencriticUrl String?
-  igdbUrl       String?
-  hltbUrl       String?
-
-  // Scores
-  opencriticScore Int?
+  id                       String        @id
+  title                    String
+  coverImage               String?
+  backgroundImage          String?
+  releaseDate              DateTime?
+  description              String?
+  screenshots              String[]
+  videos                   String[]
+  steamUrl                 String?
+  opencriticUrl            String?
+  igdbUrl                  String?
+  hltbUrl                  String?
+  opencriticScore          Int?
+  igdbScore                Int?
+  steamAppId               String?       @unique
+  steamReviewScore         String?
+  steamReviewCount         Int?
+  steamReviewPercent       Int?
+  isDlc                    Boolean       @default(false)
+  igdbId                   String?       @unique
+  studio                   String?
+  genres                   String?
+  platforms                Json?
+  parentId                 String?
+  igdbTime                 Json?
+  storyline                String?
+  status                   Int?
+  gameType                 Int?
+  relatedGames             Json?
+  dataMissing              Boolean       @default(false)
+  dataFetched              Boolean       @default(false)
+  hltbMain                 Int?
+  hltbExtra                Int?
+  hltbCompletionist        Int?
+  predictedMain            Float?
+  predictedExtra           Float?
+  predictedCompletionist   Float?
+  usersMain                Int?
+  usersMainCount           Int?
+  usersExtra               Int?
+  usersExtraCount          Int?
+  usersCompletionist       Int?
+  usersCompletionistCount  Int?
+  primaryColor             String?
+  secondaryColor           String?
+  imageStatus              String        @default("OK")
+  franchise                String?
+  hypes                    Int?
+  summary                  String?
+  keywords                 String[]
+  themes                   String[]
+  ports                    Json?
+  remakes                  Json?
+  remasters                Json?
+  updatedAt                DateTime      @updatedAt
   opencriticScoreUpdatedAt DateTime?
-  igdbScore       Int?
-
-  // Steam Specific
-  steamAppId         String? @unique
-  steamReviewScore   String?
-  steamReviewCount   Int?
-  steamReviewPercent Int?
-  isDlc              Boolean @default(false)
-
-  igdbId    String? @unique // Indexé pour recherche rapide
-  studio    String? // Nom du studio/développeur
-  genres    String? // JSON string
-  platforms Json? // Structure: [{ name: "Switch", date: "2017-10-27" }]
-
-  // DLC Hierarchy
-  parentId  String?
-  parent    Game?   @relation("GameToDLC", fields: [parentId], references: [id])
-  dlcs      Game[]  @relation("GameToDLC")
-
-  // Playtime Data
-  igdbTime       Json? // { storyline, completionist }
-
-  // New Metadata (IGDB)
-  storyline      String? @db.Text
-  status         Int?    // IGDB Game Status
-  gameType       Int?    // IGDB Game Type
-  relatedGames   Json?   // { dlcs, expansions, remakes, remasters, expanded_games } (IDs & Names)
-
-
-  hltbMain          Int? // En minutes
-  hltbExtra         Int?
-  hltbCompletionist Int?
-
-  // Predicted Data (Model)
-  predictedMain          Float? // En heures (précision décimale utile)
-  predictedExtra         Float?
-  predictedCompletionist Float?
-
-  // Crowdsourced Data (Users)
-  usersMain               Int? // Median in minutes
-  usersMainCount          Int? // Number of submissions
-  usersExtra              Int?
-  usersExtraCount         Int?
-  usersCompletionist      Int?
-  usersCompletionistCount Int?
-
-  primaryColor   String?
-  secondaryColor String?
-
-  imageStatus    String        @default("OK") // OK, BROKEN
-
-  // Extended Metadata
-  franchise      String?
-  hypes          Int?
-  summary        String?       @db.Text // Distinct from description?
-  keywords       String[]      // Array of strings
-
-  // JSON lists for explicit tracking if not using Relations
-
-  ports          Json?         // [{ id, name }]
-  remakes        Json?
-  remasters      Json?
-
-  updatedAt    DateTime      @updatedAt
-  users        UserLibrary[]
-  activityLogs ActivityLog[]
+  activityLogs             ActivityLog[]
+  parent                   Game?         @relation("GameToDLC", fields: [parentId], references: [id])
+  dlcs                     Game[]        @relation("GameToDLC")
+  users                    UserLibrary[]
 }
 
 model UserLibrary {
-  id                     String   @id @default(cuid())
+  id                     String    @id @default(cuid())
   userId                 String
   gameId                 String
-  status                 String   @default("BACKLOG") // BACKLOG, PLAYING, COMPLETED, ABANDONED, WISHLIST
-  playtimeSteam          Int      @default(0) // En minutes
-  playtime2weeks         Int      @default(0) // En minutes (Steam Recent)
-  playtimeManual         Int? // Override
-  playtimeMain           Int? // User's self-reported Main Story time (minutes)
-  playtimeExtra          Int? // User's self-reported Main + Extra time (minutes)
-  playtimeCompletionist  Int? // User's self-reported 100% time (minutes)
-  progressManual         Int? // Percentage 0-100 manual override
-  isManualProgress       Boolean  @default(false)
-  targetedCompletionType String   @default("MAIN")
-  lastPlayed             DateTime? // Synced from Steam rtime_last_played
-
-  customCoverImage String?
-  primaryColor     String?
-  secondaryColor   String?
-
-  ownedPlatforms   String[] @default([])
-
-  createdAt              DateTime @default(now())
-  user                   User     @relation(fields: [userId], references: [id])
-  game                   Game     @relation(fields: [gameId], references: [id])
-  tags                   Tag[]
+  status                 String    @default("BACKLOG")
+  playtimeSteam          Int       @default(0)
+  playtime2weeks         Int       @default(0)
+  playtimeManual         Int?
+  playtimeMain           Int?
+  playtimeExtra          Int?
+  playtimeCompletionist  Int?
+  progressManual         Int?
+  targetedCompletionType String    @default("MAIN")
+  lastPlayed             DateTime?
+  customCoverImage       String?
+  primaryColor           String?
+  secondaryColor         String?
+  createdAt              DateTime  @default(now())
+  ownedPlatforms         String[]  @default([])
+  isManualProgress       Boolean   @default(false)
+  game                   Game      @relation(fields: [gameId], references: [id])
+  user                   User      @relation(fields: [userId], references: [id])
+  tags                   Tag[]     @relation("TagToUserLibrary")
 
   @@unique([userId, gameId])
 }
@@ -203,7 +164,7 @@ model Tag {
   name      String
   userId    String
   user      User          @relation(fields: [userId], references: [id])
-  libraries UserLibrary[]
+  libraries UserLibrary[] @relation("TagToUserLibrary")
 
   @@unique([userId, name])
 }
@@ -212,12 +173,11 @@ model ActivityLog {
   id        String   @id @default(cuid())
   userId    String
   gameId    String
-  type      String // e.g., "PLAY_SESSION", "STATUS_CHANGE"
+  type      String
   details   Json?
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([gameId])

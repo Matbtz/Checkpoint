@@ -207,7 +207,7 @@ async function main() {
   let skipRawg = false;
 
   // Determine Max Pages based on mode (1 for special endpoints)
-  const effectiveMaxPages = (isUpcoming || isRecent || isReviewedThisWeek) ? 1 : MAX_PAGES;
+  const effectiveMaxPages = (isUpcoming || isRecent) ? 1 : MAX_PAGES;
 
   for (let i = 0; i < effectiveMaxPages; i++) {
     const currentSkip = startSkip + (i * 20);
@@ -219,7 +219,7 @@ async function main() {
     } else if (isRecent) {
       url = `https://opencritic-api.p.rapidapi.com/game/recently-released`;
     } else if (isReviewedThisWeek) {
-      url = `https://opencritic-api.p.rapidapi.com/game/reviewed-this-week`;
+      url = `https://opencritic-api.p.rapidapi.com/game/reviewed-this-week?skip=${currentSkip}`;
     } else {
       url = `https://opencritic-api.p.rapidapi.com/game?skip=${currentSkip}&sort=${sortMode}`;
       if (platformId) {
