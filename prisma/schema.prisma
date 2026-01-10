@@ -65,8 +65,8 @@ model User {
   sessions                Session[]
   tags                    Tag[]
   library                 UserLibrary[]
-  User_A                  User[]        @relation("UserFollows")
-  User_B                  User[]        @relation("UserFollows")
+  followedBy              User[]        @relation("UserFollows")
+  following               User[]        @relation("UserFollows")
 }
 
 model Game {
