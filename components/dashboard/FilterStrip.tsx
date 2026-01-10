@@ -17,11 +17,15 @@ export function FilterStrip({ filters, activeFilter, onFilterChange, className }
       <div
         className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide py-2 gap-2 px-1"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        role="tablist"
+        aria-label="Library filters"
       >
         {filters.map((filter) => (
           <button
             key={filter.id}
             onClick={() => onFilterChange(filter.id)}
+            role="tab"
+            aria-selected={activeFilter === filter.id}
             className={cn(
               "relative snap-start flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap",
               activeFilter === filter.id
