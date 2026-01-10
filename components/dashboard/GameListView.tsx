@@ -36,12 +36,14 @@ export function GameListRow({
     const { game } = item;
     const [isHovered, setIsHovered] = useState(false);
 
-    // Image fallback logic
-    const [currentCoverImage, setCurrentCoverImage] = useState(item.customCoverImage || game.coverImage || '/placeholder.png');
+    // Image fallback logic: custom -> cover -> background -> placeholder
+    const [currentCoverImage, setCurrentCoverImage] = useState(
+        item.customCoverImage || game.coverImage || game.backgroundImage || '/placeholder.png'
+    );
 
     useEffect(() => {
-        setCurrentCoverImage(item.customCoverImage || game.coverImage || '/placeholder.png');
-    }, [item.customCoverImage, game.coverImage]);
+        setCurrentCoverImage(item.customCoverImage || game.coverImage || game.backgroundImage || '/placeholder.png');
+    }, [item.customCoverImage, game.coverImage, game.backgroundImage]);
 
     // Derived state
     const targetType = item.targetedCompletionType || 'Main';
@@ -139,15 +141,29 @@ export function GameListRow({
             {/* Game Info */}
             <td className="px-4 py-2 min-w-[200px]">
                 <div className="flex items-center gap-3">
-                    <div className="relative h-10 w-8 shrink-0 overflow-hidden rounded shadow-sm">
+                    <div className="relative h-10 w-8 shrink-0 overflow-hidden rounded shadow-sm bg-muted/50">
                         <Image
                             src={currentCoverImage}
                             alt={game.title}
                             fill
                             className="object-cover"
                             onError={() => {
+                                // 1. Try Steam portrait fallback
                                 if (currentCoverImage.includes('library_600x900.jpg')) {
-                                    setCurrentCoverImage(currentCoverImage.replace('library_600x900.jpg', 'portrait.png'));
+                                    const newUrl = currentCoverImage.replace('library_600x900.jpg', 'portrait.png');
+                                    if (newUrl !== currentCoverImage) {
+                                        setCurrentCoverImage(newUrl);
+                                        return;
+                                    }
+                                }
+                                // 2. Fallback to background image if we haven't tried it yet and it exists
+                                if (game.backgroundImage && currentCoverImage !== game.backgroundImage && !currentCoverImage.includes('portrait.png')) {
+                                    setCurrentCoverImage(game.backgroundImage);
+                                    return;
+                                }
+                                // 3. Final fallback
+                                if (currentCoverImage !== '/placeholder.png') {
+                                    setCurrentCoverImage('/placeholder.png');
                                 }
                             }}
                         />

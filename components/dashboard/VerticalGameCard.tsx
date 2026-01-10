@@ -60,12 +60,14 @@ export const VerticalGameCard = memo(function VerticalGameCard({
     const progress = Math.min(rawProgress, 100);
     const isCompleted = rawProgress >= 100;
 
-    // Use custom cover if available, fallback to game cover
-    const [currentCoverImage, setCurrentCoverImage] = useState(item.customCoverImage || game.coverImage || '/placeholder.png');
+    // Use custom cover -> game cover -> background image -> placeholder
+    const [currentCoverImage, setCurrentCoverImage] = useState(
+        item.customCoverImage || game.coverImage || game.backgroundImage || '/placeholder.png'
+    );
 
     useEffect(() => {
-        setCurrentCoverImage(item.customCoverImage || game.coverImage || '/placeholder.png');
-    }, [item.customCoverImage, game.coverImage]);
+        setCurrentCoverImage(item.customCoverImage || game.coverImage || game.backgroundImage || '/placeholder.png');
+    }, [item.customCoverImage, game.coverImage, game.backgroundImage]);
 
     return (
         <motion.div
@@ -105,8 +107,22 @@ export const VerticalGameCard = memo(function VerticalGameCard({
                     className="object-cover transition-transform duration-300 group-hover:scale-105"
                     sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
                     onError={() => {
+                        // 1. Try Steam portrait fallback
                         if (currentCoverImage.includes('library_600x900.jpg')) {
-                            setCurrentCoverImage(currentCoverImage.replace('library_600x900.jpg', 'portrait.png'));
+                            const newUrl = currentCoverImage.replace('library_600x900.jpg', 'portrait.png');
+                            if (newUrl !== currentCoverImage) {
+                                setCurrentCoverImage(newUrl);
+                                return;
+                            }
+                        }
+                        // 2. Fallback to background image if we haven't tried it yet and it exists
+                        if (game.backgroundImage && currentCoverImage !== game.backgroundImage && !currentCoverImage.includes('portrait.png')) {
+                            setCurrentCoverImage(game.backgroundImage);
+                            return;
+                        }
+                        // 3. Final fallback
+                        if (currentCoverImage !== '/placeholder.png') {
+                            setCurrentCoverImage('/placeholder.png');
                         }
                     }}
                 />
