@@ -57,11 +57,6 @@ export const getCachedDiscoveryGames = unstable_cache(
                         },
                         take: 50 // Fetch more for filtering
                     });
-                    if (localGames.length < 5) {
-                        console.log(`[Discovery] RECENT: Local too low (${localGames.length}), fetching from IGDB`);
-                        const igdbGames = await getDiscoveryGamesIgdb('RECENT', 20);
-                        return upsertDiscoveryGames(igdbGames);
-                    }
                     return localGames;
 
                 case 'TOP_RATED':
@@ -96,26 +91,18 @@ export const getCachedDiscoveryGames = unstable_cache(
                         take: 100
                     });
 
-                    if (localGames.length < 5) {
-                        console.log(`[Discovery] TOP_RATED: Local localGames too low (${localGames.length}), fetching from IGDB`);
-                        const igdbGames = await getDiscoveryGamesIgdb('POPULAR', 10);
-                        return upsertDiscoveryGames(igdbGames);
-                    }
                     return localGames;
 
                 case 'RECENTLY_REVIEWED':
-                    // High scoring games (>80) ordered by release date (newest first)
+                    // Games with recent score updates (any score), ordered by update date
                     localGames = await prisma.game.findMany({
                         where: {
-                            opencriticScore: {
-                                gte: 80
-                            },
-                            releaseDate: {
-                                lte: now
+                            opencriticScoreUpdatedAt: {
+                                not: null
                             }
                         },
                         orderBy: {
-                            releaseDate: 'desc'
+                            opencriticScoreUpdatedAt: 'desc'
                         },
                         take: 20
                     });

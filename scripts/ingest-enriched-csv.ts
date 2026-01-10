@@ -6,7 +6,7 @@ import { parse } from 'csv-parse/sync';
 
 const prisma = new PrismaClient();
 
-const CSV_PATH = path.join(process.cwd(), 'scripts', 'csv', 'enriched_with_hltb.csv');
+const CSV_PATH = path.join(process.cwd(), 'scripts', 'csv', 'database_enriched_clean.csv');
 
 async function main() {
     if (!fs.existsSync(CSV_PATH)) {
@@ -56,6 +56,7 @@ async function main() {
         igdbScore?: string;
         steamAppId?: string;
         steamReviewScore?: string;
+        opencriticScoreUpdatedAt?: string;
         steamReviewCount?: string;
         steamReviewPercent?: string;
         igdbId?: string;
@@ -88,10 +89,14 @@ async function main() {
             // -- Data Mapping --
 
             // Dates
-            const releaseDate = row.releaseDate ? new Date(row.releaseDate) : null;
-            if (releaseDate && isNaN(releaseDate.getTime())) {
-                // invalid date
-            }
+            const cleanString = (str: string | undefined) => {
+                if (!str) return null;
+                return str.replace(/^["']+|["']+$/g, '');
+            };
+
+            const rawDateStr = cleanString(row.releaseDate);
+            const rawReleaseDate = rawDateStr ? new Date(rawDateStr) : null;
+            const validReleaseDate = (rawReleaseDate && !isNaN(rawReleaseDate.getTime())) ? rawReleaseDate : null;
 
             // Numbers
             const parseIntSafe = (v: string | undefined): number | null => (v && v !== 'null' && v !== '') ? parseInt(v, 10) : null;
@@ -108,16 +113,13 @@ async function main() {
             };
 
             // Strings (JSON stringified in DB)
-            // genres is String? in schema, but contains JSON array string.
-            // row.genres comes as string from CSV. e.g. "[\"RPG\", \"Indie\"]"
-            // If blank/null, set null.
             const genres = (row.genres && row.genres !== 'null') ? row.genres : null;
 
             // Arrays (String[] in schema) -> Need actual Array object
             const screenshots = parseJsonSafe(row.screenshots, []);
             const videos = parseJsonSafe(row.videos, []);
             const keywords = parseJsonSafe(row.keywords, []);
-            const themes = parseJsonSafe(row.themes, []);
+            // const themes = parseJsonSafe(row.themes, []); // Removed
 
             // Json Objects (Json in schema) -> Need actual Object/Array
             const platforms = parseJsonSafe(row.platforms, null);
@@ -129,18 +131,19 @@ async function main() {
 
             // Booleans
             const isDlc = row.isDlc === 'true';
-            const dataFetched = row.dataFetched === 'true';
-            const dataMissing = row.dataMissing === 'true';
+            // const dataFetched = row.dataFetched === 'true'; // Removed
+            // const dataMissing = row.dataMissing === 'true'; // Removed
 
             const data = {
                 title: row.title,
                 coverImage: row.coverImage || null,
                 backgroundImage: row.backgroundImage || null,
-                releaseDate: releaseDate && !isNaN(releaseDate.getTime()) ? releaseDate : null,
+                releaseDate: validReleaseDate,
                 description: row.description || null,
 
                 steamUrl: row.steamUrl || null,
                 opencriticUrl: row.opencriticUrl || null,
+                opencriticScoreUpdatedAt: (row.opencriticScoreUpdatedAt && cleanString(row.opencriticScoreUpdatedAt)) ? new Date(cleanString(row.opencriticScoreUpdatedAt)!) : ((row.opencriticScore && row.opencriticScore !== 'null') ? validReleaseDate : null),
                 igdbUrl: row.igdbUrl || null,
                 hltbUrl: row.hltbUrl || null,
 
@@ -170,8 +173,8 @@ async function main() {
 
                 relatedGames: relatedGames,
 
-                dataMissing: dataMissing,
-                dataFetched: dataFetched,
+                // dataMissing: dataMissing, // Removed
+                // dataFetched: dataFetched, // Removed
 
                 hltbMain: parseIntSafe(row.hltbMain),
                 hltbExtra: parseIntSafe(row.hltbExtra),
@@ -181,7 +184,7 @@ async function main() {
                 hypes: parseIntSafe(row.hypes),
 
                 keywords: keywords,
-                themes: themes,
+                // themes: themes, // Removed
 
                 ports: ports,
                 remakes: remakes,
@@ -203,8 +206,10 @@ async function main() {
             processed++;
             if (processed % 100 === 0) process.stdout.write(`\rProcessed: ${processed}`);
 
-        } catch (e) {
-            console.error(`\nError processing ${row.title} (${row.id}):`, e);
+        } catch (e: any) {
+            // Log concise error to avoid flooding (Prisma errors can be huge)
+            const msg = e.code ? `${e.code}: ${e.message.split('\n').pop()}` : e.message;
+            console.error(`\n❌ Error processing ${row.title} (${row.id}): ${msg}`);
             errors++;
         }
     }
@@ -228,6 +233,10 @@ async function main() {
             } catch (e) {
                 // Expected if parent doesn't exist (e.g. parent wasn't in CSV and not in DB)
                 // console.warn(`Could not link parent ${row.parentId} for ${row.id}`);
+                errors++; // Count linking errors? No, variable 'errors' isn't in scope here cleanly or reuse?
+                // Reuse 'errors' if I move declaration up?
+                // Just log:
+                // console.warn(`⚠️ Parent ${row.parentId} not found for ${row.title || row.id}`);
             }
         }
     }
