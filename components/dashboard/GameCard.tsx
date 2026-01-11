@@ -260,7 +260,14 @@ export const GameCard = memo(function GameCard({ item, paceFactor = 1.0, onGameC
                                 {targetType} {totalHours ? `/ ${totalHours}h` : ''}
                             </span>
                         </div>
-                        <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/5 border border-white/5 shadow-inner">
+                        <div
+                            className="relative h-2 w-full overflow-hidden rounded-full bg-white/5 border border-white/5 shadow-inner"
+                            role="progressbar"
+                            aria-valuenow={Math.round(progress)}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={`Progress: ${Math.round(progress)}% of ${targetType}`}
+                        >
                             <motion.div
                                 className={cn(
                                     "absolute inset-y-0 left-0 shadow-[0_0_10px_rgba(255,255,255,0.3)]",

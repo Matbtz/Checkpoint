@@ -129,7 +129,14 @@ export const VerticalGameCard = memo(function VerticalGameCard({
 
                 {/* Progress Bar Overlay */}
                 <div className="absolute bottom-0 left-0 right-0">
-                    <div className="h-1.5 w-full bg-black/50 backdrop-blur-sm">
+                    <div
+                        className="h-1.5 w-full bg-black/50 backdrop-blur-sm"
+                        role="progressbar"
+                        aria-valuenow={Math.round(progress)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Progress: ${Math.round(progress)}% of ${targetType}`}
+                    >
                         <div
                             className={cn(
                                 "h-full transition-all duration-1000",
