@@ -215,6 +215,16 @@ async function upsertDiscoveryGames(igdbGames: EnrichedIgdbGame[]): Promise<Game
     console.log(`[Discovery] Upserting ${igdbGames.length} games from IGDB`);
     if (igdbGames.length === 0) return [];
 
+    // ⚡ Bolt Optimization: Check existing games to avoid redundant Steam scraping.
+    // If we already have the game, we likely won't update the description (as per update logic below),
+    // so scraping Steam for a description we won't save is wasted effort.
+    const igdbIds = igdbGames.map(g => g.id.toString());
+    const existingGames = await prisma.game.findMany({
+        where: { igdbId: { in: igdbIds } },
+        select: { igdbId: true, description: true }
+    });
+    const existingGamesMap = new Map(existingGames.map(g => [g.igdbId, g]));
+
     // Process games in parallel to allow concurrent fetching of fallback data
     const upsertPromises = igdbGames.map(async (game) => {
         const releaseDate = game.first_release_date ? new Date(game.first_release_date * 1000) : null;
@@ -222,10 +232,13 @@ async function upsertDiscoveryGames(igdbGames: EnrichedIgdbGame[]): Promise<Game
         let coverImage = game.possibleCovers?.[0] || null;
         let backgroundImage = game.possibleBackgrounds?.[0] || null;
 
+        const existingGame = existingGamesMap.get(game.id.toString());
+
         // Fallback Enrichment: If description is missing, try to fetch from Steam
-        if (!description) {
+        // ONLY if it's a new game. Existing games are skipped because 'update' below doesn't write description.
+        if (!description && !existingGame) {
             try {
-                console.log(`[Discovery] Missing description for ${game.name}, attempting Steam fallback...`);
+                console.log(`[Discovery] Missing description for new game ${game.name}, attempting Steam fallback...`);
                 // Use release year to help matching
                 const year = releaseDate ? releaseDate.getFullYear() : null;
                 const fallback = await findFallbackMetadata(game.name, year);
