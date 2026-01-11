@@ -19,7 +19,8 @@ export async function middleware(req: NextRequest) {
     req.nextUrl.pathname.startsWith('/library') ||
     req.nextUrl.pathname.startsWith('/statistics') ||
     req.nextUrl.pathname.startsWith('/add') ||
-    req.nextUrl.pathname.startsWith('/settings');
+    req.nextUrl.pathname.startsWith('/settings') ||
+    req.nextUrl.pathname.startsWith('/profile');
 
   if (!isAuth && isProtectedPath) {
     let from = req.nextUrl.pathname;
@@ -42,6 +43,7 @@ export const config = {
     '/library/:path*',
     '/statistics/:path*',
     '/add/:path*',
-    '/settings/:path*'
+    '/settings/:path*',
+    '/profile/:path*'
   ],
 };
